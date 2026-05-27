@@ -1,0 +1,9 @@
+{
+  "name": "kzys-frontend",
+  "version": "1.0.0",
+  "description": "Video meeting frontend",
+  "scripts": {
+    "start": "npx serve ."
+  },
+  "dependencies": {}
+}

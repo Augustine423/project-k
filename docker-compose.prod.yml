@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  backend:
+    image: kyawzayarsoe/kzys-backend:latest
+    ports:
+      - "8080:8080"
+    networks:
+      - kzys-network
+
+  frontend:
+    image: kyawzayarsoe/kzys-frontend:latest
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - kzys-network
+
+networks:
+  kzys-network:
+    driver: bridge
