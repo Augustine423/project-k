@@ -16,6 +16,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "80:80"
+    environment:
+      - BACKEND_HOST=backend  # Docker Compose service name
     depends_on:
       - backend
     networks:

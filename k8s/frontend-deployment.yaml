@@ -17,6 +17,9 @@ spec:
         image: kyawzayarsoe/kzys-frontend:latest
         ports:
         - containerPort: 80
+        env:
+        - name: BACKEND_HOST
+          value: "kzys-backend"  # Kubernetes Service name
         resources:
           requests:
             memory: "64Mi"
