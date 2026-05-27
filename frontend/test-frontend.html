@@ -27,7 +27,7 @@
     <div id="videos">
         <video id="localVideo" autoplay muted></video>
     </div>
-    
+    <script src="webrtc-integration.js"></script>
     <script>
         let localStream = null;
         let roomId = null;
@@ -43,6 +43,11 @@
                     audio: true
                 });
                 
+                // --- အခု အသစ်ထည့်ရမည့် Code ---
+                webrtc = new KZYSWebRTC();
+                await webrtc.init(roomId, userName);
+                // ----------------------------
+
                 // Show local video
                 const localVideo = document.getElementById('localVideo');
                 localVideo.srcObject = localStream;

@@ -6,34 +6,46 @@ class KZYSWebRTC {
         this.ws = null;
         this.roomId = null;
         this.userId = null;
+        this.isReady = false; // Connection စစ်ဖို့ flag
     }
     
     async init(roomId, userId) {
         this.roomId = roomId;
         this.userId = userId;
         
-        // Get local media
+        // 1. Get local media
         this.localStream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: true
         });
         
-        // Connect WebSocket - Use relative path for Docker
+        // 2. WebSocket Initialize
         const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const wsUrl = `${wsProtocol}//${window.location.host}/ws`;
-        // const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        // const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
-        // const wsUrl = `${wsProtocol}//${wsHost}/ws`;
         
-        this.ws = new WebSocket(wsUrl);
-        this.ws.onmessage = this.handleMessage.bind(this);
-        
-        // Send join message
-        this.send({
-            type: 'join',
-            room: roomId,
-            user: userId
+        return new Promise((resolve, reject) => {
+            this.ws = new WebSocket(wsUrl);
+            
+            this.ws.onopen = () => {
+                console.log("WebSocket Connected!");
+                this.isReady = true;
+                // Join message ကို connection ပွင့်မှပို့ပါ
+                this.send({ type: 'join', room: roomId, user: userId });
+                resolve();
+            };
+            
+            this.ws.onmessage = this.handleMessage.bind(this);
+            this.ws.onerror = (err) => reject(err);
         });
+    }
+    
+    send(message) {
+        // Connection ပွင့်မှပဲ ပို့ဖို့ စစ်ပေးပါ
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(JSON.stringify(message));
+        } else {
+            console.warn("WebSocket not ready, queuing message:", message.type);
+        }
     }
     
     send(message) {
