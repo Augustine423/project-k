@@ -19,7 +19,13 @@ kzys-project/
 │   ├── test-frontend.html
 │   ├── webrtc-integration.js
 │   └── package.json
-├── docker-compose.yml     # Multi-container setup
+├── k8s/                   # Kubernetes manifests
+│   ├── backend-deployment.yaml
+│   ├── frontend-deployment.yaml
+│   ├── ingress.yaml
+│   └── kustomization.yaml
+├── docker-compose.yml     # Development setup
+├── docker-compose.prod.yml # Production setup
 └── README.md
 ```
 
@@ -42,10 +48,26 @@ Automatically builds and pushes Docker images to Docker Hub on push to main bran
 - Backend: `kyawzayarsoe/kzys-backend:latest`
 - Frontend: `kyawzayarsoe/kzys-frontend:latest`
 
-## Quick Start with Docker:
+## Deployment Options:
+
+### 1. Docker Compose (Development):
 ```bash
 docker-compose up --build
 ```
+
+### 2. Docker Compose (Production - pre-built images):
+```bash
+docker-compose -f docker-compose.prod.yml up
+```
+
+### 3. Kubernetes:
+```bash
+kubectl apply -k k8s/
+```
+
+## Access:
+- Frontend: http://localhost (or LoadBalancer IP in K8s)
+- WebSocket: ws://[host]/ws
 
 ## Manual Build:
 ```bash
@@ -57,7 +79,3 @@ make
 cd frontend
 npx serve .  # or use any static server
 ```
-
-## Access:
-- Frontend: http://localhost
-- WebSocket: ws://localhost:8080

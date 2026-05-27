@@ -18,8 +18,12 @@ class KZYSWebRTC {
             audio: true
         });
         
-        // Connect WebSocket
-        this.ws = new WebSocket('ws://localhost:8080');
+        // Connect WebSocket - Use relative path for Docker
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsHost = window.location.hostname === 'localhost' ? 'localhost:8080' : window.location.host;
+        const wsUrl = `${wsProtocol}//${wsHost}/ws`;
+        
+        this.ws = new WebSocket(wsUrl);
         this.ws.onmessage = this.handleMessage.bind(this);
         
         // Send join message
