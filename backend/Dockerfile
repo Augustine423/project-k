@@ -14,6 +14,7 @@ RUN gcc -o videoroom-core videoroom-core.c -Wall -Wextra -static
 
 # Runtime image
 FROM alpine:latest
+RUN apk add --no-cache libstdc++
 WORKDIR /app
 
 # Copy binaries
@@ -23,6 +24,10 @@ COPY --from=builder /app/videoroom-core .
 
 # Expose ports
 EXPOSE 8080
+
+# Use a non-root user for security
+RUN adduser -D kzys && chown -R kzys:kzys /app
+USER kzys
 
 # Start WebSocket server
 CMD ["./websocket-server"]
