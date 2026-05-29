@@ -15,6 +15,7 @@ spec:
       containers:
       - name: backend-go
         image: kyawzayarsoe/backend-go:latest
+        imagePullPolicy: Always
         ports:
         - name: rest
           containerPort: 8080
@@ -70,6 +71,7 @@ spec:
       containers:
       - name: backend-c
         image: kyawzayarsoe/backend-c:latest
+        imagePullPolicy: Always
         ports:
         - name: grpc
           containerPort: 50051
