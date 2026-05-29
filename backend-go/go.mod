@@ -1,4 +1,4 @@
-module kzys-backend
+module github.com/kzys/backend-go
 
 go 1.24
 
