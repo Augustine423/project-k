@@ -10,15 +10,14 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          room_id: 'room123',
-          user_id: 'userA',
-          sdp_offer: 'offer-data-here',
-        }),
+          room_id: "room123",
+          user_id: "userA",
+          sdp_offer: "offer-data-here"
+        })
       });
-
       const data = await response.json();
       console.log('Session Prepared:', data);
-      setStatus('Connected to backend');
+      setStatus('Connected to C-Backend');
     } catch (err) {
       console.error(err);
       setStatus('Connection Failed');
@@ -26,7 +25,7 @@ function App() {
   };
 
   return (
-    <div style={{ fontFamily: 'Arial, sans-serif', padding: '2rem' }}>
+    <div className="App">
       <h1>KZYS Video Conference</h1>
       <p>Status: {status}</p>
       <button onClick={startSession}>Join Room</button>

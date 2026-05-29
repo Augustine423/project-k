@@ -15,4 +15,4 @@ jobs:
       - name: Build and Push
         run: |
           docker build -t your-registry/${{ matrix.service }}:latest ./${{ matrix.service }}
-          # docker push your-registry/${{ matrix.service }}:latest
+          docker push your-registry/${{ matrix.service }}:latest

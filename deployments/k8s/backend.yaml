@@ -17,6 +17,22 @@ spec:
         image: your-registry/backend-go:latest
         ports:
         - containerPort: 8080
+        - containerPort: 50051
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-backend-go
+spec:
+  selector:
+    app: kzys-go
+  ports:
+  - name: rest
+    port: 8080
+    targetPort: 8080
+  - name: grpc
+    port: 50051
+    targetPort: 50051
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -35,3 +51,14 @@ spec:
       containers:
       - name: c-media-server
         image: your-registry/backend-c:latest
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-backend-c
+spec:
+  selector:
+    app: kzys-c
+  ports:
+  - port: 50051
+    targetPort: 50051
