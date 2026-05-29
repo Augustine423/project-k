@@ -3,7 +3,6 @@ kind: Ingress
 metadata:
   name: kzys-ingress
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/websocket-services: "kzys-backend"
 spec:
   rules:
