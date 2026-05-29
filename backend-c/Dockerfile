@@ -1,7 +1,7 @@
 # Build stage
 FROM gcc:latest AS builder
 WORKDIR /app
-COPY . .
+COPY backend-c/ .
 RUN gcc -std=c11 -Wall -Wextra -O2 -o media-server main.c
 
 # Runtime stage
