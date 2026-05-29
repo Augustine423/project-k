@@ -1,34 +1,50 @@
 import React, { useState } from 'react';
 
 function App() {
-  const [status, setStatus] = useState('Disconnected');
+  const [roomId, setRoomId] = useState('');
+  const [userId, setUserId] = useState('');
+  const [status, setStatus] = useState('');
 
-  const startSession = async () => {
-    setStatus('Negotiating...');
+  const joinRoom = async () => {
+    if (!roomId || !userId) { setStatus('Enter room ID and your name'); return; }
+    setStatus('Connecting...');
     try {
-      const response = await fetch('http://localhost:8080/v1/session/prepare', {
+      const res = await fetch('/api/v1/session/prepare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          room_id: "room123",
-          user_id: "userA",
-          sdp_offer: "offer-data-here"
-        })
+        body: JSON.stringify({ room_id: roomId, user_id: userId, sdp_offer: 'offer' })
       });
-      const data = await response.json();
-      console.log('Session Prepared:', data);
-      setStatus('Connected to C-Backend');
+      const data = await res.json();
+      setStatus(`Joined! Endpoint: ${data.media_server_endpoint}`);
     } catch (err) {
-      console.error(err);
-      setStatus('Connection Failed');
+      setStatus('Connection failed: ' + err.message);
     }
   };
 
+  const createRoom = () => {
+    const id = 'room-' + Math.random().toString(36).slice(2, 8);
+    setRoomId(id);
+    setStatus(`Room created: ${id} — share this ID with others`);
+  };
+
   return (
-    <div className="App">
+    <div style={{ fontFamily: 'sans-serif', maxWidth: 400, margin: '80px auto', textAlign: 'center' }}>
       <h1>KZYS Video Conference</h1>
-      <p>Status: {status}</p>
-      <button onClick={startSession}>Join Room</button>
+      <input
+        placeholder="Your name"
+        value={userId}
+        onChange={e => setUserId(e.target.value)}
+        style={{ display: 'block', width: '100%', marginBottom: 8, padding: 8 }}
+      />
+      <input
+        placeholder="Room ID"
+        value={roomId}
+        onChange={e => setRoomId(e.target.value)}
+        style={{ display: 'block', width: '100%', marginBottom: 8, padding: 8 }}
+      />
+      <button onClick={createRoom} style={{ marginRight: 8, padding: '8px 16px' }}>Create Room</button>
+      <button onClick={joinRoom} style={{ padding: '8px 16px' }}>Join Room</button>
+      {status && <p style={{ marginTop: 16 }}>{status}</p>}
     </div>
   );
 }
