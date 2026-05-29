@@ -7,7 +7,9 @@ resources:
 - ingress.yaml
 
 images:
-- name: kyawzayarsoe/kzys-backend
+- name: kyawzayarsoe/backend-go
   newTag: latest
-- name: kyawzayarsoe/kzys-frontend
+- name: kyawzayarsoe/backend-c
+  newTag: latest
+- name: kyawzayarsoe/frontend
   newTag: latest

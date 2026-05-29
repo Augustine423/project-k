@@ -1,22 +1,25 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kzys-backend
+  name: kzys-backend-go
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kzys-backend
+      app: kzys-backend-go
   template:
     metadata:
       labels:
-        app: kzys-backend
+        app: kzys-backend-go
     spec:
       containers:
-      - name: backend
-        image: kyawzayarsoe/kzys-backend-go:latest
+      - name: backend-go
+        image: kyawzayarsoe/backend-go:latest
         ports:
-        - containerPort: 8080
+        - name: rest
+          containerPort: 8080
+        - name: grpc
+          containerPort: 50051
         resources:
           requests:
             memory: "128Mi"
@@ -38,10 +41,54 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: kzys-backend
+  name: kzys-backend-go
 spec:
   selector:
-    app: kzys-backend
+    app: kzys-backend-go
   ports:
-  - port: 8080
+  - name: rest
+    port: 8080
     targetPort: 8080
+  - name: grpc
+    port: 50051
+    targetPort: 50051
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kzys-backend-c
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kzys-backend-c
+  template:
+    metadata:
+      labels:
+        app: kzys-backend-c
+    spec:
+      containers:
+      - name: backend-c
+        image: kyawzayarsoe/backend-c:latest
+        ports:
+        - name: grpc
+          containerPort: 50051
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-backend-c
+spec:
+  selector:
+    app: kzys-backend-c
+  ports:
+  - name: grpc
+    port: 50051
+    targetPort: 50051

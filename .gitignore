@@ -27,10 +27,10 @@ yarn-error.log*
 .eslintcache
 
 # generated files
-# pkg/pb/
-# *.pb.go
-# *.pb.h
-# *.pb.cc
+pkg/pb/
+*.pb.go
+*.pb.h
+*.pb.cc
 
 # OS files
 Thumbs.db

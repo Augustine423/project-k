@@ -14,17 +14,26 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: kyawzayarsoe/kzys-frontend:latest
+        image: kyawzayarsoe/frontend:latest
         ports:
         - containerPort: 80
         env:
         - name: BACKEND_HOST
-          value: "kzys-backend"  # Kubernetes Service name
+          value: "kzys-backend-go"
+        - name: MEDIA_HOST
+          value: "kzys-backend-c"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
         livenessProbe:
           httpGet:
             path: /
             port: 80
-          initialDelaySeconds: 5
+          initialDelaySeconds: 10
           periodSeconds: 10
         readinessProbe:
           httpGet:
@@ -42,7 +51,8 @@ spec:
   selector:
     app: kzys-frontend
   ports:
-  - nodePort: 31498
+  - name: http
+    nodePort: 31498
     port: 80
     protocol: TCP
     targetPort: 80
