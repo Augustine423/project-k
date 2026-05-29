@@ -15,10 +15,14 @@ RUN protoc -I api/proto \
 RUN cp main.c main.cpp && \
     g++ -std=c++17 -O2 -o media-server main.cpp kzys.pb.cc kzys.grpc.pb.cc \
     $(pkg-config --cflags --libs grpc++ protobuf) -lpthread
+# Collect all shared libs the binary needs
+RUN ldd /app/media-server | awk '/=>/{print $3}' | xargs -I{} cp {} /app/
 
-# Runtime stage — same image as builder so all shared libs are present
-FROM gcc:latest
+# Runtime stage — copy binary + all its libs
+FROM debian:bookworm-slim
 WORKDIR /root/
 COPY --from=builder /app/media-server .
+COPY --from=builder /app/*.so* /usr/local/lib/
+RUN ldconfig
 EXPOSE 50051
 CMD ["./media-server"]
