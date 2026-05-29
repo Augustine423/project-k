@@ -2,15 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"log"
 	"net"
 	"net/http"
 
-	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 
-	"kzys-backend/pb" 
+	"kzys-backend/pb"
 )
 
 type server struct {
@@ -27,25 +27,48 @@ func (s *server) PrepareMediaSession(ctx context.Context, req *pb.SessionRequest
 }
 
 func main() {
-	// 1. Start gRPC Server (for C-backend communication)
-	go func() {
-		lis, _ := net.Listen("tcp", ":50051")
-		s := grpc.NewServer()
-		pb.RegisterMediaOrchestratorServer(s, &server{})
-		log.Println("gRPC Server running on :50051")
-		s.Serve(lis)
-	}()
-
-	// 2. Start gRPC-Gateway (for React/Flutter REST/JSON calls)
-	ctx := context.Background()
-	mux := runtime.NewServeMux()
-	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
-	
-	err := pb.RegisterMediaOrchestratorHandlerFromEndpoint(ctx, mux, "localhost:50051", opts)
+	// Start gRPC server for internal C-backend communication.
+	lis, err := net.Listen("tcp", ":50051")
 	if err != nil {
-		log.Fatalf("Failed to start gateway: %v", err)
+		log.Fatalf("failed to listen on gRPC port: %v", err)
 	}
 
-	log.Println("gRPC-Gateway running on :8080")
-	http.ListenAndServe(":8080", mux)
+	s := grpc.NewServer()
+	pb.RegisterMediaOrchestratorServer(s, &server{})
+	log.Println("gRPC server running on :50051")
+
+	go func() {
+		if err := s.Serve(lis); err != nil && !errors.Is(err, net.ErrClosed) {
+			log.Printf("gRPC server error: %v", err)
+		}
+	}()
+
+	// Simple REST endpoint used by the frontend.
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v1/session/prepare", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req pb.SessionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		resp, err := (&server{}).PrepareMediaSession(r.Context(), &req)
+		if err != nil {
+			http.Error(w, "failed to prepare session", http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		_ = json.NewEncoder(w).Encode(resp)
+	})
+
+	log.Println("REST API running on :8080")
+	if err := http.ListenAndServe(":8080", mux); err != nil {
+		log.Fatalf("failed to serve REST API: %v", err)
+	}
 }
