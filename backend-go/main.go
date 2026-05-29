@@ -10,7 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 
-	"kzys-project/pb" // Ensure this is generated
+	"kzys-backend/pb" 
 )
 
 type server struct {
