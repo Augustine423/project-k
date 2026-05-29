@@ -4,15 +4,16 @@
   "description": "",
   "main": "App.js",
   "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "dependencies": {
-    "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-scripts": "^0.0.0"
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-scripts": "5.0.1"
   }
 }
