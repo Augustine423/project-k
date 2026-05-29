@@ -1,71 +1,51 @@
 package main
 
 import (
+	"context"
 	"log"
+	"net"
 	"net/http"
-	"sync"
-	"time"
 
-	"github.com/gorilla/websocket"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+
+	"kzys-project/pb" // Ensure this is generated
 )
 
-// JanusController handles signaling
-type JanusController struct {
-	upgrader websocket.Upgrader
-	janusWS  *websocket.Conn
-	mu       sync.Mutex
+type server struct {
+	pb.UnimplementedMediaOrchestratorServer
 }
 
-func (jc *JanusController) connectToJanus() {
-	// In production, this would be an environment variable
-	url := "ws://janus-gateway:8188" 
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
-	if err != nil {
-		log.Printf("Failed to connect to Janus at %s: %v", url, err)
-		time.Sleep(5 * time.Second)
-		go jc.connectToJanus() // Reconnect loop
-		return
-	}
-	jc.janusWS = conn
-	log.Println("Connected to Janus Gateway")
-}
-
-func (jc *JanusController) handleConnection(w http.ResponseWriter, r *http.Request) {
-	clientConn, err := jc.upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Println("Upgrade error:", err)
-		return
-	}
-	defer clientConn.Close()
-
-	for {
-		_, message, err := clientConn.ReadMessage()
-		if err != nil {
-			break
-		}
-
-		// Relay logic: Pass the message to Janus
-		jc.mu.Lock()
-		if jc.janusWS != nil {
-			err = jc.janusWS.WriteMessage(websocket.TextMessage, message)
-			if err != nil {
-				log.Println("Error forwarding to Janus:", err)
-			}
-		}
-		jc.mu.Unlock()
-	}
+// Implement gRPC logic
+func (s *server) PrepareMediaSession(ctx context.Context, req *pb.SessionRequest) (*pb.SessionResponse, error) {
+	log.Printf("REST request received for room: %s", req.RoomId)
+	return &pb.SessionResponse{
+		SdpAnswer:           "v=0...",
+		MediaServerEndpoint: "udp://127.0.0.1:5000",
+	}, nil
 }
 
 func main() {
-	jc := &JanusController{
-		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
-		},
+	// 1. Start gRPC Server (for C-backend communication)
+	go func() {
+		lis, _ := net.Listen("tcp", ":50051")
+		s := grpc.NewServer()
+		pb.RegisterMediaOrchestratorServer(s, &server{})
+		log.Println("gRPC Server running on :50051")
+		s.Serve(lis)
+	}()
+
+	// 2. Start gRPC-Gateway (for React/Flutter REST/JSON calls)
+	ctx := context.Background()
+	mux := runtime.NewServeMux()
+	opts := []grpc.DialOption{grpc.WithTransportCredentials(insecure.NewCredentials())}
+	
+	err := pb.RegisterMediaOrchestratorHandlerFromEndpoint(ctx, mux, "localhost:50051", opts)
+	if err != nil {
+		log.Fatalf("Failed to start gateway: %v", err)
 	}
 
-	go jc.connectToJanus()
-
-	http.HandleFunc("/ws", jc.handleConnection)
-	log.Println("Signaling Controller listening on :8080")
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Println("gRPC-Gateway running on :8080")
+	http.ListenAndServe(":8080", mux)
 }

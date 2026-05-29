@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kzys-backend-go
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kzys-go
+  template:
+    metadata:
+      labels:
+        app: kzys-go
+    spec:
+      containers:
+      - name: go-signaling
+        image: your-registry/backend-go:latest
+        ports:
+        - containerPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kzys-backend-c
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kzys-c
+  template:
+    metadata:
+      labels:
+        app: kzys-c
+    spec:
+      containers:
+      - name: c-media-server
+        image: your-registry/backend-c:latest

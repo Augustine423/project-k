@@ -1,81 +1,26 @@
-# KZYS Video Meeting Project
+# KZYS Project: Hybrid Video Conferencing Platform
 
-Minimal VideoRoom adaptation from Janus for Zoom/Teams-like application.
+KZYS is a production-grade video conferencing platform leveraging a hybrid architecture:
+- **Control Plane (Go):** Manages signaling, user auth, and REST/gRPC API.
+- **Data Plane (C):** High-performance UDP/WebRTC media processing.
+- **Frontend (React):** Modern web interface for session management.
 
-## Project Structure:
-```
-kzys-project/
-├── .github/workflows/     # GitHub Actions CI/CD
-│   └── docker-build.yml
-├── backend/               # C backend (WebSocket server, media routing)
-│   ├── Dockerfile
-│   ├── videoroom-core.c
-│   ├── videoroom-config.h
-│   ├── websocket-server.c
-│   ├── media-router.c
-│   └── Makefile
-├── frontend/              # Web frontend
-│   ├── Dockerfile
-│   ├── test-frontend.html
-│   ├── webrtc-integration.js
-│   └── package.json
-├── k8s/                   # Kubernetes manifests
-│   ├── backend-deployment.yaml
-│   ├── frontend-deployment.yaml
-│   ├── ingress.yaml
-│   └── kustomization.yaml
-├── docker-compose.yml     # Development setup
-├── docker-compose.prod.yml # Production setup
-└── README.md
-```
+## Project Structure
+- `.github/workflows/`: CI/CD (Docker builds).
+- `api/proto/`: Source of truth (gRPC contracts).
+- `backend-go/`: Signaling microservice (REST/gRPC).
+- `backend-c/`: Media orchestration microservice.
+- `deployments/k8s/`: Kubernetes manifests.
+- `frontend/`: React SPA.
 
-## Based on Janus VideoRoom Plugin:
-- Multi-party video conferencing
-- SFU (Selective Forwarding Unit) architecture
-- Publish/Subscribe pattern
-- WebRTC media routing
+## Workflow
+1. **API:** Frontend calls Go Gateway (REST).
+2. **Orchestration:** Go service sends Protobuf commands to C Service (gRPC).
+3. **Media:** Clients exchange media via UDP (WebRTC) facilitated by C Service.
+4. **CI/CD:** Push to `main` triggers GitHub Action to build and push Docker images.
 
-## GitHub Actions CI/CD:
-Automatically builds and pushes Docker images to Docker Hub on push to main branch.
-
-### Setup Secrets in GitHub Repository:
-1. Go to Repository → Settings → Secrets and variables → Actions
-2. Add these secrets:
-   - `DOCKER_USERNAME`: `kyawzayarsoe`
-   - `DOCKER_PASSWORD`: `Kakeruaura1!`
-
-### Docker Images on Docker Hub:
-- Backend: `kyawzayarsoe/kzys-backend:latest`
-- Frontend: `kyawzayarsoe/kzys-frontend:latest`
-
-## Deployment Options:
-
-### 1. Docker Compose (Development):
-```bash
-docker-compose up --build
-```
-
-### 2. Docker Compose (Production - pre-built images):
-```bash
-docker-compose -f docker-compose.prod.yml up
-```
-
-### 3. Kubernetes:
-```bash
-kubectl apply -k k8s/
-```
-
-## Access:
-- Frontend: http://localhost (or LoadBalancer IP in K8s)
-- WebSocket: ws://[host]/ws
-
-## Manual Build:
-```bash
-# Backend
-cd backend
-make
-
-# Frontend
-cd frontend
-npx serve .  # or use any static server
-```
+## Deployment
+1. Generate Protobuf bindings:
+   `protoc -I api/proto --go_out=. --go-grpc_out=. api/proto/kzys.proto`
+2. Deploy to K8s:
+   `kubectl apply -f deployments/k8s/`

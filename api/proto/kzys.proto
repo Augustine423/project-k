@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package kzys;
+
+option go_package = "./pb";
+
+// Room and Stream management
+service MediaOrchestrator {
+  // Go tells C to prepare a media session for a user
+  rpc PrepareMediaSession(SessionRequest) returns (SessionResponse);
+  // C notifies Go when a stream is live or error occurs
+  rpc StreamStatusUpdate(StatusRequest) returns (StatusResponse);
+}
+
+message SessionRequest {
+  string room_id = 1;
+  string user_id = 2;
+  string sdp_offer = 3;
+}
+
+message SessionResponse {
+  string sdp_answer = 1;
+  string media_server_endpoint = 2; // e.g., "udp://10.0.0.5:5000"
+}
+
+message StatusRequest {
+  string room_id = 1;
+  string user_id = 2;
+  string status = 3;
+}
+
+message StatusResponse {
+  bool acknowledged = 1;
+}

@@ -1,12 +1,16 @@
+# Stage 1: Build the React app
+FROM node:18-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve with Nginx
 FROM nginx:alpine
-
-# Copy frontend files
-COPY . /usr/share/nginx/html/
-
-# Copy nginx config template
-COPY nginx.conf /etc/nginx/templates/default.conf.template
-
-# Use envsubst to replace variables at runtime
-CMD ["/bin/sh", "-c", "envsubst '$$BACKEND_HOST' < /etc/nginx/templates/default.conf.template > /etc/nginx/conf.d/default.conf && nginx -g 'daemon off;'"]
-
+# Copy build output to Nginx's default directory
+COPY --from=builder /app/build /usr/share/nginx/html
+# Add custom Nginx config for React SPA routing
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
