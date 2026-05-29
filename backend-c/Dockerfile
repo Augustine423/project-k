@@ -8,4 +8,5 @@ RUN gcc -std=c11 -Wall -Wextra -O2 -o media-server main.c
 FROM debian:bookworm-slim
 WORKDIR /root/
 COPY --from=builder /app/media-server .
+EXPOSE 50051
 CMD ["./media-server"]

@@ -51,6 +51,8 @@ spec:
       containers:
       - name: c-media-server
         image: your-registry/backend-c:latest
+        ports:
+        - containerPort: 50051
 ---
 apiVersion: v1
 kind: Service
