@@ -22,6 +22,7 @@ jobs:
       - name: Build and Push
         uses: docker/build-push-action@v5
         with:
-          context: ./${{ matrix.service }}
+          context: .
+          file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: kyawzayarsoe/${{ matrix.service }}:latest,kyawzayarsoe/${{ matrix.service }}:${{ github.sha }}
