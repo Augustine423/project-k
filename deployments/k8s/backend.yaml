@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: go-signaling
-        image: your-registry/backend-go:latest
+        image: kyawzayarsoe/backend-go:latest
         ports:
         - containerPort: 8080
         - containerPort: 50051
@@ -50,7 +50,7 @@ spec:
     spec:
       containers:
       - name: c-media-server
-        image: your-registry/backend-c:latest
+        image: kyawzayarsoe/backend-c:latest
         ports:
         - containerPort: 50051
 ---
