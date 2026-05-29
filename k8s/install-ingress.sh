@@ -12,3 +12,12 @@ kubectl wait --namespace ingress-nginx \
 
 echo "Ingress controller ready."
 kubectl get svc -n ingress-nginx
+
+echo ""
+echo "Deploying KZYS application..."
+kubectl apply -f backend-deployment.yaml -f frontend-deployment.yaml -f ingress.yaml
+
+echo ""
+NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')
+NODE_PORT=$(kubectl get svc -n ingress-nginx ingress-nginx-controller -o jsonpath='{.spec.ports[?(@.port==80)].nodePort}')
+echo "Access the app at: http://${NODE_IP}:${NODE_PORT}/"
