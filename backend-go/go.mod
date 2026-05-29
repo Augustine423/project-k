@@ -3,6 +3,7 @@ module kzys/backend
 go 1.24
 
 require (
+	github.com/gorilla/websocket v1.5.3
 	google.golang.org/grpc v1.65.0
 	kzys/backend/pb v0.0.0-00010101000000-000000000000
 )
