@@ -10,7 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 
-	"kzys-backend/pb"
+	"kzys.backend/pb"
 )
 
 type server struct {
