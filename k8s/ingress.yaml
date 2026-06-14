@@ -21,7 +21,7 @@ metadata:
   name: kzys-ingress-backend
   annotations:
     nginx.ingress.kubernetes.io/rewrite-target: /$2
-    nginx.ingress.kubernetes.io/websocket-services: "kzys-backend-go"
+    nginx.ingress.kubernetes.io/websocket-services: "kzys-backend-csharp"
 spec:
   ingressClassName: nginx
   rules:
@@ -31,6 +31,6 @@ spec:
         pathType: ImplementationSpecific
         backend:
           service:
-            name: kzys-backend-go
+            name: kzys-backend-csharp
             port:
               number: 8080

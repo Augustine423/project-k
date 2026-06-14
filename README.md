@@ -1,26 +1,46 @@
-# KZYS Project: Hybrid Video Conferencing Platform
+# KZYS Project: Hybrid Video Conferencing Platform (C# & React)
 
-KZYS is a production-grade video conferencing platform leveraging a hybrid architecture:
-- **Control Plane (Go):** Manages signaling, user auth, and REST/gRPC API.
-- **Data Plane (C):** High-performance UDP/WebRTC media processing.
-- **Frontend (React):** Modern web interface for session management.
+KZYS is a high-performance, production-grade video conferencing platform designed for low-latency live meetings and broadcasts.
 
-## Project Structure
-- `.github/workflows/`: CI/CD (Docker builds).
-- `api/proto/`: Source of truth (gRPC contracts).
-- `backend-go/`: Signaling microservice (REST/gRPC).
-- `backend-c/`: Media orchestration microservice.
-- `deployments/k8s/`: Kubernetes manifests.
-- `frontend/`: React SPA.
+## 🏗️ Architecture
 
-## Workflow
-1. **API:** Frontend calls Go Gateway (REST).
-2. **Orchestration:** Go service sends Protobuf commands to C Service (gRPC).
-3. **Media:** Clients exchange media via UDP (WebRTC) facilitated by C Service.
-4. **CI/CD:** Push to `main` triggers GitHub Action to build and push Docker images.
+The platform is designed around a decoupled, ultra-low latency model:
+- **Control Plane & Signaling (C# / ASP.NET Core):** Manages sessions, users, active rooms, real-time SignalR signaling, and chat message delivery.
+- **Data Plane (C / Janus Gateway):** Manages media processing, selective forwarding (SFU), UDP, and WebRTC streaming.
+- **Frontend (React 18):** A premium, glassmorphic UI styled with CSS variables. Features full conference layout management, micro-animations, a slide-out chat system, participant drawers, and simulated multi-party rooms.
 
-## Deployment
-1. Generate Protobuf bindings:
-   `protoc -I api/proto --go_out=. --go-grpc_out=. api/proto/kzys.proto`
-2. Deploy to K8s:
-   `kubectl apply -f deployments/k8s/`
+---
+
+## 📂 Project Structure
+
+- `backend-csharp/`: Core ASP.NET Core API and SignalR Hub for Signaling/Chat.
+- `frontend/`: React SPA with premium UI components.
+- `janus-gateway/`: Reference media-gateway plugin structures for sub-ms video distribution.
+- `k8s/`: Kubernetes manifests (Deployment, Ingress, Kustomize setup).
+- `.github/workflows/`: Automated multi-service CI/CD pipelines.
+
+---
+
+## ⚙️ Run Locally
+
+### 1. Start C# Backend
+Make sure you have .NET 8 SDK installed.
+```bash
+cd backend-csharp
+dotnet run
+```
+Runs at `http://localhost:8080` (SignalR Hub on `/meetinghub`).
+
+### 2. Start Frontend
+```bash
+cd frontend
+npm install
+npm run start
+```
+Runs at `http://localhost:3000`.
+
+---
+
+## 🚀 Low-Latency Janus Integration
+
+Janus achieves sub-second processing by running a Selective Forwarding Unit (SFU) in native C. The React client is structured to separate **Publishers** (sending local WebRTC camera/audio tracks) from **Subscribers** (receiving individual downstream peer feeds), enabling sub-millisecond network turnaround times.

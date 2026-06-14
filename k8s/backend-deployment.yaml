@@ -1,33 +1,31 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kzys-backend-go
+  name: kzys-backend-csharp
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kzys-backend-go
+      app: kzys-backend-csharp
   template:
     metadata:
       labels:
-        app: kzys-backend-go
+        app: kzys-backend-csharp
     spec:
       containers:
-      - name: backend-go
-        image: kyawzayarsoe/backend-go:latest
+      - name: backend-csharp
+        image: kyawzayarsoe/backend-csharp:latest
         imagePullPolicy: Always
         ports:
-        - name: rest
+        - name: http
           containerPort: 8080
-        - name: grpc
-          containerPort: 50051
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "250m"
-          limits:
             memory: "256Mi"
             cpu: "500m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
         livenessProbe:
           tcpSocket:
             port: 8080
@@ -42,55 +40,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: kzys-backend-go
+  name: kzys-backend-csharp
 spec:
   selector:
-    app: kzys-backend-go
+    app: kzys-backend-csharp
   ports:
-  - name: rest
+  - name: http
     port: 8080
     targetPort: 8080
-  - name: grpc
-    port: 50051
-    targetPort: 50051
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: kzys-backend-c
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kzys-backend-c
-  template:
-    metadata:
-      labels:
-        app: kzys-backend-c
-    spec:
-      containers:
-      - name: backend-c
-        image: kyawzayarsoe/backend-c:latest
-        imagePullPolicy: Always
-        ports:
-        - name: grpc
-          containerPort: 50051
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "500m"
-          limits:
-            memory: "512Mi"
-            cpu: "1000m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kzys-backend-c
-spec:
-  selector:
-    app: kzys-backend-c
-  ports:
-  - name: grpc
-    port: 50051
-    targetPort: 50051

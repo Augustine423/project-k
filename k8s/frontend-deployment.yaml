@@ -20,9 +20,7 @@ spec:
         - containerPort: 80
         env:
         - name: BACKEND_HOST
-          value: "kzys-backend-go"
-        - name: MEDIA_HOST
-          value: "kzys-backend-c"
+          value: "kzys-backend-csharp"
         resources:
           requests:
             memory: "64Mi"
