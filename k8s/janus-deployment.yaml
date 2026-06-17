@@ -11,7 +11,6 @@ data:
       events_folder = "/usr/local/lib/janus/events"
       loggers_folder = "/usr/local/lib/janus/loggers"
       debug_level = 4
-      admin_secret = "janusoverlord"
     }
     media: {
       rtp_port_range = "10000-10200"
@@ -19,7 +18,6 @@ data:
     nat: {
       stun_server = "stun.l.google.com"
       stun_port = 19302
-      nice_debug = false
       full_trickle = true
       ignore_mdns = true
     }
@@ -40,6 +38,14 @@ data:
     }
   janus.plugin.videoroom.jcfg: |
     general: {}
+  start.sh: |
+    #!/bin/sh
+    # Inject the node IP as nat-1-1 into janus.jcfg
+    NODE_IP=$(cat /etc/janus-node-ip/node-ip 2>/dev/null || echo "")
+    if [ -n "$NODE_IP" ]; then
+      sed -i "s|full_trickle = true|full_trickle = true\n      nat_1_1_mapping = \"$NODE_IP\"|" /usr/local/etc/janus/janus.jcfg
+    fi
+    exec /usr/local/bin/janus
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -55,11 +61,26 @@ spec:
       labels:
         app: kzys-janus
     spec:
-      hostNetwork: false
+      initContainers:
+      - name: write-node-ip
+        image: busybox
+        command:
+        - sh
+        - -c
+        - echo $NODE_IP > /node-ip/node-ip
+        env:
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
+        volumeMounts:
+        - name: node-ip
+          mountPath: /node-ip
       containers:
       - name: janus
         image: canyan/janus-gateway:latest
         imagePullPolicy: Always
+        command: ["/bin/sh", "/usr/local/etc/janus/start.sh"]
         ports:
         - containerPort: 8088
           protocol: TCP
@@ -69,11 +90,6 @@ spec:
           protocol: UDP
         - containerPort: 10200
           protocol: UDP
-        env:
-        - name: MY_POD_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
         volumeMounts:
         - name: janus-config
           mountPath: /usr/local/etc/janus/janus.jcfg
@@ -87,6 +103,11 @@ spec:
         - name: janus-config
           mountPath: /usr/local/etc/janus/janus.plugin.videoroom.jcfg
           subPath: janus.plugin.videoroom.jcfg
+        - name: janus-config
+          mountPath: /usr/local/etc/janus/start.sh
+          subPath: start.sh
+        - name: node-ip
+          mountPath: /etc/janus-node-ip
         resources:
           requests:
             memory: "256Mi"
@@ -97,17 +118,20 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 8088
-          initialDelaySeconds: 10
+          initialDelaySeconds: 15
           periodSeconds: 15
         readinessProbe:
           tcpSocket:
             port: 8088
-          initialDelaySeconds: 10
+          initialDelaySeconds: 15
           periodSeconds: 15
       volumes:
       - name: janus-config
         configMap:
           name: janus-config
+          defaultMode: 0755
+      - name: node-ip
+        emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
