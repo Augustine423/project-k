@@ -15,7 +15,7 @@ kubectl get svc -n ingress-nginx
 
 echo ""
 echo "Deploying KZYS application..."
-kubectl apply -f backend-deployment.yaml -f frontend-deployment.yaml -f ingress.yaml
+kubectl apply -k .
 
 echo ""
 NODE_IP=$(kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}')

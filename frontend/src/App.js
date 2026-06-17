@@ -205,10 +205,12 @@ function Room({ session, onLeave }) {
 
   // Set up SignalR Signaling Connection
   useEffect(() => {
-    // In production, the URL matches where the backend is hosted or proxied
-    const hubUrl = window.location.origin.includes('localhost') 
-      ? 'http://localhost:8080/meetinghub' 
-      : `${window.location.protocol}//${window.location.host}/meetinghub`;
+    // Local npm dev talks to backend directly; K8s/ingress/nginx use /api/meetinghub
+    const isLocalDev =
+      window.location.hostname === 'localhost' && window.location.port === '3000';
+    const hubUrl = isLocalDev
+      ? 'http://localhost:8080/meetinghub'
+      : `${window.location.origin}/api/meetinghub`;
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl)
