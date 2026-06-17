@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Kzys.Backend</RootNamespace>
+    <AssemblyName>Kzys.Backend</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>
