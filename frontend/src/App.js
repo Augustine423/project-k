@@ -177,144 +177,159 @@ function Room({ session, onLeave }) {
   }, [userId, addMessage]);
 
   // ── WebRTC P2P via SignalR signaling ─────────────────────────────────────
+  // ── Janus SFU connection ──────────────────────────────────────────────────
   useEffect(() => {
     if (!mediaReady) return;
 
-    const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
-    const isLocalDev = window.location.hostname === 'localhost';
-    const hubUrl = isLocalDev ? 'http://localhost:8080/meetinghub' : `${window.location.origin}/api/meetinghub`;
+    const nodeHost = window.location.hostname;
+    const janusWs = process.env.REACT_APP_JANUS_WS || `ws://${nodeHost}:30188`;
+    const JANUS_ROOM = 1234;
 
-    const createPeerConnection = (targetConnectionId, targetUserId, isInitiator) => {
-      if (peerConnectionsRef.current[targetConnectionId]) return peerConnectionsRef.current[targetConnectionId];
+    let ws = null;
+    let sessionId = null;
+    let publishHandleId = null;
+    let destroyed = false;
+    let keepAliveTimer = null;
+    const subscriberHandles = {}; // feedId -> subHandleId
+    const peerConnections = {};   // handleId -> RTCPeerConnection
+    const txHandlers = {};        // transaction -> resolve
 
-      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-      peerConnectionsRef.current[targetConnectionId] = pc;
+    const txId = () => Math.random().toString(36).substring(2, 12);
+    const send = (msg) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify(msg));
+    const request = (msg) => new Promise((res) => { txHandlers[msg.transaction] = res; send(msg); });
 
-      // Add local tracks
-      if (localStreamRef.current) {
+    const createPC = (handleId, isPublisher, feedId, feedDisplay) => {
+      const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+      peerConnections[handleId] = pc;
+
+      if (isPublisher && localStreamRef.current)
         localStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localStreamRef.current));
+
+      pc.onicecandidate = (e) => send({
+        janus: 'trickle', session_id: sessionId, handle_id: handleId,
+        transaction: txId(), candidate: e.candidate || { completed: true }
+      });
+
+      if (!isPublisher) {
+        pc.ontrack = (e) => {
+          const stream = e.streams[0];
+          setPeers((prev) => {
+            const key = String(feedId);
+            const exists = prev.some((p) => p.connectionId === key);
+            const base = exists ? prev : [...prev, { connectionId: key, userId: feedDisplay || key, stream: null }];
+            return base.map((p) => p.connectionId === key ? { ...p, stream } : p);
+          });
+        };
       }
-
-      // Receive remote stream
-      pc.ontrack = (e) => {
-        const stream = e.streams[0];
-        setPeers((prev) => prev.map((p) =>
-          p.connectionId === targetConnectionId ? { ...p, stream } : p
-        ));
-      };
-
-      // Send ICE candidates via SignalR
-      pc.onicecandidate = (e) => {
-        if (e.candidate && hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
-          hubConnectionRef.current.invoke('SendSignal', targetConnectionId,
-            JSON.stringify({ type: 'ice', candidate: e.candidate })
-          ).catch(console.error);
-        }
-      };
-
-      pc.onconnectionstatechange = () => {
-        if (pc.connectionState === 'connected') setConnectionStatus('connected');
-        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-          cleanUpPeer(targetConnectionId);
-        }
-      };
-
-      if (isInitiator) {
-        pc.createOffer()
-          .then((offer) => pc.setLocalDescription(offer))
-          .then(() => {
-            if (hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
-              hubConnectionRef.current.invoke('SendSignal', targetConnectionId,
-                JSON.stringify({ type: 'offer', sdp: pc.localDescription })
-              ).catch(console.error);
-            }
-          })
-          .catch(console.error);
-      }
-
       return pc;
     };
 
-    const connection = new signalR.HubConnectionBuilder()
-      .withUrl(hubUrl)
-      .withAutomaticReconnect()
-      .build();
-
-    hubConnectionRef.current = connection;
-
-    connection.on('RoomJoined', (_roomId, existingPeers) => {
-      setConnectionStatus('connected');
-      addMessage('System', `Connected as ${userId}`);
-      // Initiate offer to every peer already in the room
-      existingPeers.forEach(({ UserId: peerUserId, ConnectionId: peerConnId }) => {
-        setPeers((prev) => prev.some((p) => p.connectionId === peerConnId) ? prev
-          : [...prev, { connectionId: peerConnId, userId: peerUserId, stream: null }]);
-        createPeerConnection(peerConnId, peerUserId, true);
+    const subscribeToFeed = async (feedId, feedDisplay) => {
+      const a = await request({ janus: 'attach', session_id: sessionId, plugin: 'janus.plugin.videoroom', transaction: txId() });
+      const subHandleId = a.data.id;
+      subscriberHandles[feedId] = subHandleId;
+      send({
+        janus: 'message', session_id: sessionId, handle_id: subHandleId, transaction: txId(),
+        body: { request: 'join', ptype: 'subscriber', room: JANUS_ROOM, feed: feedId }
       });
-    });
+    };
 
-    connection.on('PeerJoined', (joinedUserId, joinedConnId) => {
-      addMessage('System', `${joinedUserId} joined.`);
-      setPeers((prev) => prev.some((p) => p.connectionId === joinedConnId) ? prev
-        : [...prev, { connectionId: joinedConnId, userId: joinedUserId, stream: null }]);
-      // The newcomer will send us an offer; do NOT initiate here (avoid double offer)
-    });
+    ws = new WebSocket(janusWs, 'janus-protocol');
 
-    connection.on('PeerLeft', (leftUserId, leftConnId) => {
-      addMessage('System', `${leftUserId} left.`);
-      cleanUpPeer(leftConnId);
-    });
+    ws.onopen = async () => {
+      const s = await request({ janus: 'create', transaction: txId() });
+      sessionId = s.data.id;
+      keepAliveTimer = setInterval(() => send({ janus: 'keepalive', session_id: sessionId, transaction: txId() }), 25000);
 
-    connection.on('ReceiveSignal', async (_senderUserId, senderConnId, signalDataRaw) => {
-      const signal = JSON.parse(signalDataRaw);
-      let pc = peerConnectionsRef.current[senderConnId];
+      const a = await request({ janus: 'attach', session_id: sessionId, plugin: 'janus.plugin.videoroom', transaction: txId() });
+      publishHandleId = a.data.id;
 
-      if (signal.type === 'offer') {
-        if (!pc) {
-          // Find the userId from peers state
-          setPeers((prev) => {
-            const peer = prev.find((p) => p.connectionId === senderConnId);
-            pc = createPeerConnection(senderConnId, peer?.userId || senderConnId, false);
-            return prev;
-          });
-          if (!pc) pc = createPeerConnection(senderConnId, senderConnId, false);
-        }
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      send({
+        janus: 'message', session_id: sessionId, handle_id: publishHandleId, transaction: txId(),
+        body: { request: 'join', ptype: 'publisher', room: JANUS_ROOM, display: userId }
+      });
+    };
+
+    ws.onmessage = async (evt) => {
+      const msg = JSON.parse(evt.data);
+      const { janus, transaction, sender } = msg;
+
+      if (transaction && txHandlers[transaction]) { txHandlers[transaction](msg); delete txHandlers[transaction]; return; }
+
+      if (janus !== 'event') return;
+      const pd = msg.plugindata?.data;
+      if (!pd) return;
+
+      // Joined as publisher — send offer
+      if (pd.videoroom === 'joined') {
+        setConnectionStatus('connected');
+        addMessage('System', `Joined SFU room as ${userId}`);
+        const pc = createPC(publishHandleId, true, null, null);
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        const tx = txId();
+        txHandlers[tx] = async (resp) => { if (resp.jsep) await pc.setRemoteDescription(new RTCSessionDescription(resp.jsep)); };
+        send({ janus: 'message', session_id: sessionId, handle_id: publishHandleId, transaction: tx, body: { request: 'configure', audio: true, video: true }, jsep: offer });
+        (pd.publishers || []).forEach((pub) => {
+          setPeers((prev) => prev.some((p) => p.connectionId === String(pub.id)) ? prev : [...prev, { connectionId: String(pub.id), userId: pub.display || String(pub.id), stream: null }]);
+          subscribeToFeed(pub.id, pub.display);
+        });
+      }
+
+      // New publisher joined
+      if (pd.videoroom === 'event' && pd.publishers) {
+        pd.publishers.forEach((pub) => {
+          addMessage('System', `${pub.display || pub.id} joined.`);
+          setPeers((prev) => prev.some((p) => p.connectionId === String(pub.id)) ? prev : [...prev, { connectionId: String(pub.id), userId: pub.display || String(pub.id), stream: null }]);
+          subscribeToFeed(pub.id, pub.display);
+        });
+      }
+
+      // Publisher left
+      if (pd.videoroom === 'event' && pd.leaving) {
+        cleanUpPeer(String(pd.leaving));
+      }
+
+      // Subscriber offer from Janus — send answer
+      if (pd.videoroom === 'attached' && msg.jsep) {
+        const subHandleId = sender;
+        const feedId = Object.keys(subscriberHandles).find((k) => subscriberHandles[k] === subHandleId);
+        const pc = createPC(subHandleId, false, feedId, null);
+        await pc.setRemoteDescription(new RTCSessionDescription(msg.jsep));
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
-        if (hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
-          hubConnectionRef.current.invoke('SendSignal', senderConnId,
-            JSON.stringify({ type: 'answer', sdp: pc.localDescription })
-          ).catch(console.error);
-        }
-      } else if (signal.type === 'answer' && pc) {
-        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
-      } else if (signal.type === 'ice' && pc) {
-        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(console.error);
+        send({ janus: 'message', session_id: sessionId, handle_id: subHandleId, transaction: txId(), body: { request: 'start', room: JANUS_ROOM }, jsep: answer });
       }
-    });
+    };
 
-    connection.on('ReceiveChat', (senderUserId, text, timestamp) => {
-      setMessages((prev) => [...prev, {
-        from: senderUserId, text,
-        time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      }]);
-    });
-
-    connection.start()
-      .then(() => connection.invoke('JoinRoom', roomId, userId))
-      .catch((err) => {
-        console.error('SignalR failed:', err);
-        setConnectionStatus('offline');
-        addMessage('System', 'Could not connect to signaling server.');
-      });
+    ws.onerror = () => { setConnectionStatus('offline'); addMessage('System', 'Janus SFU unreachable. Is the Janus pod running?'); };
+    ws.onclose = () => { if (!destroyed) setConnectionStatus('offline'); };
 
     return () => {
-      Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
-      peerConnectionsRef.current = {};
-      connection.stop();
+      destroyed = true;
+      clearInterval(keepAliveTimer);
+      if (sessionId) send({ janus: 'destroy', session_id: sessionId, transaction: txId() });
+      Object.values(peerConnections).forEach((pc) => pc.close());
+      ws?.close();
     };
   }, [mediaReady, roomId, userId, addMessage, cleanUpPeer]);
+
+  // ── SignalR — chat only ───────────────────────────────────────────────────
+  useEffect(() => {
+    if (!mediaReady) return;
+    const isLocalDev = window.location.hostname === 'localhost';
+    const hubUrl = isLocalDev ? 'http://localhost:8080/meetinghub' : `${window.location.origin}/api/meetinghub`;
+    const connection = new signalR.HubConnectionBuilder().withUrl(hubUrl).withAutomaticReconnect().build();
+    hubConnectionRef.current = connection;
+    connection.on('RoomJoined', () => {});
+    connection.on('ReceiveChat', (from, text, timestamp) => {
+      setMessages((prev) => [...prev, { from, text, time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    });
+    connection.on('PeerJoined', (name) => addMessage('System', `${name} joined.`));
+    connection.on('PeerLeft', (name) => addMessage('System', `${name} left.`));
+    connection.start().then(() => connection.invoke('JoinRoom', roomId, userId)).catch(() => addMessage('System', 'Chat server unavailable.'));
+    return () => connection.stop();
+  }, [mediaReady, roomId, userId, addMessage]);
 
   // ── Controls ──────────────────────────────────────────────────────────────
   const handleSendChat = () => {

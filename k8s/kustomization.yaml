@@ -5,6 +5,7 @@ resources:
 - backend-deployment.yaml
 - frontend-deployment.yaml
 - coturn-deployment.yaml
+- janus-deployment.yaml
 - ingress.yaml
 
 images:
