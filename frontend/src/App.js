@@ -4,7 +4,8 @@ import {
   Room as LiveKitRoom,
   RoomEvent,
   ConnectionState,
-  Track
+  Track,
+  createLocalTracks
 } from 'livekit-client';
 
 // ── KZYS Meeting Room App ─────────────────────────────────────────────────────
@@ -182,23 +183,12 @@ function Room({ session, onLeave }) {
     };
   }, [userId, addMessage]);
 
-  // ── LiveKit SFU connection (replaces RTCPeerConnection P2P) ──────────────
+  // ── LiveKit SFU connection ────────────────────────────────────────────────
   useEffect(() => {
     if (!mediaReady) return;
 
-    const isLocalDev = window.location.hostname === 'localhost' && window.location.port === '3000';
     const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || 'ws://localhost:7880';
-
-    // For testing: generate a token via env or use a dev token
-    // In production: fetch from your backend token endpoint
-    const token = process.env.REACT_APP_LIVEKIT_TOKEN || '';
-
-    if (!token) {
-      // No LiveKit token — fall back to local media preview only
-      setConnectionStatus('offline');
-      addMessage('System', 'No LiveKit token configured. Set REACT_APP_LIVEKIT_TOKEN to connect to SFU. Local camera/mic still works.');
-      return;
-    }
+    const tokenEndpoint = process.env.REACT_APP_LIVEKIT_TOKEN_ENDPOINT || 'http://localhost:8080/api/livekit/token';
 
     const room = new LiveKitRoom({
       adaptiveStream: true,
@@ -206,6 +196,23 @@ function Room({ session, onLeave }) {
       publishDefaults: { dtx: true }
     });
     livekitRoomRef.current = room;
+
+    // Helper: attach already-published tracks from a participant who was in the room before we joined
+    const attachExistingTracks = (participant) => {
+      participant.trackPublications.forEach((pub) => {
+        if (pub.track && pub.kind === Track.Kind.Video) {
+          const videoStream = new MediaStream([pub.track.mediaStreamTrack]);
+          setPeers((prev) => prev.map((p) =>
+            p.connectionId === participant.identity ? { ...p, videoStream } : p
+          ));
+        } else if (pub.track && pub.kind === Track.Kind.Audio) {
+          const audioStream = new MediaStream([pub.track.mediaStreamTrack]);
+          setPeers((prev) => prev.map((p) =>
+            p.connectionId === participant.identity ? { ...p, audioStream } : p
+          ));
+        }
+      });
+    };
 
     room.on(RoomEvent.ParticipantConnected, (participant) => {
       addMessage('System', `${participant.name || participant.identity} joined the conference.`);
@@ -220,30 +227,27 @@ function Room({ session, onLeave }) {
       cleanUpPeer(participant.identity);
     });
 
+    // Fix Bug 3: ensure peer exists before attaching stream
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.kind === Track.Kind.Video) {
-        const videoStream = new MediaStream([track.mediaStreamTrack]);
-        setPeers((prev) => prev.map((p) =>
-          p.connectionId === participant.identity ? { ...p, videoStream } : p
-        ));
-      } else if (track.kind === Track.Kind.Audio) {
-        const audioStream = new MediaStream([track.mediaStreamTrack]);
-        setPeers((prev) => prev.map((p) =>
-          p.connectionId === participant.identity ? { ...p, audioStream } : p
-        ));
-      }
+      const stream = new MediaStream([track.mediaStreamTrack]);
+      setPeers((prev) => {
+        // Ensure peer entry exists first
+        const exists = prev.some((p) => p.connectionId === participant.identity);
+        const base = exists ? prev : [...prev, { connectionId: participant.identity, userId: participant.name || participant.identity, stream: null, isMuted: true, isCamOff: true }];
+        return base.map((p) =>
+          p.connectionId === participant.identity
+            ? { ...p, ...(track.kind === Track.Kind.Video ? { videoStream: stream } : { audioStream: stream }) }
+            : p
+        );
+      });
     });
 
     room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-      if (track.kind === Track.Kind.Video) {
-        setPeers((prev) => prev.map((p) =>
-          p.connectionId === participant.identity ? { ...p, videoStream: null } : p
-        ));
-      } else if (track.kind === Track.Kind.Audio) {
-        setPeers((prev) => prev.map((p) =>
-          p.connectionId === participant.identity ? { ...p, audioStream: null } : p
-        ));
-      }
+      setPeers((prev) => prev.map((p) =>
+        p.connectionId === participant.identity
+          ? { ...p, ...(track.kind === Track.Kind.Video ? { videoStream: null } : { audioStream: null }) }
+          : p
+      ));
     });
 
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -257,25 +261,31 @@ function Room({ session, onLeave }) {
 
     const connect = async () => {
       try {
+        // Fix Bug 1: fetch a per-user token from the backend
+        const res = await fetch(`${tokenEndpoint}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`);
+        if (!res.ok) throw new Error(`Token endpoint returned ${res.status}`);
+        const { token } = await res.json();
+
         await room.connect(livekitUrl, token);
-        // Publish local tracks to the SFU
-        if (localStreamRef.current) {
-          const videoTrack = localStreamRef.current.getVideoTracks()[0];
-          const audioTrack = localStreamRef.current.getAudioTracks()[0];
-          if (videoTrack) await room.localParticipant.publishTrack(videoTrack);
-          if (audioTrack) await room.localParticipant.publishTrack(audioTrack);
+
+        // Fix Bug 2: use createLocalTracks so LiveKit wraps them correctly
+        const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
+        for (const track of tracks) {
+          await room.localParticipant.publishTrack(track);
         }
-        // Load existing participants
+
+        // Fix Bug 4: attach already-published tracks from participants already in the room
         room.remoteParticipants.forEach((p) => {
           setPeers((prev) => {
             if (prev.some((x) => x.connectionId === p.identity)) return prev;
             return [...prev, { connectionId: p.identity, userId: p.name || p.identity, stream: null, isMuted: true, isCamOff: true }];
           });
+          attachExistingTracks(p);
         });
       } catch (err) {
         console.error('LiveKit connect failed:', err);
         setConnectionStatus('offline');
-        addMessage('System', `SFU connection failed: ${err.message}`);
+        addMessage('System', `SFU connection failed: ${err.message}. Running in local preview mode.`);
       }
     };
     connect();
