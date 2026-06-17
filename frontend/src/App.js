@@ -1,12 +1,5 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import {
-  Room as LiveKitRoom,
-  RoomEvent,
-  ConnectionState,
-  Track,
-  createLocalTracks
-} from 'livekit-client';
 
 // ── KZYS Meeting Room App ─────────────────────────────────────────────────────
 
@@ -121,8 +114,8 @@ function Room({ session, onLeave }) {
   // References
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
-  const hubConnectionRef = useRef(null);   // SignalR — chat only
-  const livekitRoomRef = useRef(null);     // LiveKit — all media
+  const hubConnectionRef = useRef(null);   // SignalR — signaling + chat
+  const peerConnectionsRef = useRef({});   // connectionId -> RTCPeerConnection
   const chatEndRef = useRef(null);
   const canvasIntervalsRef = useRef({});
 
@@ -183,122 +176,64 @@ function Room({ session, onLeave }) {
     };
   }, [userId, addMessage]);
 
-  // ── LiveKit SFU connection ────────────────────────────────────────────────
+  // ── WebRTC P2P via SignalR signaling ─────────────────────────────────────
   useEffect(() => {
     if (!mediaReady) return;
 
-    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || 'ws://localhost:7880';
-    const tokenEndpoint = process.env.REACT_APP_LIVEKIT_TOKEN_ENDPOINT || 'http://localhost:8080/api/livekit/token';
-
-    const room = new LiveKitRoom({
-      adaptiveStream: true,
-      dynacast: true,
-      publishDefaults: { dtx: true }
-    });
-    livekitRoomRef.current = room;
-
-    // Helper: attach already-published tracks from a participant who was in the room before we joined
-    const attachExistingTracks = (participant) => {
-      participant.trackPublications.forEach((pub) => {
-        if (pub.track && pub.kind === Track.Kind.Video) {
-          const videoStream = new MediaStream([pub.track.mediaStreamTrack]);
-          setPeers((prev) => prev.map((p) =>
-            p.connectionId === participant.identity ? { ...p, videoStream } : p
-          ));
-        } else if (pub.track && pub.kind === Track.Kind.Audio) {
-          const audioStream = new MediaStream([pub.track.mediaStreamTrack]);
-          setPeers((prev) => prev.map((p) =>
-            p.connectionId === participant.identity ? { ...p, audioStream } : p
-          ));
-        }
-      });
-    };
-
-    room.on(RoomEvent.ParticipantConnected, (participant) => {
-      addMessage('System', `${participant.name || participant.identity} joined the conference.`);
-      setPeers((prev) => {
-        if (prev.some((p) => p.connectionId === participant.identity)) return prev;
-        return [...prev, { connectionId: participant.identity, userId: participant.name || participant.identity, stream: null, isMuted: true, isCamOff: true }];
-      });
-    });
-
-    room.on(RoomEvent.ParticipantDisconnected, (participant) => {
-      addMessage('System', `${participant.name || participant.identity} left the conference.`);
-      cleanUpPeer(participant.identity);
-    });
-
-    // Fix Bug 3: ensure peer exists before attaching stream
-    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      const stream = new MediaStream([track.mediaStreamTrack]);
-      setPeers((prev) => {
-        // Ensure peer entry exists first
-        const exists = prev.some((p) => p.connectionId === participant.identity);
-        const base = exists ? prev : [...prev, { connectionId: participant.identity, userId: participant.name || participant.identity, stream: null, isMuted: true, isCamOff: true }];
-        return base.map((p) =>
-          p.connectionId === participant.identity
-            ? { ...p, ...(track.kind === Track.Kind.Video ? { videoStream: stream } : { audioStream: stream }) }
-            : p
-        );
-      });
-    });
-
-    room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-      setPeers((prev) => prev.map((p) =>
-        p.connectionId === participant.identity
-          ? { ...p, ...(track.kind === Track.Kind.Video ? { videoStream: null } : { audioStream: null }) }
-          : p
-      ));
-    });
-
-    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-      setActiveSpeaker(speakers.length > 0 ? speakers[0].identity : null);
-    });
-
-    room.on(RoomEvent.ConnectionStateChanged, (state) => {
-      if (state === ConnectionState.Connected) setConnectionStatus('connected');
-      else if (state === ConnectionState.Disconnected) setConnectionStatus('offline');
-    });
-
-    const connect = async () => {
-      try {
-        // Fix Bug 1: fetch a per-user token from the backend
-        const res = await fetch(`${tokenEndpoint}?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}`);
-        if (!res.ok) throw new Error(`Token endpoint returned ${res.status}`);
-        const { token } = await res.json();
-
-        await room.connect(livekitUrl, token);
-
-        // Fix Bug 2: use createLocalTracks so LiveKit wraps them correctly
-        const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
-        for (const track of tracks) {
-          await room.localParticipant.publishTrack(track);
-        }
-
-        // Fix Bug 4: attach already-published tracks from participants already in the room
-        room.remoteParticipants.forEach((p) => {
-          setPeers((prev) => {
-            if (prev.some((x) => x.connectionId === p.identity)) return prev;
-            return [...prev, { connectionId: p.identity, userId: p.name || p.identity, stream: null, isMuted: true, isCamOff: true }];
-          });
-          attachExistingTracks(p);
-        });
-      } catch (err) {
-        console.error('LiveKit connect failed:', err);
-        setConnectionStatus('offline');
-        addMessage('System', `SFU connection failed: ${err.message}. Running in local preview mode.`);
-      }
-    };
-    connect();
-
-    return () => { room.disconnect(); };
-  }, [mediaReady, roomId, userId, addMessage, cleanUpPeer]);
-
-  // ── SignalR — chat only (same as original) ────────────────────────────────
-  useEffect(() => {
-    if (!mediaReady) return;
-
-    const isLocalDev = window.location.hostname === 'localhost' && window.location.port === '3000';
+    const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }];
+    const isLocalDev = window.location.hostname === 'localhost';
     const hubUrl = isLocalDev ? 'http://localhost:8080/meetinghub' : `${window.location.origin}/api/meetinghub`;
+
+    const createPeerConnection = (targetConnectionId, targetUserId, isInitiator) => {
+      if (peerConnectionsRef.current[targetConnectionId]) return peerConnectionsRef.current[targetConnectionId];
+
+      const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+      peerConnectionsRef.current[targetConnectionId] = pc;
+
+      // Add local tracks
+      if (localStreamRef.current) {
+        localStreamRef.current.getTracks().forEach((t) => pc.addTrack(t, localStreamRef.current));
+      }
+
+      // Receive remote stream
+      pc.ontrack = (e) => {
+        const stream = e.streams[0];
+        setPeers((prev) => prev.map((p) =>
+          p.connectionId === targetConnectionId ? { ...p, stream } : p
+        ));
+      };
+
+      // Send ICE candidates via SignalR
+      pc.onicecandidate = (e) => {
+        if (e.candidate && hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
+          hubConnectionRef.current.invoke('SendSignal', targetConnectionId,
+            JSON.stringify({ type: 'ice', candidate: e.candidate })
+          ).catch(console.error);
+        }
+      };
+
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === 'connected') setConnectionStatus('connected');
+        if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+          cleanUpPeer(targetConnectionId);
+        }
+      };
+
+      if (isInitiator) {
+        pc.createOffer()
+          .then((offer) => pc.setLocalDescription(offer))
+          .then(() => {
+            if (hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
+              hubConnectionRef.current.invoke('SendSignal', targetConnectionId,
+                JSON.stringify({ type: 'offer', sdp: pc.localDescription })
+              ).catch(console.error);
+            }
+          })
+          .catch(console.error);
+      }
+
+      return pc;
+    };
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl)
@@ -307,36 +242,79 @@ function Room({ session, onLeave }) {
 
     hubConnectionRef.current = connection;
 
-    connection.on('RoomJoined', (_joinedRoomId, _existingPeers) => {
-      addMessage('System', `Successfully connected as user: ${userId}`);
+    connection.on('RoomJoined', (_roomId, existingPeers) => {
+      setConnectionStatus('connected');
+      addMessage('System', `Connected as ${userId}`);
+      // Initiate offer to every peer already in the room
+      existingPeers.forEach(({ UserId: peerUserId, ConnectionId: peerConnId }) => {
+        setPeers((prev) => prev.some((p) => p.connectionId === peerConnId) ? prev
+          : [...prev, { connectionId: peerConnId, userId: peerUserId, stream: null }]);
+        createPeerConnection(peerConnId, peerUserId, true);
+      });
+    });
+
+    connection.on('PeerJoined', (joinedUserId, joinedConnId) => {
+      addMessage('System', `${joinedUserId} joined.`);
+      setPeers((prev) => prev.some((p) => p.connectionId === joinedConnId) ? prev
+        : [...prev, { connectionId: joinedConnId, userId: joinedUserId, stream: null }]);
+      // The newcomer will send us an offer; do NOT initiate here (avoid double offer)
+    });
+
+    connection.on('PeerLeft', (leftUserId, leftConnId) => {
+      addMessage('System', `${leftUserId} left.`);
+      cleanUpPeer(leftConnId);
+    });
+
+    connection.on('ReceiveSignal', async (_senderUserId, senderConnId, signalDataRaw) => {
+      const signal = JSON.parse(signalDataRaw);
+      let pc = peerConnectionsRef.current[senderConnId];
+
+      if (signal.type === 'offer') {
+        if (!pc) {
+          // Find the userId from peers state
+          setPeers((prev) => {
+            const peer = prev.find((p) => p.connectionId === senderConnId);
+            pc = createPeerConnection(senderConnId, peer?.userId || senderConnId, false);
+            return prev;
+          });
+          if (!pc) pc = createPeerConnection(senderConnId, senderConnId, false);
+        }
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+        const answer = await pc.createAnswer();
+        await pc.setLocalDescription(answer);
+        if (hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
+          hubConnectionRef.current.invoke('SendSignal', senderConnId,
+            JSON.stringify({ type: 'answer', sdp: pc.localDescription })
+          ).catch(console.error);
+        }
+      } else if (signal.type === 'answer' && pc) {
+        await pc.setRemoteDescription(new RTCSessionDescription(signal.sdp));
+      } else if (signal.type === 'ice' && pc) {
+        await pc.addIceCandidate(new RTCIceCandidate(signal.candidate)).catch(console.error);
+      }
     });
 
     connection.on('ReceiveChat', (senderUserId, text, timestamp) => {
       setMessages((prev) => [...prev, {
-        from: senderUserId,
-        text,
+        from: senderUserId, text,
         time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       }]);
-    });
-
-    connection.on('PeerJoined', (joinedUserId) => {
-      // Presence info only — media handled by LiveKit
-      addMessage('System', `${joinedUserId} joined.`);
-    });
-
-    connection.on('PeerLeft', (leftUserId) => {
-      addMessage('System', `${leftUserId} left the conference.`);
     });
 
     connection.start()
       .then(() => connection.invoke('JoinRoom', roomId, userId))
       .catch((err) => {
         console.error('SignalR failed:', err);
-        addMessage('System', 'Could not connect to chat server.');
+        setConnectionStatus('offline');
+        addMessage('System', 'Could not connect to signaling server.');
       });
 
-    return () => { connection.stop(); };
-  }, [mediaReady, roomId, userId, addMessage]);
+    return () => {
+      Object.values(peerConnectionsRef.current).forEach((pc) => pc.close());
+      peerConnectionsRef.current = {};
+      connection.stop();
+    };
+  }, [mediaReady, roomId, userId, addMessage, cleanUpPeer]);
 
   // ── Controls ──────────────────────────────────────────────────────────────
   const handleSendChat = () => {
@@ -375,10 +353,6 @@ function Room({ session, onLeave }) {
         setScreenSharing(true);
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
         stream.getVideoTracks()[0].onended = stopScreenSharing;
-        // Replace video track in LiveKit if connected
-        if (livekitRoomRef.current) {
-          await livekitRoomRef.current.localParticipant.publishTrack(stream.getVideoTracks()[0]);
-        }
       } catch (err) {
         console.warn('Screen share canceled', err);
       }
@@ -607,42 +581,24 @@ function Room({ session, onLeave }) {
   );
 }
 
-// ── Remote Video Tile — unchanged from original ───────────────────────────────
+// ── Remote Video Tile ─────────────────────────────────────────────────────────
 function RemoteVideoTile({ peer, isActiveSpeaker }) {
   const videoRef = useRef(null);
-  const audioRef = useRef(null);
 
   useEffect(() => {
-    if (videoRef.current && peer.videoStream) {
-      videoRef.current.srcObject = peer.videoStream;
+    if (videoRef.current && peer.stream) {
+      videoRef.current.srcObject = peer.stream;
       videoRef.current.play().catch((err) => console.warn('Video playback blocked', err));
     }
-  }, [peer.videoStream]);
-
-  useEffect(() => {
-    if (audioRef.current && peer.audioStream) {
-      audioRef.current.srcObject = peer.audioStream;
-      audioRef.current.play().catch((err) => console.warn('Audio playback blocked', err));
-    }
-  }, [peer.audioStream]);
-
-  // simulation mode still uses peer.stream (canvas stream)
-  useEffect(() => {
-    if (videoRef.current && peer.stream && !peer.videoStream) {
-      videoRef.current.srcObject = peer.stream;
-      videoRef.current.play().catch((err) => console.warn('Sim playback blocked', err));
-    }
-  }, [peer.stream, peer.videoStream]);
+  }, [peer.stream]);
 
   const initials = peer.userId.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
-  const hasVideo = peer.videoStream || peer.stream;
 
   return (
     <div className={`video-tile animate-fade-in ${isActiveSpeaker ? 'active-speaker' : ''}`}>
       <video ref={videoRef} autoPlay playsInline className="video-feed"
-        style={{ opacity: hasVideo ? 1 : 0 }} />
-      <audio ref={audioRef} autoPlay />
-      {!hasVideo && <div className="avatar-placeholder">{initials}</div>}
+        style={{ opacity: peer.stream ? 1 : 0 }} />
+      {!peer.stream && <div className="avatar-placeholder">{initials}</div>}
       <div className="video-overlay-info">
         <span className="audio-indicator" />
         <span>{peer.userId}</span>
