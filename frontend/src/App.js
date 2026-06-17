@@ -221,18 +221,29 @@ function Room({ session, onLeave }) {
     });
 
     room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.kind === Track.Kind.Video || track.kind === Track.Kind.Audio) {
-        const mediaStream = new MediaStream([track.mediaStreamTrack]);
+      if (track.kind === Track.Kind.Video) {
+        const videoStream = new MediaStream([track.mediaStreamTrack]);
         setPeers((prev) => prev.map((p) =>
-          p.connectionId === participant.identity ? { ...p, stream: mediaStream } : p
+          p.connectionId === participant.identity ? { ...p, videoStream } : p
+        ));
+      } else if (track.kind === Track.Kind.Audio) {
+        const audioStream = new MediaStream([track.mediaStreamTrack]);
+        setPeers((prev) => prev.map((p) =>
+          p.connectionId === participant.identity ? { ...p, audioStream } : p
         ));
       }
     });
 
-    room.on(RoomEvent.TrackUnsubscribed, (_track, _pub, participant) => {
-      setPeers((prev) => prev.map((p) =>
-        p.connectionId === participant.identity ? { ...p, stream: null } : p
-      ));
+    room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
+      if (track.kind === Track.Kind.Video) {
+        setPeers((prev) => prev.map((p) =>
+          p.connectionId === participant.identity ? { ...p, videoStream: null } : p
+        ));
+      } else if (track.kind === Track.Kind.Audio) {
+        setPeers((prev) => prev.map((p) =>
+          p.connectionId === participant.identity ? { ...p, audioStream: null } : p
+        ));
+      }
     });
 
     room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
@@ -589,23 +600,39 @@ function Room({ session, onLeave }) {
 // ── Remote Video Tile — unchanged from original ───────────────────────────────
 function RemoteVideoTile({ peer, isActiveSpeaker }) {
   const videoRef = useRef(null);
+  const audioRef = useRef(null);
 
   useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !peer.stream) return;
-    video.srcObject = peer.stream;
-    video.play().catch((err) => console.warn('Remote playback blocked', err));
-  }, [peer.stream]);
+    if (videoRef.current && peer.videoStream) {
+      videoRef.current.srcObject = peer.videoStream;
+      videoRef.current.play().catch((err) => console.warn('Video playback blocked', err));
+    }
+  }, [peer.videoStream]);
+
+  useEffect(() => {
+    if (audioRef.current && peer.audioStream) {
+      audioRef.current.srcObject = peer.audioStream;
+      audioRef.current.play().catch((err) => console.warn('Audio playback blocked', err));
+    }
+  }, [peer.audioStream]);
+
+  // simulation mode still uses peer.stream (canvas stream)
+  useEffect(() => {
+    if (videoRef.current && peer.stream && !peer.videoStream) {
+      videoRef.current.srcObject = peer.stream;
+      videoRef.current.play().catch((err) => console.warn('Sim playback blocked', err));
+    }
+  }, [peer.stream, peer.videoStream]);
 
   const initials = peer.userId.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+  const hasVideo = peer.videoStream || peer.stream;
 
   return (
     <div className={`video-tile animate-fade-in ${isActiveSpeaker ? 'active-speaker' : ''}`}>
-      {peer.stream ? (
-        <video ref={videoRef} autoPlay playsInline className="video-feed" />
-      ) : (
-        <div className="avatar-placeholder">{initials}</div>
-      )}
+      <video ref={videoRef} autoPlay playsInline className="video-feed"
+        style={{ opacity: hasVideo ? 1 : 0 }} />
+      <audio ref={audioRef} autoPlay />
+      {!hasVideo && <div className="avatar-placeholder">{initials}</div>}
       <div className="video-overlay-info">
         <span className="audio-indicator" />
         <span>{peer.userId}</span>
