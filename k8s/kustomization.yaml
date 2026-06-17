@@ -4,6 +4,7 @@ kind: Kustomization
 resources:
 - backend-deployment.yaml
 - frontend-deployment.yaml
+- coturn-deployment.yaml
 - ingress.yaml
 
 images:

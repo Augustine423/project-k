@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
 
-// ── WebRTC / SignalR Meeting Room App ─────────────────────────────────────────
+// ── KZYS Meeting Room App ─────────────────────────────────────────────────────
 
 export default function App() {
   const [session, setSession] = useState(null); // { roomId, userId }
@@ -108,12 +108,18 @@ function Room({ session, onLeave }) {
   ]);
   const [chatInput, setChatInput] = useState('');
   const [simulationMode, setSimulationMode] = useState(false);
+  const [mediaReady, setMediaReady] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('connecting');
 
   // References
   const localVideoRef = useRef(null);
   const localStreamRef = useRef(null);
   const hubConnectionRef = useRef(null);
   const peerConnectionsRef = useRef({}); // connectionId -> RTCPeerConnection
+  const iceServersRef = useRef([
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' }
+  ]);
   const chatEndRef = useRef(null);
   const canvasIntervalsRef = useRef({}); // connectionId -> intervalId for canvas stream simulation
 
@@ -122,15 +128,35 @@ function Room({ session, onLeave }) {
     setMessages((prev) => [...prev, { from, text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
   }, []);
 
-  // WebRTC ICE configuration
-  const iceConfiguration = {
-    iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]
-  };
+  // Load STUN/TURN servers for cross-device calls
+  useEffect(() => {
+    async function loadIceServers() {
+      const isLocalDev =
+        window.location.hostname === 'localhost' && window.location.port === '3000';
+      const apiBase = isLocalDev ? 'http://localhost:8080' : `${window.location.origin}/api`;
 
-  // Clean up WebRTC peer connections
+      try {
+        const res = await fetch(`${apiBase}/v1/turn/credentials`);
+        if (!res.ok) return;
+        const data = await res.json();
+        iceServersRef.current = [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' },
+          ...data.urls.map((url) => ({
+            urls: url,
+            username: data.username,
+            credential: data.credential
+          }))
+        ];
+      } catch (err) {
+        console.warn('TURN credentials unavailable, using STUN only', err);
+      }
+    }
+
+    loadIceServers();
+  }, []);
+
+  // Clean up peer connections
   const cleanUpPeer = useCallback((connectionId) => {
     if (peerConnectionsRef.current[connectionId]) {
       peerConnectionsRef.current[connectionId].close();
@@ -143,18 +169,33 @@ function Room({ session, onLeave }) {
     setPeers((prev) => prev.filter((p) => p.connectionId !== connectionId));
   }, []);
 
-  // Set up local media
+  // Set up local media (must finish before joining room)
   useEffect(() => {
     async function startMedia() {
+      if (!window.isSecureContext && window.location.hostname !== 'localhost') {
+        addMessage(
+          'System',
+          'Camera and microphone need HTTPS on phones and tablets. Open the app with https:// or test from a desktop browser.'
+        );
+      }
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+          }
+        });
         localStreamRef.current = stream;
         if (localVideoRef.current) {
           localVideoRef.current.srcObject = stream;
         }
+        setMediaReady(true);
       } catch (err) {
         console.warn('Failed to access camera/microphone, using fallback dummy stream', err);
-        addMessage('System', 'Camera/microphone access blocked or unavailable. Initialized in layout-preview mode.');
+        addMessage('System', 'Camera or microphone unavailable. Preview mode is active without live audio.');
         
         // Generate a beautiful dummy video stream from a canvas
         const canvas = document.createElement('canvas');
@@ -186,11 +227,13 @@ function Room({ session, onLeave }) {
           localVideoRef.current.srcObject = canvasStream;
         }
         canvasIntervalsRef.current['local'] = intervalId;
+        setMediaReady(true);
       }
     }
     startMedia();
 
     return () => {
+      setMediaReady(false);
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach((track) => track.stop());
       }
@@ -203,8 +246,24 @@ function Room({ session, onLeave }) {
     };
   }, [userId, addMessage]);
 
-  // Set up SignalR Signaling Connection
+  // Add local tracks to peer connections once media is ready
   useEffect(() => {
+    if (!mediaReady || !localStreamRef.current) return;
+
+    Object.values(peerConnectionsRef.current).forEach((pc) => {
+      localStreamRef.current.getTracks().forEach((track) => {
+        const alreadySent = pc.getSenders().some((sender) => sender.track === track);
+        if (!alreadySent) {
+          pc.addTrack(track, localStreamRef.current);
+        }
+      });
+    });
+  }, [mediaReady, peers.length]);
+
+  // Set up SignalR after camera/mic is ready
+  useEffect(() => {
+    if (!mediaReady) return;
+
     // Local npm dev talks to backend directly; K8s/ingress/nginx use /api/meetinghub
     const isLocalDev =
       window.location.hostname === 'localhost' && window.location.port === '3000';
@@ -289,21 +348,24 @@ function Room({ session, onLeave }) {
     // Start connection
     connection.start()
       .then(() => {
+        setConnectionStatus('connected');
         connection.invoke('JoinRoom', roomId, userId);
       })
       .catch((err) => {
         console.error('SignalR Connection Failed: ', err);
-        addMessage('System', 'Signaling server offline. Mock local demo mode enabled.');
+        setConnectionStatus('offline');
+        addMessage('System', 'Could not connect to the room server. Chat and video are unavailable.');
       });
 
     return () => {
       connection.stop();
+      setConnectionStatus('connecting');
     };
-  }, [roomId, userId, addMessage, cleanUpPeer]);
+  }, [roomId, userId, addMessage, cleanUpPeer, mediaReady]);
 
   // Create RTCPeerConnection for a specific peer
   const createPeerConnection = (peerConnectionId, peerUserId, isInitiator = false) => {
-    const pc = new RTCPeerConnection(iceConfiguration);
+    const pc = new RTCPeerConnection({ iceServers: iceServersRef.current });
     peerConnectionsRef.current[peerConnectionId] = pc;
 
     // Add local tracks to peer connection
@@ -423,18 +485,16 @@ function Room({ session, onLeave }) {
     }
   };
 
-  // ── Simulation Mode (For beautiful multi-party demo) ──────────────────────
+  // ── Simulation Mode (layout preview with sample participants) ───────────────
   const toggleSimulation = () => {
     if (!simulationMode) {
-      // Add mock users to room
       const mockUsers = [
-        { id: 'sim-1', name: 'Elena Rostova (SFU)' },
-        { id: 'sim-2', name: 'Marcus Aurelius (Janus)' },
-        { id: 'sim-3', name: 'Sarah Connor (WebRTC)' }
+        { id: 'sim-1', name: 'Alex' },
+        { id: 'sim-2', name: 'Jordan' },
+        { id: 'sim-3', name: 'Sam' }
       ];
 
       mockUsers.forEach((user) => {
-        // Create canvas stream for each mock user
         const canvas = document.createElement('canvas');
         canvas.width = 640;
         canvas.height = 360;
@@ -445,36 +505,27 @@ function Room({ session, onLeave }) {
         const intervalId = setInterval(() => {
           ctx.fillStyle = '#0f1122';
           ctx.fillRect(0, 0, 640, 360);
-          
-          // Draw circular floating particles
+
           ctx.fillStyle = userColor + '33';
           ctx.beginPath();
           const pulse = Math.sin(Date.now() * 0.002) * 20;
           ctx.arc(320, 150, 70 + pulse, 0, Math.PI * 2);
           ctx.fill();
 
-          // Draw avatar circle
           ctx.fillStyle = userColor;
           ctx.beginPath();
           ctx.arc(320, 150, 60, 0, Math.PI * 2);
           ctx.fill();
 
-          // Initials
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 36px Outfit';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(user.name.split(' ').map(n => n[0]).join(''), 320, 150);
+          ctx.fillText(user.name.split(' ').map((n) => n[0]).join(''), 320, 150);
 
-          // Name and latency (Janus simulation)
           ctx.fillStyle = '#ffffff';
           ctx.font = '20px Outfit';
-          ctx.fillText(user.name, 320, 250);
-          
-          ctx.fillStyle = '#10b981';
-          ctx.font = '14px Space Grotesk';
-          const latency = Math.floor(Math.random() * 4) + 1; // 1-5ms sub-ms latency simulation
-          ctx.fillText(`● LATENCY: ${latency}ms (Janus SFU)`, 320, 280);
+          ctx.fillText(user.name, 320, 260);
         }, 100);
 
         const simulatedStream = canvas.captureStream(30);
@@ -485,23 +536,19 @@ function Room({ session, onLeave }) {
           { connectionId: user.id, userId: user.name, stream: simulatedStream }
         ]);
 
-        addMessage('System', `${user.name} joined via simulated Janus node.`);
+        addMessage('System', `${user.name} joined the preview.`);
       });
 
-      // Simulate a chat conversation
       setTimeout(() => {
         setMessages((prev) => [
           ...prev,
-          { from: 'Elena Rostova (SFU)', text: "Wow, the latency is incredible! Janus SFU is blazing fast.", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
+          {
+            from: 'Alex',
+            text: 'Looks great! The room layout is working well.',
+            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          }
         ]);
       }, 3000);
-
-      setTimeout(() => {
-        setMessages((prev) => [
-          ...prev,
-          { from: 'Marcus Aurelius (Janus)', text: "Yes, sub-ms processing keeps my audio totally aligned.", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }
-        ]);
-      }, 7000);
 
       setSimulationMode(true);
     } else {
@@ -514,9 +561,18 @@ function Room({ session, onLeave }) {
         }
       });
       setSimulationMode(false);
-      addMessage('System', 'Simulated participants removed.');
+      addMessage('System', 'Preview participants removed.');
     }
   };
+
+  const statusLabel =
+    connectionStatus === 'connected'
+      ? 'Connected'
+      : connectionStatus === 'offline'
+        ? 'Offline'
+        : mediaReady
+          ? 'Connecting'
+          : 'Starting camera';
 
   return (
     <div className="room-container">
@@ -533,7 +589,7 @@ function Room({ session, onLeave }) {
             onClick={toggleSimulation}
             style={{ margin: 0, padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
-            👾 {simulationMode ? 'Stop Simulation' : 'Simulate Users'}
+            👾 {simulationMode ? 'Stop Preview' : 'Preview Layout'}
           </button>
         </div>
       </header>
@@ -672,7 +728,20 @@ function Room({ session, onLeave }) {
         {/* Left indicators */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            📶 Janus Media Core: <span style={{ color: 'var(--accent-emerald)', fontWeight: 600 }}>Active</span>
+            Live Session:{' '}
+            <span
+              style={{
+                color:
+                  connectionStatus === 'connected'
+                    ? 'var(--accent-emerald)'
+                    : connectionStatus === 'offline'
+                      ? 'var(--accent-rose)'
+                      : 'var(--accent-sky)',
+                fontWeight: 600
+              }}
+            >
+              {statusLabel}
+            </span>
           </span>
         </div>
 
@@ -735,9 +804,13 @@ function RemoteVideoTile({ peer, isActiveSpeaker }) {
   const videoRef = useRef(null);
 
   useEffect(() => {
-    if (videoRef.current && peer.stream) {
-      videoRef.current.srcObject = peer.stream;
-    }
+    const video = videoRef.current;
+    if (!video || !peer.stream) return;
+
+    video.srcObject = peer.stream;
+    video.play().catch((err) => {
+      console.warn('Remote playback blocked until user interaction', err);
+    });
   }, [peer.stream]);
 
   const initials = peer.userId.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -745,10 +818,10 @@ function RemoteVideoTile({ peer, isActiveSpeaker }) {
   return (
     <div className={`video-tile animate-fade-in ${isActiveSpeaker ? 'active-speaker' : ''}`}>
       {peer.stream ? (
-        <video 
-          ref={videoRef} 
-          autoPlay 
-          playsInline 
+        <video
+          ref={videoRef}
+          autoPlay
+          playsInline
           className="video-feed"
         />
       ) : (

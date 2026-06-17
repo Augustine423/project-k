@@ -12,11 +12,24 @@ namespace Kzys.Backend.Controllers
         [HttpGet("credentials")]
         public IActionResult GetCredentials()
         {
-            // Simulate dynamic coturn credentials generation
+            var turnHost = Environment.GetEnvironmentVariable("TURN_HOST");
+            if (string.IsNullOrWhiteSpace(turnHost))
+            {
+                turnHost = Request.Host.Host;
+            }
+
+            var turnPort = Environment.GetEnvironmentVariable("TURN_PORT") ?? "30478";
+            var username = Environment.GetEnvironmentVariable("TURN_USERNAME") ?? "kzys";
+            var password = Environment.GetEnvironmentVariable("TURN_PASSWORD") ?? "kzyspass123";
+
             return Ok(new TurnCredentialsResponse(
-                Urls: new[] { "turn:turn.example.com:3478?transport=udp" },
-                Username: "kzys-user-" + Guid.NewGuid().ToString().Substring(0, 8),
-                Credential: "kzys-secure-credential-here"
+                Urls: new[]
+                {
+                    $"turn:{turnHost}:{turnPort}?transport=udp",
+                    $"turn:{turnHost}:{turnPort}?transport=tcp"
+                },
+                Username: username,
+                Credential: password
             ));
         }
     }
