@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package kzys;
+option go_package = "kzys/backend/pb";
+
+service Signaling {
+  rpc CreateRoom (RoomRequest) returns (RoomResponse);
+  rpc GetToken (TokenRequest) returns (TokenResponse);
+}
+
+message RoomRequest {
+  string room_id = 1;
+}
+
+message RoomResponse {
+  string room_id = 1;
+  bool success = 2;
+}
+
+message TokenRequest {
+  string room_id = 1;
+  string user_id = 2;
+}
+
+message TokenResponse {
+  string token = 1;
+}

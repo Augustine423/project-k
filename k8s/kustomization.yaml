@@ -5,10 +5,12 @@ resources:
 - backend-deployment.yaml
 - frontend-deployment.yaml
 - coturn-deployment.yaml
+- livekit-secrets.yaml
+- livekit-hpa.yaml
 - ingress.yaml
 
 images:
-- name: kyawzayarsoe/backend-csharp
+- name: kyawzayarsoe/backend-go
   newTag: latest
 - name: kyawzayarsoe/frontend
   newTag: latest

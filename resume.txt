@@ -1,1 +1,3 @@
 agy --conversation=69e2f63c-1caf-4e93-b33c-364a8f6bd801
+
+hermes --resume 20260620_224559_307594

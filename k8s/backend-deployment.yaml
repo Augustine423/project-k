@@ -1,40 +1,42 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kzys-backend-csharp
+  name: kzys-backend-go
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: kzys-backend-csharp
+      app: kzys-backend-go
   template:
     metadata:
       labels:
-        app: kzys-backend-csharp
+        app: kzys-backend-go
     spec:
       containers:
-      - name: backend-csharp
-        image: kyawzayarsoe/backend-csharp:latest
+      - name: backend-go
+        image: kyawzayarsoe/backend-go:latest
         imagePullPolicy: Always
         ports:
         - name: http
           containerPort: 8080
         env:
-        - name: TURN_PORT
-          value: "30478"
-        - name: TURN_USERNAME
-          value: "kzys"
-        - name: TURN_PASSWORD
-          value: "kzyspass123"
-        - name: TURN_HOST
-          value: ""
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: livekit-secrets
+              key: api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: livekit-secrets
+              key: api-secret
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "500m"
+            memory: "64Mi"
+            cpu: "100m"
           limits:
-            memory: "512Mi"
-            cpu: "1000m"
+            memory: "128Mi"
+            cpu: "500m"
         livenessProbe:
           tcpSocket:
             port: 8080
@@ -49,10 +51,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: kzys-backend-csharp
+  name: kzys-backend-go
 spec:
   selector:
-    app: kzys-backend-csharp
+    app: kzys-backend-go
   ports:
   - name: http
     port: 8080

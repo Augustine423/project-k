@@ -1,35 +1,35 @@
-# KZYS Project: Hybrid Video Conferencing Platform (C# & React)
+# KZYS Project: Hybrid Video Conferencing Platform (Go & React)
 
-KZYS is a high-performance, production-grade video conferencing platform designed for low-latency live meetings and broadcasts.
+KZYS is a high-performance, production-grade video conferencing platform designed for low-latency live meetings and broadcasts, powered by an SFU-based architecture.
 
 ## 🏗️ Architecture
 
-The platform is designed around a decoupled, ultra-low latency model:
-- **Control Plane & Signaling (C# / ASP.NET Core):** Manages sessions, users, active rooms, real-time SignalR signaling, and chat message delivery.
-- **Data Plane (C / Janus Gateway):** Manages media processing, selective forwarding (SFU), UDP, and WebRTC streaming.
-- **Frontend (React 18):** A premium, glassmorphic UI styled with CSS variables. Features full conference layout management, micro-animations, a slide-out chat system, participant drawers, and simulated multi-party rooms.
+The platform is designed around a modern, scalable, Kubernetes-native model:
+
+- **Control Plane & Signaling (Go):** High-performance signaling server using LiveKit Server SDK to manage room state, user authentication, and LiveKit tokens.
+- **Data Plane (LiveKit SFU):** A purpose-built, Go-based Selective Forwarding Unit (SFU) for scalable video streaming.
+- **Frontend (React 18):** A premium, glassmorphic UI integrated with the `livekit-client` SDK for sub-second, multi-party video conferencing.
 
 ---
 
 ## 📂 Project Structure
 
-- `backend-csharp/`: Core ASP.NET Core API and SignalR Hub for Signaling/Chat.
-- `frontend/`: React SPA with premium UI components.
-- `janus-gateway/`: Reference media-gateway plugin structures for sub-ms video distribution.
-- `k8s/`: Kubernetes manifests (Deployment, Ingress, Kustomize setup).
-- `.github/workflows/`: Automated multi-service CI/CD pipelines.
+- `backend-go/`: High-performance Go signaling service for room orchestration and authentication.
+- `frontend/`: React SPA with premium UI components, leveraging LiveKit SFU for media.
+- `k8s/`: Kubernetes manifests (Deployment, Ingress, Kustomize setup, Secret management).
+- `.github/workflows/`: Automated CI/CD pipelines to build and push container images.
 
 ---
 
 ## ⚙️ Run Locally
 
-### 1. Start C# Backend
-Make sure you have .NET 8 SDK installed.
+### 1. Start Go Backend
+Make sure you have Go 1.22+ installed.
 ```bash
-cd backend-csharp
-dotnet run
+cd backend-go
+go run main.go
 ```
-Runs at `http://localhost:8080` (SignalR Hub on `/meetinghub`).
+Runs at `http://localhost:8080`.
 
 ### 2. Start Frontend
 ```bash
@@ -41,6 +41,6 @@ Runs at `http://localhost:3000`.
 
 ---
 
-## 🚀 Low-Latency Janus Integration
+## 🚀 Scalable SFU Integration
 
-Janus achieves sub-second processing by running a Selective Forwarding Unit (SFU) in native C. The React client is structured to separate **Publishers** (sending local WebRTC camera/audio tracks) from **Subscribers** (receiving individual downstream peer feeds), enabling sub-millisecond network turnaround times.
+KZYS leverages the LiveKit SFU, which allows for unlimited user scaling via adaptive streaming and dynacast technology. By offloading media distribution to a dedicated Go-based SFU, the platform ensures low latency even as the number of participants grows.
