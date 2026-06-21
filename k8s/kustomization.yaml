@@ -9,6 +9,7 @@ resources:
 - livekit-secrets.yaml
 - livekit-hpa.yaml
 - ingress.yaml
+- livekit-sfu.yaml
 
 images:
 - name: kyawzayarsoe/backend-go

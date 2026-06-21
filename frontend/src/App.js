@@ -155,7 +155,7 @@ function Room({ session, onLeave }) {
 
     const isLocal = window.location.hostname === 'localhost';
     const apiBase = isLocal ? 'http://localhost:8080/api' : `${window.location.origin}/api`;
-    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || 'wss://your-project.livekit.cloud';
+    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || 'wss://30780-port-amygh6ykbmhr3jm3.labs.kodekloud.com';
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
     livekitRoomRef.current = room;
