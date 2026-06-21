@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [backend-go, frontend]
+        service: [backend-go, backend-csharp, frontend]
     steps:
       - uses: actions/checkout@v4
       - name: Set up Docker Buildx

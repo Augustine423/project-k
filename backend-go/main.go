@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/livekit/protocol/auth"
-	"github.com/livekit/server-sdk-go/v2/livekit"
 )
 
 // Simple env vars for LiveKit creds

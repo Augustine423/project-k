@@ -3,6 +3,7 @@ kind: Kustomization
 
 resources:
 - backend-deployment.yaml
+- backend-csharp-deployment.yaml
 - frontend-deployment.yaml
 - coturn-deployment.yaml
 - livekit-secrets.yaml
@@ -11,6 +12,8 @@ resources:
 
 images:
 - name: kyawzayarsoe/backend-go
+  newTag: latest
+- name: kyawzayarsoe/backend-csharp
   newTag: latest
 - name: kyawzayarsoe/frontend
   newTag: latest

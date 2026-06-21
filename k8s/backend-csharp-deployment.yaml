@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kzys-backend-csharp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kzys-backend-csharp
+  template:
+    metadata:
+      labels:
+        app: kzys-backend-csharp
+    spec:
+      containers:
+      - name: backend-csharp
+        image: kyawzayarsoe/backend-csharp:latest
+        imagePullPolicy: Always
+        ports:
+        - name: http
+          containerPort: 8080
+        env:
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: livekit-secrets
+              key: api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: livekit-secrets
+              key: api-secret
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 15
+        readinessProbe:
+          tcpSocket:
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-backend-csharp
+spec:
+  selector:
+    app: kzys-backend-csharp
+  ports:
+  - name: http
+    port: 8080
+    targetPort: 8080
