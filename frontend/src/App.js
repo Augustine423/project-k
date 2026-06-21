@@ -154,7 +154,7 @@ function Room({ session, onLeave }) {
     if (!mediaReady) return;
 
     const isLocal = window.location.hostname === 'localhost';
-    const apiBase = isLocal ? 'http://localhost:8080' : `${window.location.origin}/api`;
+    const apiBase = isLocal ? 'http://localhost:8080/api' : `${window.location.origin}/api`;
     const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || 'wss://your-project.livekit.cloud';
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
