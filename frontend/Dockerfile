@@ -11,6 +11,6 @@ FROM nginx:alpine
 # Copy build output to Nginx's default directory
 COPY --from=builder /app/build /usr/share/nginx/html
 # Add custom Nginx config for React SPA routing
-COPY frontend/nginx.conf /etc/nginx/conf.d/default.conf
+COPY frontend/nginx.conf /etc/nginx/templates/default.conf.template
 EXPOSE 80
 CMD ["nginx", "-g", "daemon off;"]

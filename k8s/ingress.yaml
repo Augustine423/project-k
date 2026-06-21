@@ -20,15 +20,14 @@ kind: Ingress
 metadata:
   name: kzys-ingress-backend
   annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /$2
     nginx.ingress.kubernetes.io/websocket-services: "kzys-backend-csharp"
 spec:
   ingressClassName: nginx
   rules:
   - http:
       paths:
-      - path: /api(/|$)(.*)
-        pathType: ImplementationSpecific
+      - path: /api
+        pathType: Prefix
         backend:
           service:
             name: kzys-backend-csharp
