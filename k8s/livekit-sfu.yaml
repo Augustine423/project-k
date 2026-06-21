@@ -18,13 +18,13 @@ spec:
         args:
         - --dev
         - --config
-        - /etc/livekit.yaml
+        - /etc/livekit/livekit.yaml
         ports:
         - name: rtc
           containerPort: 7880
         volumeMounts:
         - name: config
-          mountPath: /etc/
+          mountPath: /etc/livekit
       volumes:
       - name: config
         configMap:
