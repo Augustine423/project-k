@@ -14,7 +14,7 @@ namespace Kzys.Backend.Controllers
                 return BadRequest("roomId and userId are required.");
 
             var apiKey    = Environment.GetEnvironmentVariable("LIVEKIT_API_KEY")    ?? "devkey";
-            var apiSecret = Environment.GetEnvironmentVariable("LIVEKIT_API_SECRET") ?? "devsecret";
+            var apiSecret = Environment.GetEnvironmentVariable("LIVEKIT_API_SECRET") ?? "devsecret-devsecret-devsecret-12";
 
             var token = new AccessToken(apiKey, apiSecret)
                 .WithIdentity(userId)
