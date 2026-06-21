@@ -39,6 +39,9 @@ data:
     port: 7880
     keys:
       devkey: devsecret-devsecret-devsecret-12
+    rtc:
+      stun_servers:
+        - "stun:stun.l.google.com:19302"
 ---
 apiVersion: v1
 kind: Service
