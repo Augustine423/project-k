@@ -12,10 +12,6 @@ spec:
       labels:
         app: kzys-backend-csharp
     spec:
-      initContainers:
-      - name: wait-for-livekit
-        image: busybox:1.36
-        command: ['sh', '-c', 'until nc -z livekit-sfu 7880; do echo waiting for livekit-sfu; sleep 2; done']
       containers:
       - name: backend-csharp
         image: kyawzayarsoe/backend-csharp:latest
