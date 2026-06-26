@@ -158,7 +158,11 @@ function Room({ session, onLeave }) {
     const isLocal = window.location.hostname === 'localhost';
     const apiBase = isLocal ? 'http://localhost:8080/api' : `${window.location.origin}/api`;
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || `${proto}://${window.location.hostname}:30780`;
+    // In production, LiveKit WebSocket goes through nginx /rtc/ proxy (already exposed).
+    // In local dev, connect directly to LiveKit on port 7880.
+    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || (
+      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
+    );
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
     livekitRoomRef.current = room;
