@@ -5,7 +5,8 @@ import {
   RoomEvent,
   Track,
   ConnectionState,
-  createLocalTracks
+  createLocalTracks,
+  createLocalScreenTracks,
 } from 'livekit-client';
 
 // ── KZYS Meeting Room App ─────────────────────────────────────────────────────
@@ -97,6 +98,7 @@ function Room({ session, onLeave }) {
   const hubConnectionRef = useRef(null);
   const livekitRoomRef = useRef(null);
   const localTracksRef = useRef([]);
+  const screenTracksRef = useRef([]);
   const chatEndRef = useRef(null);
   const canvasIntervalsRef = useRef({});
 
@@ -155,7 +157,8 @@ function Room({ session, onLeave }) {
 
     const isLocal = window.location.hostname === 'localhost';
     const apiBase = isLocal ? 'http://localhost:8080/api' : `${window.location.origin}/api`;
-    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || window.location.origin.replace('http', 'ws');
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || `${proto}://${window.location.hostname}:30780`;
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
     livekitRoomRef.current = room;
@@ -200,6 +203,7 @@ function Room({ session, onLeave }) {
     room.on(RoomEvent.ConnectionStateChanged, (state) => {
       if (state === ConnectionState.Connected) setConnectionStatus('connected');
       else if (state === ConnectionState.Disconnected) setConnectionStatus('offline');
+      else if (state === ConnectionState.Reconnecting) setConnectionStatus('reconnecting');
     });
 
     const connect = async () => {
@@ -297,22 +301,37 @@ function Room({ session, onLeave }) {
     setCamOn(!camOn);
   };
 
+  const stopScreenSharing = useCallback(async () => {
+    const room = livekitRoomRef.current;
+    for (const track of screenTracksRef.current) {
+      if (room) await room.localParticipant.unpublishTrack(track).catch(() => {});
+      track.stop();
+    }
+    screenTracksRef.current = [];
+    setScreenSharing(false);
+    if (localVideoRef.current && localStreamRef.current) {
+      localVideoRef.current.srcObject = localStreamRef.current;
+    }
+  }, []);
+
   const toggleScreenShare = async () => {
     if (!screenSharing) {
       try {
-        const stream = await navigator.mediaDevices.getDisplayMedia({ video: true });
+        const tracks = await createLocalScreenTracks({ audio: false });
+        screenTracksRef.current = tracks;
+        const room = livekitRoomRef.current;
+        for (const track of tracks) {
+          if (room) await room.localParticipant.publishTrack(track);
+          if (track.kind === Track.Kind.Video && localVideoRef.current) {
+            localVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
+          }
+          track.mediaStreamTrack.onended = stopScreenSharing;
+        }
         setScreenSharing(true);
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-        stream.getVideoTracks()[0].onended = stopScreenSharing;
-      } catch { }
+      } catch {}
     } else {
       stopScreenSharing();
     }
-  };
-
-  const stopScreenSharing = () => {
-    setScreenSharing(false);
-    if (localVideoRef.current && localStreamRef.current) localVideoRef.current.srcObject = localStreamRef.current;
   };
 
   // ── Simulation Mode ───────────────────────────────────────────────────────
@@ -349,7 +368,10 @@ function Room({ session, onLeave }) {
     }
   };
 
-  const statusLabel = connectionStatus === 'connected' ? 'Connected' : connectionStatus === 'offline' ? 'Offline' : mediaReady ? 'Connecting' : 'Starting camera';
+  const statusLabel = connectionStatus === 'connected' ? 'Connected'
+    : connectionStatus === 'offline' ? 'Offline'
+    : connectionStatus === 'reconnecting' ? 'Reconnecting...'
+    : mediaReady ? 'Connecting' : 'Starting camera';
 
   // ── JSX ───────────────────────────────────────────────────────────────────
   return (
@@ -446,7 +468,7 @@ function Room({ session, onLeave }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
             Live Session:{' '}
-            <span style={{ color: connectionStatus === 'connected' ? 'var(--accent-emerald)' : connectionStatus === 'offline' ? 'var(--accent-rose)' : 'var(--accent-sky)', fontWeight: 600 }}>
+            <span style={{ color: connectionStatus === 'connected' ? 'var(--accent-emerald)' : connectionStatus === 'offline' ? 'var(--accent-rose)' : connectionStatus === 'reconnecting' ? 'var(--accent-blue)' : 'var(--text-secondary)', fontWeight: 600 }}>
               {statusLabel}
             </span>
           </span>

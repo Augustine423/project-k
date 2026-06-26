@@ -44,3 +44,117 @@ Runs at `http://localhost:3000`.
 ## 🚀 Scalable SFU Integration
 
 KZYS leverages the LiveKit SFU, which allows for unlimited user scaling via adaptive streaming and dynacast technology. By offloading media distribution to a dedicated Go-based SFU, the platform ensures low latency even as the number of participants grows.
+
+---
+
+## 🔄 Project Workflow
+
+### 1. User Joins a Meeting (Lobby → Room)
+
+```
+User opens browser
+  └─> Enters display name + room ID (or generates one)
+        └─> Clicks "Enter Conference"
+              └─> React mounts the Room component
+```
+
+### 2. Camera & Mic Preview
+
+Before connecting to the SFU, the frontend immediately requests the user's camera and microphone:
+
+- If permission is granted → shows live camera preview
+- If denied → falls back to an animated canvas placeholder
+
+### 3. LiveKit Token Request
+
+```
+React (Room component)
+  └─> GET /api/livekit/token?roomId=...&userId=...
+        └─> C# Backend (LiveKitController)
+              └─> Generates a signed JWT using LIVEKIT_API_KEY + LIVEKIT_API_SECRET
+                    └─> Returns { token: "..." }
+```
+
+### 4. SFU Connection & Media Publishing
+
+```
+Frontend receives token
+  └─> room.connect(livekitUrl, token)   ← LiveKit SFU (port 7880)
+        └─> createLocalTracks({ audio, video })
+              └─> localParticipant.publishTrack(track)
+                    └─> Remote participants receive tracks via TrackSubscribed event
+```
+
+LiveKit handles all media routing — each participant only receives the tracks they need (Selective Forwarding).
+
+### 5. Real-Time Chat (SignalR)
+
+```
+Frontend
+  └─> Connects to SignalR Hub (/api/meetinghub)
+        └─> Calls JoinRoom(roomId, userId)
+              └─> MeetingHub adds connection to SignalR group
+                    └─> Broadcasts PeerJoined to room
+                          └─> User sends chat → SendChat(message)
+                                └─> Hub broadcasts ReceiveChat to all group members
+```
+
+### 6. NAT Traversal (TURN)
+
+When direct peer-to-WebRTC connections fail (e.g. behind strict firewalls):
+
+```
+WebRTC client
+  └─> GET /api/v1/turn/credentials
+        └─> TurnController returns Coturn credentials
+              └─> Client uses TURN relay (UDP/TCP port 30478/30479)
+```
+
+### 7. Participant Leave / Disconnect
+
+```
+User clicks Leave (or closes browser tab)
+  └─> LiveKit room.disconnect()  ← stops media tracks
+  └─> SignalR connection closes
+        └─> MeetingHub.OnDisconnectedAsync fires
+              └─> Removes user from room group
+                    └─> Broadcasts PeerLeft to remaining participants
+```
+
+### 8. CI/CD Pipeline
+
+```
+git push → main branch
+  └─> GitHub Actions: docker-build.yml
+        └─> Builds 3 Docker images in parallel:
+              ├─ kyawzayarsoe/backend-go:latest
+              ├─ kyawzayarsoe/backend-csharp:latest
+              └─ kyawzayarsoe/frontend:latest
+                    └─> Pushed to Docker Hub
+```
+
+### 9. Kubernetes Deployment
+
+```
+kubectl apply -k k8s/     ← Kustomize
+  ├─> kzys-frontend        (Nginx + React, NodePort 31498)
+  ├─> kzys-backend-csharp  (ASP.NET Core, port 8080)
+  ├─> kzys-backend-go      (Go, port 8080)
+  ├─> livekit-sfu          (LiveKit server, NodePort 30780)
+  ├─> kzys-coturn          (TURN relay, NodePort 30478/30479)
+  └─> Ingress (nginx)
+        ├─> /       → kzys-frontend
+        └─> /api    → kzys-backend-csharp (WebSocket-enabled)
+```
+
+### Request Flow Summary
+
+```
+Browser
+  │
+  ├─ GET  /                        → Nginx → React SPA
+  ├─ GET  /api/livekit/token       → C# Backend → LiveKit JWT
+  ├─ GET  /api/v1/turn/credentials → C# Backend → Coturn creds
+  ├─ WSS  /api/meetinghub          → C# Backend → SignalR (chat)
+  └─ WSS  /rtc/                    → LiveKit SFU (media)
+```

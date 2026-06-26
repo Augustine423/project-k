@@ -26,3 +26,5 @@ jobs:
           file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: kyawzayarsoe/${{ matrix.service }}:latest,kyawzayarsoe/${{ matrix.service }}:${{ github.sha }}
+          build-args: |
+            REACT_APP_LIVEKIT_URL=${{ secrets.REACT_APP_LIVEKIT_URL }}

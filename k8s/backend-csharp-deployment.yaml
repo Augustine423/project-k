@@ -30,6 +30,14 @@ spec:
             secretKeyRef:
               name: livekit-secrets
               key: api-secret
+        - name: REDIS_URL
+          value: "kzys-redis:6379"
+        - name: CORS_ORIGIN
+          value: ""
+        - name: LIVEKIT_URL
+          value: "http://livekit-sfu:7880"
+        - name: MAX_PARTICIPANTS_PER_ROOM
+          value: "50"
         resources:
           requests:
             memory: "128Mi"

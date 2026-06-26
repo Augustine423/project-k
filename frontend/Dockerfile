@@ -4,6 +4,9 @@ WORKDIR /app
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ .
+# Pass LiveKit server URL at build time: docker build --build-arg REACT_APP_LIVEKIT_URL=wss://your-livekit-host
+ARG REACT_APP_LIVEKIT_URL
+ENV REACT_APP_LIVEKIT_URL=$REACT_APP_LIVEKIT_URL
 RUN npm run build
 
 # Stage 2: Serve with Nginx

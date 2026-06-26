@@ -13,6 +13,10 @@ data:
     no-tls
     no-dtls
     no-cli
+    max-bps=1000000
+    total-quota=1000
+    bps-capacity=0
+    stale-nonce=600
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -42,11 +46,11 @@ spec:
           mountPath: /etc/coturn
         resources:
           requests:
-            memory: "64Mi"
-            cpu: "100m"
-          limits:
             memory: "128Mi"
             cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "1000m"
       volumes:
       - name: config
         configMap:
@@ -58,6 +62,11 @@ metadata:
   name: kzys-coturn
 spec:
   type: NodePort
+  # ClientIP affinity keeps a given client's UDP packets on the same pod
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
   selector:
     app: kzys-coturn
   ports:
