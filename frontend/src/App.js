@@ -156,10 +156,12 @@ function Room({ session, onLeave }) {
     if (!mediaReady) return;
 
     const isLocal = window.location.hostname === 'localhost';
-    const host = window.location.host;
-    const apiBase = isLocal ? 'http://localhost:8080/api' : `http://${host}/api`;
+    const apiBase = isLocal ? 'http://localhost:8080/api' : `${window.location.origin}/api`;
+    const proto = window.location.protocol === 'https:' ? 'wss' : 'ws';
+    // In production, LiveKit WebSocket goes through nginx /rtc/ proxy (already exposed).
+    // In local dev, connect directly to LiveKit on port 7880.
     const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || (
-      isLocal ? 'ws://localhost:7880' : `ws://${host}`
+      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
     );
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
@@ -259,8 +261,7 @@ function Room({ session, onLeave }) {
   useEffect(() => {
     if (!mediaReady) return;
     const isLocal = window.location.hostname === 'localhost';
-    const host = window.location.host;
-    const hubUrl = isLocal ? 'http://localhost:8080/meetinghub' : `http://${host}/api/meetinghub`;
+    const hubUrl = isLocal ? 'http://localhost:8080/meetinghub' : `${window.location.origin}/api/meetinghub`;
 
     const connection = new signalR.HubConnectionBuilder().withUrl(hubUrl).withAutomaticReconnect().build();
     hubConnectionRef.current = connection;
