@@ -1,16 +1,1 @@
 agent --resume=29d6ba02-45cc-4dd8-a981-ec5e9a35f5b3
-
-connection state changed: disconnected -> connecting 
-Object
-logger.ts:78 signal connecting to wss://31498-port-efzgufn6xbd3kllf.labs.kodekloud.com/rtc/v1?access_token=%3…bfZHVt_ymFyxV16hj_v2jX56Yl9qmgot0PoirbkEr3fbbUxOqoWMxQiJPjr4_-C9S6p5VDTQAA 
-Object
-Utils.ts:191 [2026-06-26T13:07:00.239Z] Information: WebSocket connected to wss://31498-port-efzgufn6xbd3kllf.labs.kodekloud.com/api/meetinghub?id=ZuJUxZhTXYfXnkj06L-ECQ.
-WebSocketStream.ts:52
- WebSocket connection to 'wss://31498-port-efzgufn6xbd3kllf.labs.kodekloud.com/rtc/v1?access_token=ey…bfZHVt_ymFyxV16hj_v2jX56Yl9qmgot0PoirbkEr3fbbUxOqoWMxQiJPjr4_-C9S6p5VDTQAA' failed: Error during WebSocket handshake: Unexpected response code: 500
-logger.ts:78
- websocket closed 
-Object
-logger.ts:78 connection state changed: connecting -> disconnected 
-Object
-App.js:247
- LiveKit connect error: ConnectionError: could not establish signal connection: Encountered websocket error during connection establishment
