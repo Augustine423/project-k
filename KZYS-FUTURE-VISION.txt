@@ -1,0 +1,358 @@
+================================================================================
+  PROJECT-K (KZYS) — FUTURE VISION & ROADMAP NOTES
+  Goal: Build a conferencing platform that can compete with and ultimately
+  beat Zoom, Google Meet, Microsoft Teams, and other major apps — not by
+  copying every feature on day one, but by winning on speed, cost, privacy,
+  and a sharper product for the next decade of work.
+================================================================================
+
+Last updated: 2026-06-28
+Current stage: Dev / UAT (invite-link rooms, LiveKit SFU, K8s, Redis, tiers)
+
+--------------------------------------------------------------------------------
+PART 1 — HONEST BASELINE (WHERE YOU ARE TODAY)
+--------------------------------------------------------------------------------
+
+STRENGTHS
+  - LiveKit SFU architecture (same class of tech serious platforms use)
+  - Invite-link flow (low friction, no install)
+  - Tiered monetization designed (Free 30, Plus 100/500/1000/2000)
+  - Redis room persistence + KEDA warm SFU pool
+  - Self-hosted = margin control + data sovereignty story
+  - Kubernetes-native = can scale when you grow
+
+GAPS VS ZOOM / MEET / TEAMS
+  - No user accounts / login yet
+  - No real payment (Stripe) — mock billing only
+  - Browser-only — no native mobile/desktop apps
+  - No calendar integration (Google / Outlook)
+  - No recording, transcription, breakout rooms, polls, whiteboard
+  - No enterprise SSO (SAML, OIDC), admin console, audit logs
+  - No global multi-region edge — single cluster
+  - No brand trust yet
+  - Corporate firewall / mobile Safari edge cases not battle-tested
+
+REALISTIC TARGET
+  You do NOT beat Zoom globally in year 1.
+  You CAN beat them in a niche first, then expand:
+    "Fastest link-to-video room for small teams worldwide"
+
+--------------------------------------------------------------------------------
+PART 2 — HOW TO "ABSOLUTELY BEAT" THEM (STRATEGY, NOT SLOGAN)
+--------------------------------------------------------------------------------
+
+Big apps win on: brand, ecosystem lock-in, enterprise sales, global infra.
+You beat them by being BETTER on dimensions they are slow to change:
+
+  1. SPEED — room live in under 3 seconds from link click
+  2. SIMPLICITY — no account required to join; host account optional
+  3. PRICE — free 30 users; paid tiers cheaper than Zoom for same room size
+  4. PRIVACY — self-host option, EU/Asia data residency, no data mining
+  5. OPEN / API-FIRST — developers embed KZYS in their own apps
+  6. AI-NATIVE — transcription, summaries, action items built-in (2026+ expectation)
+  7. REGIONAL — Myanmar, SEA, Africa, LATAM — localized, low-bandwidth modes
+
+Zoom optimizes for enterprise contracts.
+You optimize for: creators, startups, education, communities, remote teams
+who hate account friction and high per-seat pricing.
+
+--------------------------------------------------------------------------------
+PART 3 — USER EXPERIENCE ROADMAP (BEAT THEM ON FEEL)
+--------------------------------------------------------------------------------
+
+PHASE A — "JOIN NEVER FAILS" (months 1–3) *** HIGHEST PRIORITY ***
+  [ ] HTTPS + WSS everywhere (Let's Encrypt on ingress)
+  [ ] Mobile Safari + Chrome Android tested on real devices
+  [ ] TURN always works (auto-detect NAT, fallback paths)
+  [ ] Rejoin after tab refresh without losing room
+  [ ] Clear error messages ("Camera blocked", "Network issue", not "offline")
+  [ ] Connection quality indicator (bars / "weak network" badge)
+  [ ] First video frame under 2s on warm SFU standby pod
+  [ ] Landing page: one sentence + "Create free room" CTA
+
+PHASE B — "HOST CONTROLS" (months 3–6)
+  [ ] User accounts (email + OAuth: Google, Microsoft)
+  [ ] Waiting room — host admits guests
+  [ ] Mute all / mute one / remove participant
+  [ ] Lock room (no new joins)
+  [ ] Co-host role
+  [ ] Screen share with tab/window picker polish
+  [ ] Raise hand, reactions (emoji)
+  [ ] Copy invite + email share from UI
+  [ ] Room password optional (in addition to invite key)
+
+PHASE C — "DAILY DRIVER" (months 6–12)
+  [ ] Calendar: "Add KZYS link" to Google Calendar + Outlook plugin
+  [ ] Recurring meetings
+  [ ] Personal meeting room (permanent link per user)
+  [ ] Cloud recording + playback links
+  [ ] Live captions / transcription (LiveKit + Whisper or cloud STT)
+  [ ] AI meeting summary sent after call
+  [ ] Breakout rooms
+  [ ] Virtual background / blur (client-side)
+  [ ] Noise suppression (Krisp-style or browser RNNoise)
+  [ ] In-meeting file share
+  [ ] Whiteboard (integrate Excalidraw or tldraw)
+
+PHASE D — "PRO & ENTERPRISE" (year 2+)
+  [ ] SAML / OIDC SSO
+  [ ] Admin dashboard (usage, billing, users)
+  [ ] Audit logs, compliance exports
+  [ ] HIPAA / SOC2 path if targeting health/finance
+  [ ] SLA 99.9% + status page (status.kzys.com)
+  [ ] Dial-in phone number (PSTN via Twilio + LiveKit SIP)
+  [ ] Webinar mode (1 presenter, 1000+ viewers, Q&A)
+  [ ] Branding: custom logo, colors, domain (meet.client.com)
+
+PHASE E — "NATIVE APPS" (year 2+)
+  [ ] iOS + Android (React Native or Flutter wrapping livekit-client)
+  [ ] Windows / macOS desktop (Electron or Tauri)
+  [ ] OS-level screen share + better device picker
+  [ ] Push notifications for "you're invited"
+
+--------------------------------------------------------------------------------
+PART 4 — INFRASTRUCTURE ROADMAP (BEAT THEM ON COST & SCALE)
+--------------------------------------------------------------------------------
+
+CURRENT (implemented or in progress)
+  - Kubernetes + LiveKit SFU
+  - Redis StatefulSet (room state, chat presence, SignalR backplane)
+  - KEDA warm pool (1 standby SFU, scale on active rooms)
+  - Secrets via K8s (LiveKit + TURN)
+  - SQLite billing (move to Postgres + PVC for production)
+
+PHASE 1 — PRODUCTION HARDENING
+  [ ] TLS ingress (cert-manager)
+  [ ] Postgres for billing/subscriptions (replace SQLite)
+  [ ] Redis Sentinel or managed Redis (ElastiCache / Memorystore)
+  [ ] PVC for backend billing DB
+  [ ] Prometheus + Grafana (SFU CPU, room count, join failures)
+  [ ] Alerting: PagerDuty / Discord webhook when join rate drops
+  [ ] Liveness: HTTP /health on all services (not just TCP)
+  [ ] PodDisruptionBudgets + topology spread (multi-AZ)
+
+PHASE 2 — MULTI-REGION (beat single-region latency)
+  [ ] Region selector at room create: us / eu / apac
+  [ ] LiveKit multi-node or per-region SFU clusters
+  [ ] GeoDNS or latency-based routing to nearest ingress
+  [ ] Redis Global / per-region room routing metadata
+  [ ] TURN servers in each region
+  [ ] Target: <100ms signaling RTT for 80% of users
+
+PHASE 3 — COST LEADERSHIP (your profit edge)
+  [ ] Spot/preemptible nodes for SFU burst (already designed)
+  [ ] Cluster Autoscaler: stable min=1, spot min=0
+  [ ] Adaptive video quality (LiveKit dynacast + simulcast tiers)
+  [ ] "Audio only" mode for low bandwidth regions
+  [ ] Per-room cost dashboard (internal) — know margin per tier
+  [ ] Target: 60%+ gross margin on paid tiers at 50% avg room fill
+
+PHASE 4 — gRPC MICROSERVICES (your stated plan)
+  [ ] Go signaling service (kzys.proto) — token, room create
+  [ ] C# API gateway — REST + SignalR at edge
+  [ ] integration-teams / integration-meet / integration-zoom services
+  [ ] Bridge: join Teams/Meet call FROM KZYS UI (not replace them overnight)
+  [ ] Service mesh optional (Istio) for mTLS internal traffic
+
+--------------------------------------------------------------------------------
+PART 5 — MONETIZATION (BEAT THEM ON PRICE + FLEXIBILITY)
+--------------------------------------------------------------------------------
+
+CURRENT TIERS (keep)
+  Free     — 30 users / room — $0
+  Plus 100 — $4.99 / room (24h) or ~$15.99/mo sub
+  Plus 500 — $14.99 / room or ~$47.99/mo sub
+  Plus1000 — $24.99 / room or ~$79.99/mo sub
+  Plus2000 — $39.99 / room or ~$127.99/mo sub
+  (Annual = 20% off monthly sub)
+
+WHY THIS BEATS ZOOM FOR SMALL USERS
+  Zoom Pro ≈ $15–20/host/month (per seat, not per room).
+  KZYS: pay per active room OR flat sub for power hosts.
+  A community running 4 meetings/month pays ~$20 on KZYS vs multiple Zoom seats.
+
+ROADMAP
+  [ ] Stripe Checkout + webhooks (replace mock payments)
+  [ ] Customer portal (upgrade, cancel, invoices)
+  [ ] Usage metering (participant-minutes for analytics)
+  [ ] Referral program ("invite host → 1 free Plus room")
+  [ ] Education / nonprofit discount tier
+  [ ] API billing for embed customers (per 1000 participant-minutes)
+  [ ] White-label B2B: $500+/mo for custom domain + support
+
+KILLER PRICING IDEA (future)
+  "Pay only when room is active" — per-minute after first 60 min free/day.
+  Big apps can't pivot to this easily. You can.
+
+--------------------------------------------------------------------------------
+PART 6 — FEATURES THAT COULD LEAPFROG ZOOM (2026–2028)
+--------------------------------------------------------------------------------
+
+1. AI MEETING COPILOT (built-in, not add-on)
+   - Real-time captions in 50+ languages
+   - End-of-call summary + tasks pushed to Notion/Linear/Slack
+   - "What did we decide?" chatbot on room history (Redis + LLM)
+
+2. ZERO-INSTALL GUEST EXPERIENCE
+   - Guest joins in browser in <5s, no "download Zoom"
+   - QR code join from phone
+   - Progressive Web App (Add to Home Screen)
+
+3. DEVELOPER PLATFORM
+   - embed() JS SDK: 5 lines to add video to any SaaS
+   - Webhooks: room.started, room.ended, participant.joined
+   - Zapier / Make.com integration
+   - Beat Zoom by being the "Stripe of video rooms"
+
+4. PRIVACY / SOVEREIGNTY
+   - "Your data never leaves your country" — K8s in customer's cloud
+   - On-prem license for governments / banks
+   - Zoom can't match self-host story easily
+
+5. LOW-BANDWIDTH MODE
+   - Audio-first fallback when video degrades
+   - Works on 3G — critical for Myanmar, rural markets, emerging economies
+   - Meet/Zoom assume good fiber
+
+6. UNIFIED COMMUNICATIONS HUB
+   - Video + chat + async video messages (Loom-style) in one product
+   - Thread per room persists after call ends
+
+7. FAIR FREE TIER
+   - 30 users free forever (generous vs Zoom 40-min limit on free)
+   - Marketing: "No 40-minute timer. No credit card."
+
+--------------------------------------------------------------------------------
+PART 7 — INTEGRATION STRATEGY (TEAMS / MEET / ZOOM)
+--------------------------------------------------------------------------------
+
+Don't try to replace them day one. BE THE LAYER ABOVE THEM:
+
+  Short term:
+    - Export calendar invite (.ics) with KZYS link
+    - "Open in browser" — no bridge needed
+
+  Medium term:
+    - Microsoft Teams: Bot Framework + Graph API
+      → "Start KZYS room" from Teams channel
+    - Google Meet: Calendar API embed
+      → Auto-attach KZYS link when Meet quota/full
+    - Zoom: Zoom SDK / REST for migration tool
+      → "Import your Zoom PMI settings"
+
+  Long term:
+    - SIP bridge: corporate PBX dials into KZYS room
+    - Federated rooms: 5 users on KZYS + 5 on Teams in same call
+      (hard — only attempt after core product is solid)
+
+Your app becomes: "The meeting layer that works everywhere,
+even when companies are split across Zoom AND Meet."
+
+--------------------------------------------------------------------------------
+PART 8 — TRUST & GROWTH (BEAT THEM ON REPUTATION)
+--------------------------------------------------------------------------------
+
+PRODUCT
+  [ ] Public status page
+  [ ] Privacy policy + terms (GDPR-ready)
+  [ ] Security page (how keys, media, Redis are handled)
+  [ ] Open roadmap (GitHub or public Notion)
+
+GROWTH LOOPS
+  [ ] Every room end screen: "Host another free room" + share
+  [ ] Watermark on free tier (removable on paid) — viral
+  [ ] "Powered by KZYS" on embed widget
+  [ ] Case studies: schools, startups, creators in your region
+  [ ] Product Hunt, Hacker News, Reddit r/selfhosted
+  [ ] YouTube: "I built Zoom alternative in 30 days" dev content
+  [ ] Partner with coworking spaces / accelerators
+
+METRICS TO TRACK
+  - Time to first successful video frame (TTFVF)
+  - Join failure rate (by browser, country, network)
+  - Rooms created / day
+  - Paid conversion rate (free host → Plus)
+  - Participant-minutes / month
+  - Churn on subscriptions
+  - NPS after call ("How was your call? 1 tap")
+
+--------------------------------------------------------------------------------
+PART 9 — 12-MONTH MILESTONE MAP
+--------------------------------------------------------------------------------
+
+MONTH 1–2: RELIABILITY
+  TLS, mobile web, Stripe, accounts, monitoring
+  Target: 100 real rooms/week, <5% join failure
+
+MONTH 3–4: HOST POWER
+  Waiting room, mute all, recording beta, calendar .ics
+  Target: 1,000 registered hosts
+
+MONTH 5–6: AI + RETENTION
+  Captions, summary emails, personal room links
+  Target: first $1,000 MRR
+
+MONTH 7–9: SCALE
+  Second region, native app beta, API embed SDK
+  Target: 10,000 MAU, $5k MRR
+
+MONTH 10–12: ENTERPRISE PILOT
+  SSO, admin console, 2 B2B pilot customers
+  Target: $15k MRR, 99.5% uptime
+
+YEAR 2: Compete on features with Zoom for SMB segment.
+YEAR 3: Multi-region + enterprise + integrations = global niche leader.
+YEAR 5: Acquisition target or $10M ARR independent player.
+
+--------------------------------------------------------------------------------
+PART 10 — WHAT "WINNING" LOOKS LIKE (MEASURABLE)
+--------------------------------------------------------------------------------
+
+You have BEATEN the big apps in your segment when:
+
+  [ ] Join success rate > 98% on mobile + desktop
+  [ ] Median time link-click → video: < 4 seconds
+  [ ] Free tier hosts choose you over Zoom free (no 40-min limit messaging)
+  [ ] Paid hosts say: "cheaper than Zoom for our room sizes"
+  [ ] Developers embed KZYS instead of Zoom SDK
+  [ ] $50k+ MRR with < 20% churn
+  [ ] NPS > 50 (Zoom enterprise ~30–40)
+  [ ] Press: "Best Zoom alternative for [niche]" — Forbes, TechCrunch, regional media
+
+You have NOT won if:
+  - You only match feature count but join fails on phones
+  - You scale infra before UX is solid
+  - You target enterprise before SMB product-market fit
+
+--------------------------------------------------------------------------------
+PART 11 — TECHNICAL DEBT TO CLEAR (FROM CURRENT CODEBASE)
+--------------------------------------------------------------------------------
+
+  [ ] Move billing SQLite → Postgres with backups
+  [ ] Remove dev secrets from any tracked files (rotate keys)
+  [ ] Real Stripe integration (remove KZYS_AUTO_MOCK_PAYMENTS in prod)
+  [ ] Go backend: decide keep (gRPC) or remove to reduce confusion
+  [ ] SessionController mock SDP — delete or implement
+  [ ] E2E tests: Playwright join flow in CI
+  [ ] Load test: 30 users one room, 100 users Plus tier
+  [ ] Document disaster recovery: Redis PVC backup, restore runbook
+
+--------------------------------------------------------------------------------
+PART 12 — ONE-PAGE PITCH (FOR YOU, WHEN MARKETING)
+--------------------------------------------------------------------------------
+
+  KZYS is the fastest way to host a video room on the internet.
+  Free for 30 people. No download. No 40-minute limit.
+  Paid rooms up to 2,000 when you need more.
+  Your meetings, your infrastructure, your rules.
+
+  Zoom is the office.
+  KZYS is the open door.
+
+--------------------------------------------------------------------------------
+END OF VISION DOCUMENT
+================================================================================
+  File: KZYS-FUTURE-VISION.txt
+  Project: Project-K / KZYS Video Conferencing Platform
+  Keep this file updated as milestones ship. Review quarterly.
+================================================================================

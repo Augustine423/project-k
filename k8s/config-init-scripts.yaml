@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-config-init
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+    cat > /config/livekit.yaml <<EOF
+    port: 7880
+    keys:
+      ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
+    rtc:
+      stun_servers:
+        - stun.l.google.com:19302
+      turn_servers:
+        - urls: turn:kzys-coturn:3478
+          username: ${TURN_USERNAME}
+          credential: ${TURN_PASSWORD}
+      tcp_port: 7881
+      udp_port: 7882
+    logging:
+      level: info
+    EOF
+    chmod 644 /config/livekit.yaml
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coturn-config-init
+data:
+  init.sh: |
+    #!/bin/sh
+    set -eu
+    cat > /config/turnserver.conf <<EOF
+    listening-port=3478
+    fingerprint
+    lt-cred-mech
+    user=${TURN_USERNAME}:${TURN_PASSWORD}
+    realm=${TURN_REALM}
+    log-file=stdout
+    no-tls
+    no-dtls
+    no-cli
+    max-bps=1000000
+    total-quota=1000
+    bps-capacity=0
+    stale-nonce=600
+    EOF
+    chmod 644 /config/turnserver.conf

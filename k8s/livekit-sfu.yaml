@@ -1,7 +1,10 @@
+# LiveKit SFU — secrets via init container; warm pool via KEDA minReplicaCount=1.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: livekit-sfu
+  labels:
+    kzys.io/tier: spot
 spec:
   replicas: 1
   selector:
@@ -11,13 +14,49 @@ spec:
     metadata:
       labels:
         app: livekit-sfu
+        kzys.io/tier: spot
     spec:
+      initContainers:
+      - name: config-init
+        image: busybox:1.36
+        command: ["sh", "/scripts/init.sh"]
+        env:
+        - name: LIVEKIT_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: livekit-secrets
+              key: api-key
+        - name: LIVEKIT_API_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: livekit-secrets
+              key: api-secret
+        - name: TURN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: username
+        - name: TURN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: password
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: init-scripts
+          mountPath: /scripts
       containers:
       - name: livekit-sfu
         image: livekit/livekit-server:latest
         args:
         - --config
         - /etc/livekit/livekit.yaml
+        env:
+        - name: LIVEKIT_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         ports:
         - name: rtc-ws
           containerPort: 7880
@@ -48,46 +87,29 @@ spec:
           periodSeconds: 10
       volumes:
       - name: config
+        emptyDir: {}
+      - name: init-scripts
         configMap:
-          name: livekit-sfu-config
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: livekit-sfu-config
-data:
-  livekit.yaml: |
-    port: 7880
-    keys:
-      devkey: devsecret-devsecret-devsecret-12
-    rtc:
-      stun_servers:
-        - stun.l.google.com:19302
-      tcp_port: 7881
-      udp_port: 7882
-    logging:
-      level: info
+          name: livekit-config-init
+          defaultMode: 0755
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: livekit-sfu
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: livekit-sfu
   ports:
   - name: rtc-ws
     port: 7880
     targetPort: 7880
-    nodePort: 30780
   - name: rtc-tcp
     port: 7881
     targetPort: 7881
-    nodePort: 30781
     protocol: TCP
   - name: rtc-udp
     port: 7882
     targetPort: 7882
-    nodePort: 30782
     protocol: UDP

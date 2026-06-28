@@ -1,23 +1,3 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: coturn-config
-data:
-  turnserver.conf: |
-    listening-port=3478
-    fingerprint
-    lt-cred-mech
-    user=kzys:kzyspass123
-    realm=kzys.local
-    log-file=stdout
-    no-tls
-    no-dtls
-    no-cli
-    max-bps=1000000
-    total-quota=1000
-    bps-capacity=0
-    stale-nonce=600
----
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -31,11 +11,42 @@ spec:
     metadata:
       labels:
         app: kzys-coturn
+        kzys.io/tier: spot
     spec:
+      initContainers:
+      - name: config-init
+        image: busybox:1.36
+        command: ["sh", "/scripts/init.sh"]
+        env:
+        - name: TURN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: username
+        - name: TURN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: password
+        - name: TURN_REALM
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: realm
+        volumeMounts:
+        - name: config
+          mountPath: /config
+        - name: init-scripts
+          mountPath: /scripts
       containers:
       - name: coturn
         image: coturn/coturn:latest
         args: ["-c", "/etc/coturn/turnserver.conf"]
+        env:
+        - name: TURNSERVER_EXTERNAL_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         ports:
         - containerPort: 3478
           protocol: UDP
@@ -53,8 +64,11 @@ spec:
             cpu: "1000m"
       volumes:
       - name: config
+        emptyDir: {}
+      - name: init-scripts
         configMap:
-          name: coturn-config
+          name: coturn-config-init
+          defaultMode: 0755
 ---
 apiVersion: v1
 kind: Service
@@ -62,7 +76,6 @@ metadata:
   name: kzys-coturn
 spec:
   type: NodePort
-  # ClientIP affinity keeps a given client's UDP packets on the same pod
   sessionAffinity: ClientIP
   sessionAffinityConfig:
     clientIP:

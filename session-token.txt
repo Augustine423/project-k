@@ -1,1 +1,8 @@
-agent --resume=29d6ba02-45cc-4dd8-a981-ec5e9a35f5b3
+Resume this session with:
+  hermes --resume 20260627_055926_d02295
+  hermes -c "Configuring LiveKit TURN Server Connectivity"
+
+Session:        20260627_055926_d02295
+Title:          Configuring LiveKit TURN Server Connectivity
+Duration:       21m 26s
+Messages:       79 (17 user, 46 tool calls)

@@ -13,6 +13,7 @@ dist/
 bin/
 obj/
 publish/
+*.db
 
 # IDE and OS files
 .DS_Store
@@ -32,8 +33,8 @@ Desktop.ini
 .env.production.local
 
 # Kubernetes secrets with real credentials — keep out of version control
-# Rename livekit-secrets.yaml to livekit-secrets.yaml.example and use Sealed Secrets in production
-#k8s/livekit-secrets.yaml
+k8s/livekit-secrets.yaml
+k8s/turn-secrets.yaml
 
 # npm/yarn logs
 npm-debug.log*

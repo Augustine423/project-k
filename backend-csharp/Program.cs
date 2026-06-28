@@ -1,15 +1,39 @@
 using Kzys.Backend.Hubs;
+using Kzys.Backend.Data;
+using Kzys.Backend.Services;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.EntityFrameworkCore;
+using StackExchange.Redis;
 using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
+builder.WebHost.UseKestrel(options =>
+{
+    options.Limits.RequestHeadersTimeout = ServerTimeoutOptions.ReadTimeout;
+    options.Limits.KeepAliveTimeout = TimeSpan.FromSeconds(120);
+});
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Rate limiting — 10 token requests per IP per minute to prevent abuse
+builder.Services.AddSingleton<RoomPlanManager>();
+builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+
+var redisUrl = Environment.GetEnvironmentVariable("REDIS_URL") ?? "kzys-redis:6379";
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+    ConnectionMultiplexer.Connect(redisUrl));
+builder.Services.AddSingleton<IRoomStore, RedisRoomStore>();
+builder.Services.AddSingleton<IChatPresenceStore, RedisChatPresenceStore>();
+
+var dbPath = Environment.GetEnvironmentVariable("KZYS_DB_PATH")
+    ?? Path.Combine(AppContext.BaseDirectory, "data", "kzys.db");
+Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlite($"Data Source={dbPath}"));
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -25,40 +49,34 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
-// Configure CORS — restrict to the origin set via CORS_ORIGIN env var in production
 var allowedOrigin = Environment.GetEnvironmentVariable("CORS_ORIGIN");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("CorsPolicy", policy =>
     {
         if (string.IsNullOrWhiteSpace(allowedOrigin))
-        {
             policy.AllowAnyHeader().AllowAnyMethod().AllowAnyOrigin();
-        }
         else
-        {
-            policy.AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .WithOrigins(allowedOrigin)
-                  .AllowCredentials();
-        }
+            policy.AllowAnyHeader().AllowAnyMethod().WithOrigins(allowedOrigin).AllowCredentials();
     });
 });
 
-// Add SignalR with optional Redis backplane for multi-replica support
-var redisUrl = Environment.GetEnvironmentVariable("REDIS_URL");
 var signalR = builder.Services.AddSignalR(options =>
 {
-    options.EnableDetailedErrors = true;
+    options.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    options.ClientTimeoutInterval = ServerTimeoutOptions.ReadTimeout;
+    options.KeepAliveInterval = TimeSpan.FromSeconds(15);
 });
-if (!string.IsNullOrWhiteSpace(redisUrl))
+
+signalR.AddStackExchangeRedis(redisUrl, redisOptions =>
 {
-    signalR.AddStackExchangeRedis(redisUrl);
-}
+    redisOptions.Configuration.ChannelPrefix = RedisChannel.Literal("kzys:signalr");
+});
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+await DatabaseSeeder.InitializeAsync(app.Services);
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -70,12 +88,9 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
-
-// Map SignalR Hubs
 app.MapHub<MeetingHub>("/meetinghub");
 app.MapHub<MeetingHub>("/api/meetinghub");
-
-// Health check endpoint
 app.MapGet("/", () => "KZYS C# Backend Signaling Server Running!");
+app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
 
 app.Run();
