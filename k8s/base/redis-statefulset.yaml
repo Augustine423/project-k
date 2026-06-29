@@ -29,21 +29,6 @@ spec:
         app: kzys-redis
         kzys.io/tier: stable
     spec:
-      # Prefer stable nodes when labeled; still schedules on any node in dev.
-      affinity:
-        nodeAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            preference:
-              matchExpressions:
-              - key: kzys.io/node-tier
-                operator: In
-                values: ["stable"]
-      tolerations:
-      - key: kzys.io/stable
-        operator: Equal
-        value: "true"
-        effect: NoSchedule
       containers:
       - name: redis
         image: redis:7-alpine

@@ -1,0 +1,24 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Core manifests (no secrets — use overlays/dev for one-command dev deploy).
+#   kubectl apply -k k8s/overlays/dev
+#
+# Optional:
+#   k8s/optional/ingress.yaml       — nginx ingress (needs DNS or extra NodePort)
+#   k8s/optional/livekit-hpa.yaml — HPA (needs metrics-server)
+#   k8s/keda-scaledobject.yaml      — SFU autoscaling (needs KEDA)
+
+resources:
+- backend-csharp-deployment.yaml
+- frontend-deployment.yaml
+- coturn-deployment.yaml
+- redis-statefulset.yaml
+- config-init-scripts.yaml
+- livekit-sfu.yaml
+
+images:
+- name: kyawzayarsoe/backend-csharp
+  newTag: latest
+- name: kyawzayarsoe/frontend
+  newTag: latest

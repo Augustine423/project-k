@@ -16,7 +16,7 @@ spec:
       containers:
       - name: backend-csharp
         image: kyawzayarsoe/backend-csharp:latest
-        imagePullPolicy: Always
+        imagePullPolicy: IfNotPresent
         ports:
         - name: http
           containerPort: 8080
@@ -33,6 +33,8 @@ spec:
               key: api-secret
         - name: REDIS_URL
           value: "kzys-redis:6379"
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Development"
         - name: CORS_ORIGIN
           value: ""
         - name: LIVEKIT_URL
@@ -63,15 +65,15 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
-        # Node IP + NodePort for external TURN clients (matches kzys-coturn Service).
+        # Coturn uses hostNetwork (port 3478 on node); TURN_HOST is auto node IP.
         - name: TURN_HOST
           valueFrom:
             fieldRef:
               fieldPath: status.hostIP
         - name: TURN_PORT
-          value: "30478"
+          value: "3478"
         - name: TURN_PORT_TCP
-          value: "30479"
+          value: "3478"
         resources:
           requests:
             memory: "128Mi"

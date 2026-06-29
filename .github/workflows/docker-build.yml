@@ -26,5 +26,6 @@ jobs:
           file: ./${{ matrix.service }}/Dockerfile
           push: true
           tags: kyawzayarsoe/${{ matrix.service }}:latest,kyawzayarsoe/${{ matrix.service }}:${{ github.sha }}
-          build-args: |
-            REACT_APP_LIVEKIT_URL=${{ secrets.REACT_APP_LIVEKIT_URL }}
+          # Frontend only. Leave REACT_APP_LIVEKIT_URL secret unset for dev k8s (no DNS);
+          # the SPA defaults to ws(s)://<current-host>/rtc at runtime.
+          build-args: ${{ matrix.service == 'frontend' && format('REACT_APP_LIVEKIT_URL={0}', secrets.REACT_APP_LIVEKIT_URL) || '' }}
