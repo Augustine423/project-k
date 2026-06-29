@@ -75,6 +75,7 @@ spec:
       name: redis-data
     spec:
       accessModes: ["ReadWriteOnce"]
+      # Omit storageClassName to use the cluster default StorageClass (standard on minikube/kind/Docker Desktop).
       resources:
         requests:
           storage: 5Gi

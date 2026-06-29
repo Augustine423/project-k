@@ -63,8 +63,15 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
+        # Node IP + NodePort for external TURN clients (matches kzys-coturn Service).
+        - name: TURN_HOST
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         - name: TURN_PORT
-          value: "3478"
+          value: "30478"
+        - name: TURN_PORT_TCP
+          value: "30479"
         resources:
           requests:
             memory: "128Mi"

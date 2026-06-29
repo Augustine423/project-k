@@ -17,6 +17,7 @@ public class TurnController : ControllerBase
             turnHost = Request.Host.Host;
 
         var turnPort = Environment.GetEnvironmentVariable("TURN_PORT") ?? "3478";
+        var turnPortTcp = Environment.GetEnvironmentVariable("TURN_PORT_TCP") ?? turnPort;
         var username = Environment.GetEnvironmentVariable("TURN_USERNAME");
         var password = Environment.GetEnvironmentVariable("TURN_PASSWORD");
 
@@ -27,7 +28,7 @@ public class TurnController : ControllerBase
             Urls:
             [
                 $"turn:{turnHost}:{turnPort}?transport=udp",
-                $"turn:{turnHost}:{turnPort}?transport=tcp",
+                $"turn:{turnHost}:{turnPortTcp}?transport=tcp",
             ],
             Username: username,
             Credential: password));

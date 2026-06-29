@@ -33,6 +33,10 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: realm
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         volumeMounts:
         - name: config
           mountPath: /config
@@ -42,11 +46,6 @@ spec:
       - name: coturn
         image: coturn/coturn:latest
         args: ["-c", "/etc/coturn/turnserver.conf"]
-        env:
-        - name: TURNSERVER_EXTERNAL_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
         ports:
         - containerPort: 3478
           protocol: UDP

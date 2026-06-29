@@ -1,9 +1,13 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-# Apply secrets before deploy (copy examples for first-time setup):
+# Dev/test deploy: kubectl apply -k k8s/
+#
+# First-time secrets:
 #   cp k8s/livekit-secrets.yaml.example k8s/livekit-secrets.yaml
 #   cp k8s/turn-secrets.yaml.example k8s/turn-secrets.yaml
+#
+# Optional (prod scaling, requires KEDA): kubectl apply -f k8s/keda-scaledobject.yaml
 
 resources:
 - backend-csharp-deployment.yaml
@@ -16,7 +20,6 @@ resources:
 - livekit-hpa.yaml
 - ingress.yaml
 - livekit-sfu.yaml
-- keda-scaledobject.yaml
 - cluster-autoscaler-notes.yaml
 
 patches:

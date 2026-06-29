@@ -6,3 +6,7 @@ Session:        20260627_055926_d02295
 Title:          Configuring LiveKit TURN Server Connectivity
 Duration:       21m 26s
 Messages:       79 (17 user, 46 tool calls)
+
+===========================================================================
+
+agent --resume=a511c88b-3765-482a-a606-5d28ee5dd57a

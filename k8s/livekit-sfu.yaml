@@ -1,4 +1,5 @@
-# LiveKit SFU — secrets via init container; warm pool via KEDA minReplicaCount=1.
+# LiveKit SFU — dev/test: NodePort + node IP auto-detect (status.hostIP in config init).
+# Optional prod scaling: kubectl apply -f k8s/keda-scaledobject.yaml (requires KEDA).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -16,6 +17,9 @@ spec:
         app: livekit-sfu
         kzys.io/tier: spot
     spec:
+      # Bind RTC ports on the node so ICE candidates (7881/7882) match what browsers reach.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       initContainers:
       - name: config-init
         image: busybox:1.36
@@ -41,6 +45,10 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         volumeMounts:
         - name: config
           mountPath: /config
@@ -52,11 +60,6 @@ spec:
         args:
         - --config
         - /etc/livekit/livekit.yaml
-        env:
-        - name: LIVEKIT_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
         ports:
         - name: rtc-ws
           containerPort: 7880
@@ -98,18 +101,21 @@ kind: Service
 metadata:
   name: livekit-sfu
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector:
     app: livekit-sfu
   ports:
   - name: rtc-ws
     port: 7880
     targetPort: 7880
+    nodePort: 30780
   - name: rtc-tcp
     port: 7881
     targetPort: 7881
     protocol: TCP
+    nodePort: 30781
   - name: rtc-udp
     port: 7882
     targetPort: 7882
     protocol: UDP
+    nodePort: 30782

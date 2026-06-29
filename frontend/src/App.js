@@ -487,7 +487,7 @@ function Room({ session, onLeave }) {
     const proto = isLocal ? 'ws' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
     // Force ws:// for local dev, wss:// for production
     const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || (
-      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
+      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}/rtc`
     );
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
