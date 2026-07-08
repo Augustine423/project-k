@@ -8,6 +8,8 @@ metadata:
     kzys.io/tier: spot
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: livekit-sfu
@@ -17,9 +19,18 @@ spec:
         app: livekit-sfu
         kzys.io/tier: spot
     spec:
-      # Bind RTC ports on the node so ICE candidates (7881/7882) match what browsers reach.
+      # Bind RTC ports on the node so ICE candidates match what browsers reach.
       hostNetwork: true
       dnsPolicy: ClusterFirstWithHostNet
+      affinity:
+        podAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: kzys-coturn
+              topologyKey: kubernetes.io/hostname
       initContainers:
       - name: config-init
         image: busybox:1.36
@@ -56,18 +67,22 @@ spec:
           mountPath: /scripts
       containers:
       - name: livekit-sfu
-        image: livekit/livekit-server:latest
+        image: livekit/livekit-server:v1.9.9
+        imagePullPolicy: IfNotPresent
+        command: ["/livekit-server"]
         args:
         - --config
         - /etc/livekit/livekit.yaml
+        env:
+        - name: NODE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.hostIP
         ports:
         - name: rtc-ws
           containerPort: 7880
         - name: rtc-tcp
           containerPort: 7881
-        - name: rtc-udp
-          containerPort: 7882
-          protocol: UDP
         volumeMounts:
         - name: config
           mountPath: /etc/livekit
@@ -81,12 +96,12 @@ spec:
         livenessProbe:
           tcpSocket:
             port: 7880
-          initialDelaySeconds: 15
+          initialDelaySeconds: 20
           periodSeconds: 20
         readinessProbe:
           tcpSocket:
             port: 7880
-          initialDelaySeconds: 10
+          initialDelaySeconds: 15
           periodSeconds: 10
       volumes:
       - name: config

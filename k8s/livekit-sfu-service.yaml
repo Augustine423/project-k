@@ -16,8 +16,3 @@ spec:
     targetPort: 7881
     protocol: TCP
     nodePort: 30781
-  - name: rtc-udp
-    port: 7882
-    targetPort: 7882
-    protocol: UDP
-    nodePort: 30782
