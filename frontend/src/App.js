@@ -41,6 +41,18 @@ function parseInviteLink(text) {
   return null;
 }
 
+function isSecureCameraContext() {
+  return window.isSecureContext || isLocalDev();
+}
+
+function getLiveKitUrl() {
+  const isLocal = isLocalDev();
+  const proto = isLocal ? 'ws' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
+  return process.env.REACT_APP_LIVEKIT_URL || (
+    isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
+  );
+}
+
 // ── KZYS Meeting Room App ───────────────────────────────────────────────────
 
 export default function App() {
@@ -190,6 +202,19 @@ function Lobby({ onJoin }) {
           </div>
         )}
 
+        {!isSecureCameraContext() && (
+          <div style={{
+            marginBottom: '16px', padding: '12px', borderRadius: '10px', fontSize: '0.85rem',
+            background: 'rgba(245, 158, 11, 0.12)', color: 'var(--accent-amber, #f59e0b)', textAlign: 'left',
+          }}>
+            Camera needs HTTPS or localhost. On this HTTP IP, use port-forward for testing:
+            <code style={{ display: 'block', marginTop: '8px', fontSize: '0.75rem', wordBreak: 'break-all' }}>
+              kubectl port-forward svc/kzys-frontend 8080:80
+            </code>
+            Then open <strong>http://localhost:8080</strong>
+          </div>
+        )}
+
         {step === 'home' && (
           <div style={{ textAlign: 'left' }}>
             <div className="form-group">
@@ -329,12 +354,7 @@ function Room({ session, onLeave }) {
   // ── Local camera preview (before LiveKit connects) ────────────────────────
   useEffect(() => {
     async function startPreview() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
-        localStreamRef.current = stream;
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      } catch {
-        // Canvas fallback for preview
+      const showCanvasFallback = (reason) => {
         const canvas = document.createElement('canvas');
         canvas.width = 640; canvas.height = 360;
         const ctx = canvas.getContext('2d');
@@ -343,7 +363,7 @@ function Room({ session, onLeave }) {
           ctx.font = '24px Outfit'; ctx.fillStyle = '#8b5cf6'; ctx.textAlign = 'center';
           ctx.fillText(userId + ' (You)', 320, 160);
           ctx.fillStyle = '#94a3b8'; ctx.font = '16px Outfit';
-          ctx.fillText('Camera unavailable', 320, 200);
+          ctx.fillText(reason, 320, 200);
           const t = Date.now() * 0.003;
           ctx.beginPath(); ctx.arc(320 + Math.sin(t) * 100, 250 + Math.cos(t * 2) * 20, 8, 0, Math.PI * 2);
           ctx.fillStyle = '#0ea5e9'; ctx.fill();
@@ -352,6 +372,21 @@ function Room({ session, onLeave }) {
         localStreamRef.current = s;
         if (localVideoRef.current) localVideoRef.current.srcObject = s;
         canvasIntervalsRef.current['local'] = id;
+      };
+
+      if (!isSecureCameraContext()) {
+        showCanvasFallback('Use localhost for camera');
+        addMessage('System', 'Camera blocked on HTTP public IP. Port-forward frontend to localhost for camera access.');
+        setMediaReady(true);
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        localStreamRef.current = stream;
+        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
+      } catch {
+        showCanvasFallback('Camera unavailable');
         addMessage('System', 'Camera unavailable. Preview mode active.');
       }
       setMediaReady(true);
@@ -367,13 +402,8 @@ function Room({ session, onLeave }) {
   useEffect(() => {
     if (!mediaReady) return;
 
-    const isLocal = isLocalDev();
     const apiBase = getApiBase();
-    const proto = isLocal ? 'ws' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
-    // LiveKit client appends /rtc itself — do not add /rtc here (avoids /rtc/rtc 404).
-    const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || (
-      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
-    );
+    const livekitUrl = getLiveKitUrl();
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
     livekitRoomRef.current = room;
@@ -423,28 +453,44 @@ function Room({ session, onLeave }) {
 
     const connect = async () => {
       try {
-        // Fetch token from our C# backend
-        const res = await fetch(
-          `${apiBase}/livekit/token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&joinKey=${encodeURIComponent(joinKey)}`
-        );
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          if (res.status === 403 && data.requiresUpgrade) {
+        const [tokenRes, turnRes] = await Promise.all([
+          fetch(
+            `${apiBase}/livekit/token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&joinKey=${encodeURIComponent(joinKey)}`
+          ),
+          fetch(`${apiBase}/v1/turn/credentials`).catch(() => null),
+        ]);
+
+        if (!tokenRes.ok) {
+          const data = await tokenRes.json().catch(() => ({}));
+          if (tokenRes.status === 403 && data.requiresUpgrade) {
             throw new Error(`Room full (${data.participantCount}/${data.maxParticipants}). Host must upgrade the ${data.planName} plan.`);
           }
-          throw new Error(data.error || `Token request failed: ${res.status}`);
+          throw new Error(data.error || `Token request failed: ${tokenRes.status}`);
         }
-        const { token } = await res.json();
-        await room.connect(livekitUrl, token);
+        const { token } = await tokenRes.json();
 
-        // Publish local tracks via LiveKit (proper wrappers)
-        const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
-        localTracksRef.current = tracks;
-        for (const track of tracks) {
-          await room.localParticipant.publishTrack(track);
-          // Mirror video to local preview
-          if (track.kind === Track.Kind.Video && localVideoRef.current) {
-            localVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
+        let connectOptions;
+        if (turnRes?.ok) {
+          const turn = await turnRes.json();
+          connectOptions = {
+            rtcConfig: {
+              iceServers: [{ urls: turn.urls, username: turn.username, credential: turn.credential }],
+            },
+          };
+        } else {
+          addMessage('System', 'TURN not configured — WebRTC may fail behind NAT. Run kzys-endpoint-setup job.');
+        }
+
+        await room.connect(livekitUrl, token, connectOptions);
+
+        if (isSecureCameraContext()) {
+          const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
+          localTracksRef.current = tracks;
+          for (const track of tracks) {
+            await room.localParticipant.publishTrack(track);
+            if (track.kind === Track.Kind.Video && localVideoRef.current) {
+              localVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
+            }
           }
         }
 

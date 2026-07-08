@@ -38,6 +38,23 @@ spec:
           value: "http://livekit-sfu:7880"
         - name: KZYS_DB_PATH
           value: "/app/data/kzys.db"
+        - name: TURN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: username
+        - name: TURN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: turn-secrets
+              key: password
+        - name: TURN_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: kzys-gcp-endpoints
+              key: turn-host
+        - name: TURN_PORT
+          value: "3478"
         resources:
           requests:
             memory: "128Mi"

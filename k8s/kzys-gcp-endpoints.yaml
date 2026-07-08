@@ -1,0 +1,7 @@
+# Patched by kzys-endpoint-setup Job with coturn LoadBalancer IP.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-gcp-endpoints
+data:
+  turn-host: "127.0.0.1"
