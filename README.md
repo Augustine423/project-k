@@ -138,18 +138,16 @@ git push → main branch
 ```
 kubectl apply -f k8s/
   ├─> kzys-frontend        (LoadBalancer — public HTTP)
-  ├─> kzys-coturn           (LoadBalancer — public TURN UDP/TCP)
-  ├─> kzys-backend-csharp   (ClusterIP — internal)
-  ├─> kzys-backend-go       (ClusterIP — internal)
-  ├─> livekit-sfu           (ClusterIP — internal, /rtc proxy)
-  └─> kzys-redis            (ClusterIP headless)
+  ├─> kzys-backend-csharp   (ClusterIP — rooms + tokens)
+  ├─> livekit-sfu           (ClusterIP — WebRTC SFU)
+  └─> kzys-redis            (ClusterIP — room state)
 ```
 
-Then check URLs:
+Then open the app:
 
 ```bash
-kubectl get svc kzys-frontend kzys-coturn
-kubectl logs job/kzys-endpoint-setup   # waits for coturn LB IP + restarts pods
+kubectl get svc kzys-frontend
+# http://<EXTERNAL-IP>/
 ```
 
 ### Request Flow Summary

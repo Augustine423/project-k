@@ -1,4 +1,4 @@
-# Internal only — browsers reach LiveKit signaling via frontend nginx at /rtc/
+# ClusterIP — browsers reach LiveKit signaling via frontend nginx at /rtc
 apiVersion: v1
 kind: Service
 metadata:
@@ -14,4 +14,3 @@ spec:
   - name: rtc-tcp
     port: 7881
     targetPort: 7881
-    protocol: TCP

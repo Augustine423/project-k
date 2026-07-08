@@ -1,10 +1,8 @@
-# LiveKit SFU — cluster-internal; signaling proxied by frontend nginx at /rtc/
+# LiveKit SFU — hostNetwork for WebRTC on GKE; scale replicas later for more capacity.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: livekit-sfu
-  labels:
-    kzys.io/tier: spot
 spec:
   replicas: 1
   strategy:
@@ -16,59 +14,21 @@ spec:
     metadata:
       labels:
         app: livekit-sfu
-        kzys.io/tier: spot
     spec:
-      initContainers:
-      - name: config-init
-        image: busybox:1.36
-        command: ["sh", "/scripts/init.sh"]
-        env:
-        - name: LIVEKIT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: livekit-secrets
-              key: api-key
-        - name: LIVEKIT_API_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: livekit-secrets
-              key: api-secret
-        - name: TURN_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: username
-        - name: TURN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: password
-        - name: TURN_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: kzys-gcp-endpoints
-              key: turn-host
-        volumeMounts:
-        - name: config
-          mountPath: /config
-        - name: init-scripts
-          mountPath: /scripts
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
       - name: livekit-sfu
         image: livekit/livekit-server:v1.9.9
         imagePullPolicy: IfNotPresent
-        command: ["/livekit-server"]
-        args:
-        - --config
-        - /etc/livekit/livekit.yaml
+        args: ["--config", "/etc/livekit/livekit.yaml"]
         ports:
-        - name: rtc-ws
-          containerPort: 7880
-        - name: rtc-tcp
-          containerPort: 7881
+        - containerPort: 7880
+        - containerPort: 7881
         volumeMounts:
         - name: config
           mountPath: /etc/livekit
+          readOnly: true
         resources:
           requests:
             memory: "512Mi"
@@ -88,8 +48,5 @@ spec:
           periodSeconds: 10
       volumes:
       - name: config
-        emptyDir: {}
-      - name: init-scripts
         configMap:
-          name: livekit-config-init
-          defaultMode: 0755
+          name: livekit-config

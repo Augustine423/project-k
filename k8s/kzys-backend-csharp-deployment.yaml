@@ -11,7 +11,6 @@ spec:
     metadata:
       labels:
         app: kzys-backend-csharp
-        kzys.io/tier: stable
     spec:
       containers:
       - name: backend-csharp
@@ -35,46 +34,10 @@ spec:
           value: "kzys-redis:6379"
         - name: ASPNETCORE_ENVIRONMENT
           value: "Development"
-        - name: CORS_ORIGIN
-          value: ""
         - name: LIVEKIT_URL
           value: "http://livekit-sfu:7880"
-        - name: KZYS_ALLOW_PAID_PLANS
-          value: "true"
-        - name: KZYS_AUTO_MOCK_PAYMENTS
-          value: "true"
-        - name: KZYS_PAID_UNLOCK_CODE
-          value: "kzys-dev-paid"
         - name: KZYS_DB_PATH
           value: "/app/data/kzys.db"
-        - name: KZYS_PRICING_BASE_URL
-          value: "/pricing"
-        - name: KZYS_SFU_STANDBY_POOL
-          value: "1"
-        - name: KZYS_READ_TIMEOUT_SECONDS
-          value: "30"
-        - name: KZYS_WRITE_TIMEOUT_SECONDS
-          value: "30"
-        - name: TURN_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: username
-        - name: TURN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: password
-        # TURN_HOST = kzys-coturn LoadBalancer IP (patched by kzys-endpoint-setup Job).
-        - name: TURN_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: kzys-gcp-endpoints
-              key: turn-host
-        - name: TURN_PORT
-          value: "3478"
-        - name: TURN_PORT_TCP
-          value: "3478"
         resources:
           requests:
             memory: "128Mi"

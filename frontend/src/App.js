@@ -41,15 +41,7 @@ function parseInviteLink(text) {
   return null;
 }
 
-const FALLBACK_PLANS = [
-  { id: 'free', name: 'Free', maxParticipants: 30, isPaid: false, pricePerRoom: 0, monthlyPrice: 0, annualPrice: 0, description: 'Up to 30 participants — free', available: true },
-  { id: 'plus100', name: 'Plus 100', maxParticipants: 100, isPaid: true, pricePerRoom: 4.99, monthlyPrice: 15.97, annualPrice: 153.31, description: 'Up to 100 participants', available: false },
-  { id: 'plus500', name: 'Plus 500', maxParticipants: 500, isPaid: true, pricePerRoom: 14.99, monthlyPrice: 47.97, annualPrice: 460.51, description: 'Up to 500 participants', available: false },
-  { id: 'plus1000', name: 'Plus 1000', maxParticipants: 1000, isPaid: true, pricePerRoom: 24.99, monthlyPrice: 79.97, annualPrice: 767.71, description: 'Up to 1000 participants', available: false },
-  { id: 'plus2000', name: 'Plus 2000', maxParticipants: 2000, isPaid: true, pricePerRoom: 39.99, monthlyPrice: 127.97, annualPrice: 1228.51, description: 'Up to 2000 participants', available: false },
-];
-
-// ── KZYS Meeting Room App ─────────────────────────────────────────────────────
+// ── KZYS Meeting Room App ───────────────────────────────────────────────────
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -68,10 +60,10 @@ export default function App() {
   return <Lobby onJoin={setSession} />;
 }
 
-// ── Lobby Component ───────────────────────────────────────────────────────────
+// ── Lobby ───────────────────────────────────────────────────────────────────
 function Lobby({ onJoin }) {
   const inviteFromUrl = parseInviteFromUrl();
-  const [mode, setMode] = useState(inviteFromUrl ? 'invite' : 'create');
+  const [step, setStep] = useState(inviteFromUrl ? 'join' : 'home');
   const [userId, setUserId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -80,23 +72,6 @@ function Lobby({ onJoin }) {
   const [inviteMeta, setInviteMeta] = useState(null);
   const [inviteLinkInput, setInviteLinkInput] = useState('');
   const [copied, setCopied] = useState(false);
-  const [plans, setPlans] = useState(FALLBACK_PLANS);
-  const [autoMockPayments, setAutoMockPayments] = useState(true);
-  const [selectedPlanId, setSelectedPlanId] = useState('free');
-  const [billingMode, setBillingMode] = useState('per_room');
-  const [subscriptionPeriod, setSubscriptionPeriod] = useState('monthly');
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(`${getApiBase()}/rooms/plans`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (Array.isArray(data.plans) && data.plans.length) setPlans(data.plans);
-        if (typeof data.autoMockPayments === 'boolean') setAutoMockPayments(data.autoMockPayments);
-      } catch { /* use fallback */ }
-    })();
-  }, []);
 
   useEffect(() => {
     if (!invite) return;
@@ -114,7 +89,7 @@ function Lobby({ onJoin }) {
           setInviteMeta(data);
         }
       } catch {
-        if (!cancelled) setErrorMsg('Could not verify invite link. Is the backend running?');
+        if (!cancelled) setErrorMsg('Backend unavailable. Check kubectl get pods.');
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -124,47 +99,28 @@ function Lobby({ onJoin }) {
 
   const handleCreateRoom = async () => {
     if (!userId.trim()) {
-      setErrorMsg('Enter your display name — it is used as your dev payment identity.');
+      setErrorMsg('Enter your display name.');
       return;
     }
     setErrorMsg('');
     setLoading(true);
-    const selectedPlan = plans.find((p) => p.id === selectedPlanId) || plans[0];
     try {
       const res = await fetch(`${getApiBase()}/rooms/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          hostName: userId.trim() || null,
-          userId: userId.trim() || null,
-          planId: selectedPlanId,
-          requestedParticipants: selectedPlan?.maxParticipants ?? 30,
-          billingMode,
-          subscriptionPeriod: billingMode === 'subscription' ? subscriptionPeriod : null,
-          durationHours: 24,
-        }),
+        body: JSON.stringify({ hostName: userId.trim(), userId: userId.trim() }),
       });
       const data = await res.json().catch(() => ({}));
-      if (res.status === 402) {
-        const amount = data.amountDue != null ? ` Amount due: $${Number(data.amountDue).toFixed(2)}.` : '';
-        const link = data.pricingUrl ? ` Pricing: ${window.location.origin}${data.pricingUrl}` : '';
-        setErrorMsg((data.error || 'Payment required.') + amount + link);
-        return;
-      }
       if (!res.ok) throw new Error(data.error || `Create failed: ${res.status}`);
       const joinUrl = buildJoinUrl(data.roomId, data.joinKey);
       setCreatedRoom({
         roomId: data.roomId,
         joinKey: data.joinKey,
         joinUrl,
-        planId: data.planId,
         planName: data.planName,
         maxParticipants: data.maxParticipants,
-        mockPayment: data.mockPayment,
-        amountCharged: data.amountCharged,
-        paymentReference: data.paymentReference,
       });
-      setMode('created');
+      setStep('ready');
       window.history.replaceState(null, '', joinUrl);
     } catch (err) {
       setErrorMsg(err.message || 'Failed to create room.');
@@ -181,40 +137,33 @@ function Lobby({ onJoin }) {
     }
     setErrorMsg('');
     setInvite(parsed);
-    setMode('invite');
+    setStep('join');
     window.history.replaceState(null, '', buildJoinUrl(parsed.roomId, parsed.joinKey));
   };
 
   const handleJoin = () => {
-    if (!userId.trim()) { setErrorMsg('Please enter your name.'); return; }
+    if (!userId.trim()) { setErrorMsg('Enter your display name.'); return; }
 
-    if (mode === 'created' && createdRoom) {
+    if (step === 'ready' && createdRoom) {
       onJoin({
         roomId: createdRoom.roomId,
         joinKey: createdRoom.joinKey,
         userId: userId.trim(),
-        isHost: true,
-        planId: createdRoom.planId,
         planName: createdRoom.planName,
         maxParticipants: createdRoom.maxParticipants,
       });
       return;
     }
 
-    if (mode === 'invite' && invite) {
+    if (step === 'join' && invite && inviteMeta) {
       onJoin({
         roomId: invite.roomId,
         joinKey: invite.joinKey,
         userId: userId.trim(),
-        isHost: false,
-        planId: inviteMeta?.planId || 'free',
-        planName: inviteMeta?.planName || 'Free',
-        maxParticipants: inviteMeta?.maxParticipants || 30,
+        planName: inviteMeta.planName || 'Free',
+        maxParticipants: inviteMeta.maxParticipants || 30,
       });
-      return;
     }
-
-    setErrorMsg('Create a room or open an invite link to join.');
   };
 
   const copyInviteLink = async () => {
@@ -224,150 +173,95 @@ function Lobby({ onJoin }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      setErrorMsg('Could not copy link. Select and copy manually.');
+      setErrorMsg('Could not copy link.');
     }
   };
-
-  const activeRoomId = createdRoom?.roomId || invite?.roomId;
 
   return (
     <div className="lobby-container">
       <div className="lobby-card glass animate-fade-in">
-        <div className="animate-float">
-          <span style={{ fontSize: '3.5rem' }}>🎥</span>
-        </div>
+        <div className="animate-float"><span style={{ fontSize: '3.5rem' }}>🎥</span></div>
         <h1 className="lobby-title">KZYS Video Space</h1>
-        <p className="lobby-subtitle">Create a room and share the invite link — only guests with the link can join</p>
+        <p className="lobby-subtitle">Create a room, share the link, join with video</p>
 
         {errorMsg && (
-          <div style={{ color: 'var(--accent-rose)', marginBottom: '16px', fontSize: '0.9rem', fontWeight: 500 }}>
+          <div style={{ color: 'var(--accent-rose)', marginBottom: '16px', fontSize: '0.9rem' }}>
             ⚠️ {errorMsg}
           </div>
         )}
 
-        {mode === 'create' && (
-          <div style={{ marginBottom: '24px', textAlign: 'left' }}>
+        {step === 'home' && (
+          <div style={{ textAlign: 'left' }}>
             <div className="form-group">
-              <label className="form-label">Display Name (host)</label>
-              <input className="form-input" placeholder="e.g. John Doe" value={userId}
-                onChange={(e) => setUserId(e.target.value)} />
+              <label className="form-label">Your name</label>
+              <input className="form-input" placeholder="e.g. Alex" value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleCreateRoom()} />
             </div>
-            <label className="form-label" style={{ marginBottom: '12px' }}>Choose room plan</label>
-            <div className="plan-grid">
-              {plans.map((plan) => (
-                <button
-                  key={plan.id}
-                  type="button"
-                  className={`plan-card ${selectedPlanId === plan.id ? 'plan-card-selected' : ''} ${plan.isPaid && !plan.available ? 'plan-card-locked' : ''}`}
-                  onClick={() => setSelectedPlanId(plan.id)}
-                >
-                  <span className="plan-card-name">{plan.name}</span>
-                  <span className="plan-card-cap">{plan.maxParticipants} users</span>
-                  <span className="plan-card-cap">
-                    {plan.isPaid ? `$${Number(plan.pricePerRoom || 0).toFixed(2)}/room` : 'Free'}
-                  </span>
-                  {plan.isPaid && (
-                    <span className="plan-card-cap" style={{ fontSize: '0.72rem' }}>
-                      or ${Number(plan.monthlyPrice || 0).toFixed(2)}/mo sub
-                    </span>
-                  )}
-                  <span className="plan-card-badge">{plan.isPaid ? 'Paid' : 'Free'}</span>
-                </button>
-              ))}
-            </div>
-            <div className="form-group" style={{ marginTop: '12px', marginBottom: 0 }}>
-              <label className="form-label">Billing mode</label>
-              <select className="form-input" value={billingMode} onChange={(e) => setBillingMode(e.target.value)}>
-                <option value="per_room">Pay per room (24h)</option>
-                <option value="subscription">Use subscription</option>
-              </select>
-            </div>
-            {billingMode === 'subscription' && (
-              <div className="form-group" style={{ marginTop: '12px', marginBottom: 0 }}>
-                <label className="form-label">Subscription period</label>
-                <select className="form-input" value={subscriptionPeriod} onChange={(e) => setSubscriptionPeriod(e.target.value)}>
-                  <option value="monthly">Monthly</option>
-                  <option value="annual">Annual (20% off)</option>
-                </select>
-              </div>
-            )}
-            {autoMockPayments && (
-              <p style={{ color: 'var(--accent-emerald)', fontSize: '0.8rem', marginTop: '12px' }}>
-                Dev mode: payment is auto-created from your display name — no checkout needed.
-              </p>
-            )}
             <div className="lobby-sticky-actions">
               <button className="btn-primary" onClick={handleCreateRoom} disabled={loading}>
                 {loading ? 'Creating…' : 'Create Room'}
               </button>
             </div>
-
             <div className="lobby-divider">or join with invite link</div>
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Paste invite link</label>
               <div style={{ display: 'flex', gap: '8px' }}>
-                <input className="form-input" style={{ flex: 1 }} placeholder="https://…/join?room=…&key=…"
+                <input className="form-input" style={{ flex: 1 }} placeholder="Paste invite URL"
                   value={inviteLinkInput} onChange={(e) => setInviteLinkInput(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handlePasteInvite()} />
-                <button className="btn-secondary" style={{ width: 'auto', margin: 0, padding: '0 16px', borderRadius: '12px' }}
+                <button className="btn-secondary" style={{ width: 'auto', margin: 0, padding: '0 16px' }}
                   onClick={handlePasteInvite}>Join</button>
               </div>
             </div>
           </div>
         )}
 
-        {mode === 'created' && createdRoom && (
-          <div className="invite-box glass" style={{ marginBottom: '24px', padding: '16px', borderRadius: '12px' }}>
-            <label className="form-label" style={{ marginBottom: '8px' }}>Share this invite link</label>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input className="form-input" style={{ flex: 1, fontSize: '0.8rem' }} readOnly value={createdRoom.joinUrl} />
-              <button className="btn-secondary" style={{ width: 'auto', margin: 0, padding: '0 16px', borderRadius: '12px', whiteSpace: 'nowrap' }}
-                onClick={copyInviteLink}>{copied ? '✓ Copied' : 'Copy'}</button>
-            </div>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '8px' }}>
-              Room: <strong>{createdRoom.roomId}</strong> · Plan: <strong>{createdRoom.planName}</strong> ({createdRoom.maxParticipants} max)
-              {createdRoom.mockPayment && (
-                <> · Mock paid <strong>${Number(createdRoom.amountCharged || 0).toFixed(2)}</strong></>
-              )}
-            </p>
-          </div>
-        )}
-
-        {mode === 'invite' && invite && inviteMeta && (
-          <div style={{ marginBottom: '24px', padding: '12px 16px', borderRadius: '12px', background: 'rgba(139,92,246,0.12)', border: '1px solid rgba(139,92,246,0.3)' }}>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
-              Invited to <strong style={{ color: 'var(--accent-purple)' }}>{invite.roomId}</strong>
-              {' · '}{inviteMeta.planName} plan · up to {inviteMeta.maxParticipants} participants
-            </p>
-          </div>
-        )}
-
-        {mode === 'invite' && invite && !inviteMeta && !errorMsg && loading && (
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: '16px' }}>Verifying invite…</p>
-        )}
-
-        {(mode === 'created' || mode === 'invite') && (
+        {step === 'ready' && createdRoom && (
           <>
-            <div className="form-group">
-              <label className="form-label">Display Name</label>
-              <input className="form-input" placeholder="e.g. John Doe" value={userId}
-                onChange={(e) => setUserId(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleJoin()} />
+            <div className="invite-box glass" style={{ marginBottom: '20px', padding: '16px', borderRadius: '12px', textAlign: 'left' }}>
+              <label className="form-label">Share invite link</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input className="form-input" style={{ flex: 1, fontSize: '0.8rem' }} readOnly value={createdRoom.joinUrl} />
+                <button className="btn-secondary" style={{ width: 'auto', margin: 0, padding: '0 16px' }}
+                  onClick={copyInviteLink}>{copied ? 'Copied' : 'Copy'}</button>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '8px' }}>
+                Room <strong>{createdRoom.roomId}</strong> · up to {createdRoom.maxParticipants} people
+              </p>
             </div>
-            <button className="btn-primary" onClick={handleJoin} disabled={loading || (mode === 'invite' && !!errorMsg)}>
-              {mode === 'created' ? 'Start Meeting as Host' : 'Join Meeting'}
+            <button className="btn-primary" onClick={handleJoin}>Start Meeting</button>
+            <button className="btn-secondary" style={{ marginTop: '12px' }}
+              onClick={() => { setStep('home'); setCreatedRoom(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
+              Back
             </button>
-            {mode === 'invite' && (
-              <button className="btn-secondary" style={{ marginTop: '12px' }} onClick={() => { setMode('create'); setInvite(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
-                Back
-              </button>
-            )}
           </>
         )}
 
-        {activeRoomId && mode === 'created' && (
-          <button className="btn-secondary" style={{ marginTop: '12px' }} onClick={() => { setMode('create'); setCreatedRoom(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
-            Cancel
-          </button>
+        {step === 'join' && (
+          <>
+            {inviteMeta && (
+              <p style={{ marginBottom: '16px', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
+                Joining <strong style={{ color: 'var(--accent-purple)' }}>{invite.roomId}</strong>
+                {' '}({inviteMeta.maxParticipants} max)
+              </p>
+            )}
+            {!inviteMeta && !errorMsg && loading && (
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Checking invite…</p>
+            )}
+            <div className="form-group">
+              <label className="form-label">Your name</label>
+              <input className="form-input" placeholder="e.g. Alex" value={userId}
+                onChange={(e) => setUserId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleJoin()} />
+            </div>
+            <button className="btn-primary" onClick={handleJoin} disabled={loading || !inviteMeta}>
+              Join Meeting
+            </button>
+            <button className="btn-secondary" style={{ marginTop: '12px' }}
+              onClick={() => { setStep('home'); setInvite(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
+              Back
+            </button>
+          </>
         )}
       </div>
     </div>
@@ -408,7 +302,6 @@ function Room({ session, onLeave }) {
     { from: 'System', text: `Welcome to room ${roomId}! Invite others to join.` }
   ]);
   const [chatInput, setChatInput] = useState('');
-  const [simulationMode, setSimulationMode] = useState(false);
   const [mediaReady, setMediaReady] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
 
@@ -542,30 +435,7 @@ function Room({ session, onLeave }) {
           throw new Error(data.error || `Token request failed: ${res.status}`);
         }
         const { token } = await res.json();
-
-        let connectOptions = {};
-        try {
-          const turnRes = await fetch(`${apiBase}/v1/turn/credentials`);
-          if (turnRes.ok) {
-            const turn = await turnRes.json();
-            const urls = turn.Urls || turn.urls;
-            if (Array.isArray(urls) && urls.length) {
-              connectOptions = {
-                rtcConfig: {
-                  iceServers: [{
-                    urls,
-                    username: turn.Username || turn.username,
-                    credential: turn.Credential || turn.credential,
-                  }],
-                },
-              };
-            }
-          }
-        } catch {
-          /* TURN optional — LiveKit may still supply ICE servers */
-        }
-
-        await room.connect(livekitUrl, token, connectOptions);
+        await room.connect(livekitUrl, token);
 
         // Publish local tracks via LiveKit (proper wrappers)
         const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
@@ -686,40 +556,6 @@ function Room({ session, onLeave }) {
     }
   };
 
-  // ── Simulation Mode ───────────────────────────────────────────────────────
-  const toggleSimulation = () => {
-    if (!simulationMode) {
-      const mockUsers = [{ id: 'sim-1', name: 'Alex' }, { id: 'sim-2', name: 'Jordan' }, { id: 'sim-3', name: 'Sam' }];
-      mockUsers.forEach((user) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 640; canvas.height = 360;
-        const ctx = canvas.getContext('2d');
-        const colors = ['#8b5cf6', '#0ea5e9', '#ec4899'];
-        const color = colors[Math.floor(Math.random() * colors.length)];
-        const id = setInterval(() => {
-          ctx.fillStyle = '#0f1122'; ctx.fillRect(0, 0, 640, 360);
-          ctx.fillStyle = color + '33'; ctx.beginPath();
-          const p = Math.sin(Date.now() * 0.002) * 20;
-          ctx.arc(320, 150, 70 + p, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = color; ctx.beginPath(); ctx.arc(320, 150, 60, 0, Math.PI * 2); ctx.fill();
-          ctx.fillStyle = '#fff'; ctx.font = 'bold 36px Outfit'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-          ctx.fillText(user.name.split(' ').map((n) => n[0]).join(''), 320, 150);
-          ctx.font = '20px Outfit'; ctx.fillText(user.name, 320, 260);
-        }, 100);
-        canvasIntervalsRef.current[user.id] = id;
-        setPeers((prev) => [...prev, { connectionId: user.id, userId: user.name, stream: canvas.captureStream(30) }]);
-        addMessage('System', `${user.name} joined the preview.`);
-      });
-      setTimeout(() => setMessages((prev) => [...prev, { from: 'Alex', text: 'Looks great! The room layout is working well.', time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]), 3000);
-      setSimulationMode(true);
-    } else {
-      setPeers((prev) => prev.filter((p) => !p.connectionId.startsWith('sim-')));
-      Object.keys(canvasIntervalsRef.current).forEach((k) => { if (k.startsWith('sim-')) { clearInterval(canvasIntervalsRef.current[k]); delete canvasIntervalsRef.current[k]; } });
-      setSimulationMode(false);
-      addMessage('System', 'Preview participants removed.');
-    }
-  };
-
   const statusLabel = connectionStatus === 'connected' ? 'Connected'
     : connectionStatus === 'offline' ? 'Offline'
     : connectionStatus === 'reconnecting' ? 'Reconnecting...'
@@ -745,13 +581,8 @@ function Room({ session, onLeave }) {
                 setLinkCopied(true);
                 setTimeout(() => setLinkCopied(false), 2000);
               } catch { /* ignore */ }
-            }}
-            title="Copy invite link for new participants">
-            🔗 {linkCopied ? 'Copied!' : 'Invite'}
-          </button>
-          <button className={`btn-secondary ${simulationMode ? 'active' : ''}`} onClick={toggleSimulation}
-            style={{ margin: 0, padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            👾 {simulationMode ? 'Stop Preview' : 'Preview Layout'}
+            }}>
+            🔗 {linkCopied ? 'Copied!' : 'Copy invite'}
           </button>
         </div>
       </header>
