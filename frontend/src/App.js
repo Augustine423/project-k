@@ -296,9 +296,11 @@ function Lobby({ onJoin }) {
                 Dev mode: payment is auto-created from your display name — no checkout needed.
               </p>
             )}
-            <button className="btn-primary" style={{ marginTop: '16px' }} onClick={handleCreateRoom} disabled={loading}>
-              {loading ? 'Creating…' : 'Create Room'}
-            </button>
+            <div className="lobby-sticky-actions">
+              <button className="btn-primary" onClick={handleCreateRoom} disabled={loading}>
+                {loading ? 'Creating…' : 'Create Room'}
+              </button>
+            </div>
 
             <div className="lobby-divider">or join with invite link</div>
             <div className="form-group" style={{ marginBottom: 0 }}>
