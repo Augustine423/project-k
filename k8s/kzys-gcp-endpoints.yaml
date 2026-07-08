@@ -1,4 +1,4 @@
-# Populated by deploy-dev.sh after GCP LoadBalancer IPs are assigned.
+# Populated automatically by Job kzys-endpoint-setup after coturn LoadBalancer is ready.
 apiVersion: v1
 kind: ConfigMap
 metadata:

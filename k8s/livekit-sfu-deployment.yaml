@@ -1,5 +1,4 @@
 # LiveKit SFU — cluster-internal; signaling proxied by frontend nginx at /rtc/
-# Optional KEDA scaling: bash k8s/install-keda.sh (requires Helm + KEDA CRDs).
 apiVersion: apps/v1
 kind: Deployment
 metadata:

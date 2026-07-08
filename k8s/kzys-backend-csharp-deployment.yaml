@@ -65,7 +65,7 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
-        # TURN_HOST = kzys-coturn LoadBalancer IP (set by deploy-dev.sh).
+        # TURN_HOST = kzys-coturn LoadBalancer IP (patched by kzys-endpoint-setup Job).
         - name: TURN_HOST
           valueFrom:
             configMapKeyRef:

@@ -1,0 +1,73 @@
+# Waits for the coturn LoadBalancer IP, patches kzys-gcp-endpoints, restarts dependent pods.
+# Re-apply: kubectl delete job kzys-endpoint-setup --ignore-not-found && kubectl apply -f .
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kzys-endpoint-setup
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: kzys-endpoint-setup
+rules:
+- apiGroups: [""]
+  resources: ["services", "configmaps"]
+  verbs: ["get", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: kzys-endpoint-setup
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: kzys-endpoint-setup
+subjects:
+- kind: ServiceAccount
+  name: kzys-endpoint-setup
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kzys-endpoint-setup
+spec:
+  ttlSecondsAfterFinished: 600
+  backoffLimit: 8
+  template:
+    spec:
+      serviceAccountName: kzys-endpoint-setup
+      restartPolicy: OnFailure
+      containers:
+      - name: setup
+        image: bitnami/kubectl:1.30
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -euo pipefail
+          echo "Waiting for kzys-coturn LoadBalancer IP..."
+          IP=""
+          for _ in $(seq 1 60); do
+            IP="$(kubectl get svc kzys-coturn -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)"
+            if [[ -z "${IP}" ]]; then
+              IP="$(kubectl get svc kzys-coturn -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            fi
+            if [[ -n "${IP}" ]]; then
+              break
+            fi
+            sleep 5
+          done
+          if [[ -z "${IP}" ]]; then
+            echo "Timed out waiting for coturn LoadBalancer IP" >&2
+            exit 1
+          fi
+          echo "Coturn LoadBalancer IP: ${IP}"
+          kubectl patch configmap kzys-gcp-endpoints --type merge \
+            -p "{\"data\":{\"turn-host\":\"${IP}\"}}"
+          kubectl rollout restart deployment/kzys-coturn deployment/livekit-sfu deployment/kzys-backend-csharp
+          kubectl rollout status deployment/kzys-coturn --timeout=300s
+          kubectl rollout status deployment/livekit-sfu --timeout=300s
+          kubectl rollout status deployment/kzys-backend-csharp --timeout=300s
+          echo "Endpoint setup complete."

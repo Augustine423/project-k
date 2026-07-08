@@ -136,15 +136,20 @@ git push → main branch
 ### 9. Kubernetes Deployment
 
 ```
-bash k8s/deploy-dev.sh    ← plain kubectl apply
-  ├─> kzys-frontend        (Nginx + React, NodePort 31498)
-  ├─> kzys-backend-csharp  (ASP.NET Core, port 8080)
-  ├─> kzys-backend-go      (Go, port 8080)
-  ├─> livekit-sfu          (LiveKit server, NodePort 30780)
-  ├─> kzys-coturn          (TURN relay, NodePort 30478/30479)
-  └─> Ingress (nginx)
-        ├─> /       → kzys-frontend
-        └─> /api    → kzys-backend-csharp (WebSocket-enabled)
+kubectl apply -f k8s/
+  ├─> kzys-frontend        (LoadBalancer — public HTTP)
+  ├─> kzys-coturn           (LoadBalancer — public TURN UDP/TCP)
+  ├─> kzys-backend-csharp   (ClusterIP — internal)
+  ├─> kzys-backend-go       (ClusterIP — internal)
+  ├─> livekit-sfu           (ClusterIP — internal, /rtc proxy)
+  └─> kzys-redis            (ClusterIP headless)
+```
+
+Then check URLs:
+
+```bash
+kubectl get svc kzys-frontend kzys-coturn
+kubectl logs job/kzys-endpoint-setup   # waits for coturn LB IP + restarts pods
 ```
 
 ### Request Flow Summary
