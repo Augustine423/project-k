@@ -47,7 +47,7 @@ namespace Kzys.Backend.Controllers
                 return BadRequest(new { error = ex.Message });
             }
 
-            await LiveKitRoomService.EnsureRoomAsync(room.RoomId, room.MaxParticipants);
+            await JanusRoomService.EnsureVideoRoomAsync(room.RoomId, room.MaxParticipants, cancellationToken);
 
             return Ok(new
             {
@@ -89,7 +89,7 @@ namespace Kzys.Backend.Controllers
             if (!valid)
                 return NotFound(new { error });
 
-            var (count, _) = await LiveKitRoomService.GetParticipantInfoAsync(roomId);
+            var chatCount = await _presence.CountAsync(roomId);
 
             return Ok(new
             {
@@ -97,9 +97,9 @@ namespace Kzys.Backend.Controllers
                 planId = room.PlanId,
                 planName = room.PlanName,
                 maxParticipants = room.MaxParticipants,
-                participantCount = count,
-                seatsRemaining = Math.Max(0, room.MaxParticipants - count),
-                isFull = count >= room.MaxParticipants,
+                participantCount = chatCount,
+                seatsRemaining = Math.Max(0, room.MaxParticipants - chatCount),
+                isFull = chatCount >= room.MaxParticipants,
             });
         }
     }

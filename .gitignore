@@ -36,6 +36,9 @@ Desktop.ini
 k8s/livekit-secrets.yaml
 k8s/turn-secrets.yaml
 
+# Local Janus source clone (reference only — use frontend/public/janus.js)
+janus-gateway/
+
 # npm/yarn logs
 npm-debug.log*
 yarn-debug.log*

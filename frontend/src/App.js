@@ -1,17 +1,8 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
 import * as signalR from '@microsoft/signalr';
-import {
-  Room as LiveKitRoom,
-  RoomEvent,
-  Track,
-  ConnectionState,
-  createLocalTracks,
-  createLocalScreenTracks,
-  LocalVideoTrack,
-  LocalAudioTrack,
-} from 'livekit-client';
+import { useJanusVideoRoom } from './useJanusVideoRoom';
 
-// ── Helpers ─────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 function isLocalDev() {
   return window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -43,20 +34,15 @@ function parseInviteLink(text) {
   return null;
 }
 
-function getLiveKitUrl() {
+function getJanusServerUrl() {
   const isLocal = isLocalDev();
   const proto = isLocal ? 'ws' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
-  return process.env.REACT_APP_LIVEKIT_URL || (
-    isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
+  return process.env.REACT_APP_JANUS_URL || (
+    isLocal ? 'ws://localhost:8188' : `${proto}://${window.location.host}/janus-ws`
   );
 }
 
-const DEFAULT_STUN = [
-  { urls: 'stun:stun.l.google.com:19302' },
-  { urls: 'stun:stun1.l.google.com:19302' },
-];
-
-// ── KZYS Meeting Room App ───────────────────────────────────────────────────
+// â”€â”€ KZYS Meeting Room App â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export default function App() {
   const [session, setSession] = useState(null);
@@ -75,7 +61,7 @@ export default function App() {
   return <Lobby onJoin={setSession} />;
 }
 
-// ── Lobby ───────────────────────────────────────────────────────────────────
+// â”€â”€ Lobby â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Lobby({ onJoin }) {
   const inviteFromUrl = parseInviteFromUrl();
   const [step, setStep] = useState(inviteFromUrl ? 'join' : 'home');
@@ -195,13 +181,13 @@ function Lobby({ onJoin }) {
   return (
     <div className="lobby-container">
       <div className="lobby-card glass animate-fade-in">
-        <div className="animate-float"><span style={{ fontSize: '3.5rem' }}>🎥</span></div>
+        <div className="animate-float"><span style={{ fontSize: '3.5rem' }}>ðŸŽ¥</span></div>
         <h1 className="lobby-title">KZYS Video Space</h1>
         <p className="lobby-subtitle">Create a room, share the link, join with video</p>
 
         {errorMsg && (
           <div style={{ color: 'var(--accent-rose)', marginBottom: '16px', fontSize: '0.9rem' }}>
-            ⚠️ {errorMsg}
+            âš ï¸ {errorMsg}
           </div>
         )}
 
@@ -215,7 +201,7 @@ function Lobby({ onJoin }) {
             </div>
             <div className="lobby-sticky-actions">
               <button className="btn-primary" onClick={handleCreateRoom} disabled={loading}>
-                {loading ? 'Creating…' : 'Create Room'}
+                {loading ? 'Creatingâ€¦' : 'Create Room'}
               </button>
             </div>
             <div className="lobby-divider">or join with invite link</div>
@@ -241,7 +227,7 @@ function Lobby({ onJoin }) {
                   onClick={copyInviteLink}>{copied ? 'Copied' : 'Copy'}</button>
               </div>
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', marginTop: '8px' }}>
-                Room <strong>{createdRoom.roomId}</strong> · up to {createdRoom.maxParticipants} people
+                Room <strong>{createdRoom.roomId}</strong> Â· up to {createdRoom.maxParticipants} people
               </p>
             </div>
             <button className="btn-primary" onClick={handleJoin}>Start Meeting</button>
@@ -261,7 +247,7 @@ function Lobby({ onJoin }) {
               </p>
             )}
             {!inviteMeta && !errorMsg && loading && (
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Checking invite…</p>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '16px' }}>Checking inviteâ€¦</p>
             )}
             <div className="form-group">
               <label className="form-label">Your name</label>
@@ -283,12 +269,31 @@ function Lobby({ onJoin }) {
   );
 }
 
-// ── Room Component ────────────────────────────────────────────────────────────
+// â”€â”€ Room Component (Janus VideoRoom SFU) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function Room({ session, onLeave }) {
   const { roomId, userId, joinKey, planName, maxParticipants } = session;
   const [linkCopied, setLinkCopied] = useState(false);
   const [roomStatus, setRoomStatus] = useState({ participantCount: 1, seatsRemaining: maxParticipants - 1, isFull: false });
+  const [janusConfig, setJanusConfig] = useState(null);
+  const [configError, setConfigError] = useState('');
   const inviteUrl = buildJoinUrl(roomId, joinKey);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(
+          `${getApiBase()}/janus/config?roomId=${encodeURIComponent(roomId)}&joinKey=${encodeURIComponent(joinKey)}`
+        );
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || `Janus config failed: ${res.status}`);
+        if (!cancelled) setJanusConfig(data);
+      } catch (err) {
+        if (!cancelled) setConfigError(err.message || 'Failed to load Janus config.');
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [roomId, joinKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -307,284 +312,61 @@ function Room({ session, onLeave }) {
     return () => { cancelled = true; clearInterval(id); };
   }, [roomId, joinKey]);
 
+  const {
+    localVideoRef,
+    peers,
+    connectionStatus,
+    micOn,
+    camOn,
+    toggleMic,
+    toggleCam,
+    error: janusError,
+  } = useJanusVideoRoom({
+    janusRoomId: janusConfig?.janusRoomId,
+    userId,
+    server: janusConfig?.server || getJanusServerUrl(),
+    iceServers: janusConfig?.iceServers,
+    enabled: Boolean(janusConfig),
+  });
+
   const [activeTab, setActiveTab] = useState('chat');
-  const [micOn, setMicOn] = useState(true);
-  const [camOn, setCamOn] = useState(true);
-  const [screenSharing, setScreenSharing] = useState(false);
-  const [activeSpeaker, setActiveSpeaker] = useState(null);
-  const [peers, setPeers] = useState([]);
   const [messages, setMessages] = useState([
-    { from: 'System', text: `Welcome to room ${roomId}! Invite others to join.` }
+    { from: 'System', text: `Welcome to room ${roomId}! Invite others to join.` },
   ]);
   const [chatInput, setChatInput] = useState('');
-  const [mediaReady, setMediaReady] = useState(false);
-  const [connectionStatus, setConnectionStatus] = useState('connecting');
-
-  const localVideoRef = useRef(null);
-  const localStreamRef = useRef(null);
   const hubConnectionRef = useRef(null);
-  const livekitRoomRef = useRef(null);
-  const localTracksRef = useRef([]);
-  const screenTracksRef = useRef([]);
   const chatEndRef = useRef(null);
-  const canvasIntervalsRef = useRef({});
-  const iceServersRef = useRef(DEFAULT_STUN);
 
   const addMessage = useCallback((from, text) => {
-    setMessages((prev) => [...prev, { from, text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+    setMessages((prev) => [...prev, {
+      from, text,
+      time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+    }]);
   }, []);
 
-  const cleanUpPeer = useCallback((identity) => {
-    if (canvasIntervalsRef.current[identity]) {
-      clearInterval(canvasIntervalsRef.current[identity]);
-      delete canvasIntervalsRef.current[identity];
-    }
-    setPeers((prev) => prev.filter((p) => p.connectionId !== identity));
-  }, []);
-
-  // ── STUN/TURN (same as dev branch P2P) ────────────────────────────────────
   useEffect(() => {
-    async function loadIceServers() {
-      try {
-        const res = await fetch(`${getApiBase()}/v1/turn/credentials`);
-        if (!res.ok) return;
-        const data = await res.json();
-        iceServersRef.current = [
-          ...DEFAULT_STUN,
-          ...data.urls.map((url) => ({
-            urls: url,
-            username: data.username,
-            credential: data.credential,
-          })),
-        ];
-      } catch (err) {
-        console.warn('TURN credentials unavailable, using STUN only', err);
-      }
-    }
-    loadIceServers();
-  }, []);
+    if (janusError) addMessage('System', `Video error: ${janusError}`);
+  }, [janusError, addMessage]);
 
-  // ── Local camera (dev branch: always try getUserMedia) ────────────────────
   useEffect(() => {
-    async function startMedia() {
-      if (!window.isSecureContext && !isLocalDev()) {
-        addMessage(
-          'System',
-          'Camera and microphone need HTTPS on phones. Desktop browsers may still allow camera on HTTP.'
-        );
-      }
+    if (configError) addMessage('System', configError);
+  }, [configError, addMessage]);
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'user' },
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-          },
-        });
-        localStreamRef.current = stream;
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      } catch (err) {
-        console.warn('Failed to access camera/microphone, using fallback preview', err);
-        addMessage('System', 'Camera or microphone unavailable. Preview mode is active without live audio.');
-        const canvas = document.createElement('canvas');
-        canvas.width = 640;
-        canvas.height = 360;
-        const ctx = canvas.getContext('2d');
-        const id = setInterval(() => {
-          ctx.fillStyle = '#111428';
-          ctx.fillRect(0, 0, 640, 360);
-          ctx.font = '24px Outfit';
-          ctx.fillStyle = '#8b5cf6';
-          ctx.textAlign = 'center';
-          ctx.fillText(userId + ' (You)', 320, 160);
-          ctx.fillStyle = '#94a3b8';
-          ctx.font = '16px Outfit';
-          ctx.fillText('Camera preview simulation active', 320, 200);
-          const time = Date.now() * 0.003;
-          ctx.beginPath();
-          ctx.arc(320 + Math.sin(time) * 100, 250 + Math.cos(time * 2) * 20, 8, 0, Math.PI * 2);
-          ctx.fillStyle = '#0ea5e9';
-          ctx.fill();
-        }, 33);
-        const canvasStream = canvas.captureStream(30);
-        localStreamRef.current = canvasStream;
-        if (localVideoRef.current) localVideoRef.current.srcObject = canvasStream;
-        canvasIntervalsRef.current['local'] = id;
-      }
-      setMediaReady(true);
-    }
-    startMedia();
-    return () => {
-      setMediaReady(false);
-      localStreamRef.current?.getTracks().forEach((t) => t.stop());
-      if (canvasIntervalsRef.current['local']) clearInterval(canvasIntervalsRef.current['local']);
-    };
-  }, [userId, addMessage]);
-
-  // ── LiveKit SFU ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!mediaReady) return;
-
-    const apiBase = getApiBase();
-    const livekitUrl = getLiveKitUrl();
-
-    const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
-    livekitRoomRef.current = room;
-
-    // Participant connected
-    room.on(RoomEvent.ParticipantConnected, (p) => {
-      addMessage('System', `${p.name || p.identity} joined.`);
-      setPeers((prev) => prev.some((x) => x.connectionId === p.identity) ? prev
-        : [...prev, { connectionId: p.identity, userId: p.name || p.identity, stream: null }]);
-    });
-
-    // Participant disconnected
-    room.on(RoomEvent.ParticipantDisconnected, (p) => {
-      addMessage('System', `${p.name || p.identity} left.`);
-      cleanUpPeer(p.identity);
-    });
-
-    // Remote track received — attach to peer
-    room.on(RoomEvent.TrackSubscribed, (track, _pub, participant) => {
-      if (track.kind !== Track.Kind.Video && track.kind !== Track.Kind.Audio) return;
-      const stream = new MediaStream([track.mediaStreamTrack]);
-      const key = track.kind === Track.Kind.Video ? 'videoStream' : 'audioStream';
-      setPeers((prev) => {
-        const exists = prev.some((p) => p.connectionId === participant.identity);
-        const base = exists ? prev : [...prev, { connectionId: participant.identity, userId: participant.name || participant.identity, stream: null }];
-        return base.map((p) => p.connectionId === participant.identity ? { ...p, [key]: stream } : p);
-      });
-    });
-
-    // Remote track removed
-    room.on(RoomEvent.TrackUnsubscribed, (track, _pub, participant) => {
-      const key = track.kind === Track.Kind.Video ? 'videoStream' : 'audioStream';
-      setPeers((prev) => prev.map((p) => p.connectionId === participant.identity ? { ...p, [key]: null } : p));
-    });
-
-    // Active speaker
-    room.on(RoomEvent.ActiveSpeakersChanged, (speakers) => {
-      setActiveSpeaker(speakers.length > 0 ? speakers[0].identity : null);
-    });
-
-    // Connection state
-    room.on(RoomEvent.ConnectionStateChanged, (state) => {
-      if (state === ConnectionState.Connected) setConnectionStatus('connected');
-      else if (state === ConnectionState.Disconnected) setConnectionStatus('offline');
-      else if (state === ConnectionState.Reconnecting) setConnectionStatus('reconnecting');
-    });
-
-    const connect = async () => {
-      try {
-        const tokenRes = await fetch(
-          `${apiBase}/livekit/token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&joinKey=${encodeURIComponent(joinKey)}`
-        );
-
-        if (!tokenRes.ok) {
-          const data = await tokenRes.json().catch(() => ({}));
-          if (tokenRes.status === 403 && data.requiresUpgrade) {
-            throw new Error(`Room full (${data.participantCount}/${data.maxParticipants}). Host must upgrade the ${data.planName} plan.`);
-          }
-          throw new Error(data.error || `Token request failed: ${tokenRes.status}`);
-        }
-        const { token } = await tokenRes.json();
-
-        let iceServers = iceServersRef.current;
-        try {
-          const turnRes = await fetch(`${apiBase}/v1/turn/credentials`);
-          if (turnRes.ok) {
-            const data = await turnRes.json();
-            iceServers = [
-              ...DEFAULT_STUN,
-              ...data.urls.map((url) => ({
-                urls: url,
-                username: data.username,
-                credential: data.credential,
-              })),
-            ];
-            iceServersRef.current = iceServers;
-          }
-        } catch (err) {
-          console.warn('TURN credentials unavailable at connect time', err);
-        }
-
-        await room.connect(livekitUrl, token, {
-          rtcConfig: { iceServers },
-        });
-
-        const published = [];
-        const localStream = localStreamRef.current;
-        const videoTrack = localStream?.getVideoTracks()[0];
-        const audioTrack = localStream?.getAudioTracks()[0];
-
-        if (audioTrack) {
-          const track = new LocalAudioTrack(audioTrack);
-          await room.localParticipant.publishTrack(track);
-          published.push(track);
-        }
-        if (videoTrack) {
-          const track = new LocalVideoTrack(videoTrack);
-          await room.localParticipant.publishTrack(track);
-          published.push(track);
-          if (localVideoRef.current) {
-            localVideoRef.current.srcObject = new MediaStream([videoTrack]);
-          }
-        }
-        if (published.length === 0) {
-          const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
-          for (const track of tracks) {
-            await room.localParticipant.publishTrack(track);
-            published.push(track);
-            if (track.kind === Track.Kind.Video && localVideoRef.current) {
-              localVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
-            }
-          }
-        }
-        localTracksRef.current = published;
-
-        // Load participants already in the room
-        room.remoteParticipants.forEach((p) => {
-          setPeers((prev) => prev.some((x) => x.connectionId === p.identity) ? prev
-            : [...prev, { connectionId: p.identity, userId: p.name || p.identity, stream: null }]);
-          // Attach existing tracks
-          p.trackPublications.forEach((pub) => {
-            if (!pub.track) return;
-            const stream = new MediaStream([pub.track.mediaStreamTrack]);
-            const key = pub.kind === Track.Kind.Video ? 'videoStream' : 'audioStream';
-            setPeers((prev) => prev.map((x) => x.connectionId === p.identity ? { ...x, [key]: stream } : x));
-          });
-        });
-
-      } catch (err) {
-        console.error('LiveKit connect error:', err);
-        setConnectionStatus('offline');
-        addMessage('System', `SFU connection failed: ${err.message}`);
-      }
-    };
-    connect();
-
-    return () => {
-      localTracksRef.current.forEach((t) => t.stop());
-      room.disconnect();
-    };
-  }, [mediaReady, roomId, userId, joinKey, addMessage, cleanUpPeer]);
-
-  // ── SignalR — chat only ───────────────────────────────────────────────────
-  useEffect(() => {
-    if (!mediaReady) return;
+    if (!janusConfig) return;
     const isLocal = isLocalDev();
     const hubUrl = isLocal ? 'http://localhost:8080/meetinghub' : `${window.location.origin}/api/meetinghub`;
-
     const connection = new signalR.HubConnectionBuilder().withUrl(hubUrl).withAutomaticReconnect().build();
     hubConnectionRef.current = connection;
 
     connection.on('ReceiveChat', (from, text, timestamp) => {
-      setMessages((prev) => [...prev, { from, text, time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
+      setMessages((prev) => [...prev, {
+        from, text,
+        time: new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      }]);
     });
-    connection.on('PeerJoined', (name) => addMessage('System', `${name} joined.`));
-    connection.on('PeerLeft', (name) => addMessage('System', `${name} left.`));
+    connection.on('PeerJoined', (name) => addMessage('System', `${name} joined chat.`));
+    connection.on('PeerLeft', (name) => addMessage('System', `${name} left chat.`));
     connection.on('RoomJoined', () => addMessage('System', `Connected as ${userId}`));
 
     connection.start()
@@ -592,9 +374,8 @@ function Room({ session, onLeave }) {
       .catch(() => addMessage('System', 'Chat server unavailable.'));
 
     return () => connection.stop();
-  }, [mediaReady, roomId, userId, joinKey, addMessage]);
+  }, [janusConfig, roomId, userId, joinKey, addMessage]);
 
-  // ── Controls ──────────────────────────────────────────────────────────────
   const handleSendChat = () => {
     if (!chatInput.trim()) return;
     if (hubConnectionRef.current?.state === signalR.HubConnectionState.Connected) {
@@ -607,66 +388,19 @@ function Room({ session, onLeave }) {
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  const toggleMic = () => {
-    localTracksRef.current.filter((t) => t.kind === Track.Kind.Audio).forEach((t) => micOn ? t.mute() : t.unmute());
-    if (localStreamRef.current) localStreamRef.current.getAudioTracks().forEach((t) => (t.enabled = !micOn));
-    setMicOn(!micOn);
-  };
-
-  const toggleCam = () => {
-    localTracksRef.current.filter((t) => t.kind === Track.Kind.Video).forEach((t) => camOn ? t.mute() : t.unmute());
-    if (localStreamRef.current) localStreamRef.current.getVideoTracks().forEach((t) => (t.enabled = !camOn));
-    setCamOn(!camOn);
-  };
-
-  const stopScreenSharing = useCallback(async () => {
-    const room = livekitRoomRef.current;
-    for (const track of screenTracksRef.current) {
-      if (room) await room.localParticipant.unpublishTrack(track).catch(() => {});
-      track.stop();
-    }
-    screenTracksRef.current = [];
-    setScreenSharing(false);
-    if (localVideoRef.current && localStreamRef.current) {
-      localVideoRef.current.srcObject = localStreamRef.current;
-    }
-  }, []);
-
-  const toggleScreenShare = async () => {
-    if (!screenSharing) {
-      try {
-        const tracks = await createLocalScreenTracks({ audio: false });
-        screenTracksRef.current = tracks;
-        const room = livekitRoomRef.current;
-        for (const track of tracks) {
-          if (room) await room.localParticipant.publishTrack(track);
-          if (track.kind === Track.Kind.Video && localVideoRef.current) {
-            localVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
-          }
-          track.mediaStreamTrack.onended = stopScreenSharing;
-        }
-        setScreenSharing(true);
-      } catch {}
-    } else {
-      stopScreenSharing();
-    }
-  };
-
   const statusLabel = connectionStatus === 'connected' ? 'Connected'
     : connectionStatus === 'offline' ? 'Offline'
-    : connectionStatus === 'reconnecting' ? 'Reconnecting...'
-    : mediaReady ? 'Connecting' : 'Starting camera';
+    : janusConfig ? 'Connecting' : 'Loading Janusâ€¦';
 
-  // ── JSX ───────────────────────────────────────────────────────────────────
   return (
     <div className="room-container">
       <header className="room-header glass">
         <div className="room-info">
-          <span style={{ fontSize: '1.5rem' }}>⚡</span>
+          <span style={{ fontSize: '1.5rem' }}>âš¡</span>
           <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: '1.25rem' }}>KZYS Live Portal</h2>
           <div className="room-badge">{roomId}</div>
           <div className="room-badge" style={{ background: 'rgba(16,185,129,0.15)', borderColor: 'rgba(16,185,129,0.4)' }}>
-            {planName} · {roomStatus.participantCount ?? peers.length + 1}/{maxParticipants}
+            {planName} Â· {roomStatus.participantCount ?? peers.length + 1}/{maxParticipants}
           </div>
         </div>
         <div style={{ display: 'flex', gap: '8px' }}>
@@ -678,7 +412,7 @@ function Room({ session, onLeave }) {
                 setTimeout(() => setLinkCopied(false), 2000);
               } catch { /* ignore */ }
             }}>
-            🔗 {linkCopied ? 'Copied!' : 'Copy invite'}
+            ðŸ”— {linkCopied ? 'Copied!' : 'Copy invite'}
           </button>
         </div>
       </header>
@@ -686,7 +420,7 @@ function Room({ session, onLeave }) {
       <div className="room-main">
         <div className="video-area">
           <div className="grid-layout">
-            <div className={`video-tile ${activeSpeaker === 'local' ? 'active-speaker' : ''}`}>
+            <div className="video-tile">
               <video ref={localVideoRef} autoPlay muted playsInline className="video-feed"
                 style={{ opacity: camOn ? 1 : 0, transition: 'opacity 0.3s' }} />
               {!camOn && <div style={{ position: 'absolute' }} className="avatar-placeholder">{userId.substring(0, 2).toUpperCase()}</div>}
@@ -696,7 +430,7 @@ function Room({ session, onLeave }) {
               </div>
             </div>
             {peers.map((peer) => (
-              <RemoteVideoTile key={peer.connectionId} peer={peer} isActiveSpeaker={activeSpeaker === peer.connectionId} />
+              <RemoteVideoTile key={peer.id} peer={peer} />
             ))}
           </div>
         </div>
@@ -704,8 +438,8 @@ function Room({ session, onLeave }) {
         {activeTab && (
           <aside className="side-drawer glass">
             <div className="drawer-header">
-              <h3 className="drawer-title">{activeTab === 'chat' ? '💬 Live Discussion' : `👥 Participants (${peers.length + 1})`}</h3>
-              <button className="drawer-close" onClick={() => setActiveTab(null)}>✕</button>
+              <h3 className="drawer-title">{activeTab === 'chat' ? 'ðŸ’¬ Live Discussion' : `ðŸ‘¥ Participants (${peers.length + 1})`}</h3>
+              <button className="drawer-close" onClick={() => setActiveTab(null)}>âœ•</button>
             </div>
             <div className="drawer-content">
               {activeTab === 'chat' ? (
@@ -729,18 +463,18 @@ function Room({ session, onLeave }) {
                 <div className="participant-list">
                   <div className="participant-item">
                     <div className="participant-name-avatar">
-                      <div className="participant-avatar" style={{ background: 'var(--accent-purple)' }}>{userId[0].toUpperCase()}</div>
+                      <div className="participant-avatar">{userId[0].toUpperCase()}</div>
                       <span className="participant-name">{userId} (You)</span>
                     </div>
-                    <div className="participant-controls"><span>{micOn ? '🎤' : '🔇'}</span><span>{camOn ? '📷' : '🚫'}</span></div>
+                    <div className="participant-controls"><span>{micOn ? 'ðŸŽ¤' : 'ðŸ”‡'}</span><span>{camOn ? 'ðŸ“·' : 'ðŸš«'}</span></div>
                   </div>
                   {peers.map((peer) => (
-                    <div key={peer.connectionId} className="participant-item animate-fade-in">
+                    <div key={peer.id} className="participant-item animate-fade-in">
                       <div className="participant-name-avatar">
                         <div className="participant-avatar">{peer.userId[0].toUpperCase()}</div>
                         <span className="participant-name">{peer.userId}</span>
                       </div>
-                      <div className="participant-controls"><span>🎤</span><span>📷</span></div>
+                      <div className="participant-controls"><span>ðŸŽ¤</span><span>ðŸ“·</span></div>
                     </div>
                   ))}
                 </div>
@@ -760,23 +494,23 @@ function Room({ session, onLeave }) {
       <footer className="control-bar glass">
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <span style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
-            Live Session:{' '}
-            <span style={{ color: connectionStatus === 'connected' ? 'var(--accent-emerald)' : connectionStatus === 'offline' ? 'var(--accent-rose)' : connectionStatus === 'reconnecting' ? 'var(--accent-blue)' : 'var(--text-secondary)', fontWeight: 600 }}>
-              {statusLabel}
-            </span>
+            Janus VideoRoom:{' '}
+            <span style={{
+              color: connectionStatus === 'connected' ? 'var(--accent-emerald)' : connectionStatus === 'offline' ? 'var(--accent-rose)' : 'var(--accent-blue)',
+              fontWeight: 600,
+            }}>{statusLabel}</span>
           </span>
         </div>
         <div className="ctrl-group">
-          <button className={`ctrl-btn ${!micOn ? 'danger' : 'active'}`} onClick={toggleMic} title={micOn ? 'Mute Mic' : 'Unmute Mic'}>{micOn ? '🎤' : '🔇'}</button>
-          <button className={`ctrl-btn ${!camOn ? 'danger' : 'active'}`} onClick={toggleCam} title={camOn ? 'Turn Camera Off' : 'Turn Camera On'}>{camOn ? '📷' : '🚫'}</button>
-          <button className={`ctrl-btn ${screenSharing ? 'active' : ''}`} onClick={toggleScreenShare} title={screenSharing ? 'Stop Presenting' : 'Share Screen'}>🖥️</button>
-          <button className="ctrl-btn danger" onClick={onLeave} title="Leave Meeting">🛑</button>
+          <button className={`ctrl-btn ${!micOn ? 'danger' : 'active'}`} onClick={toggleMic}>{micOn ? 'ðŸŽ¤' : 'ðŸ”‡'}</button>
+          <button className={`ctrl-btn ${!camOn ? 'danger' : 'active'}`} onClick={toggleCam}>{camOn ? 'ðŸ“·' : 'ðŸš«'}</button>
+          <button className="ctrl-btn danger" onClick={onLeave} title="Leave Meeting">ðŸ›‘</button>
         </div>
         <div className="ctrl-group">
           <button className={`ctrl-btn ${activeTab === 'participants' ? 'active' : ''}`}
-            onClick={() => setActiveTab(activeTab === 'participants' ? null : 'participants')} title="Show Participants">👥</button>
+            onClick={() => setActiveTab(activeTab === 'participants' ? null : 'participants')}>ðŸ‘¥</button>
           <button className={`ctrl-btn ${activeTab === 'chat' ? 'active' : ''}`}
-            onClick={() => setActiveTab(activeTab === 'chat' ? null : 'chat')} title="Show Chat">💬</button>
+            onClick={() => setActiveTab(activeTab === 'chat' ? null : 'chat')}>ðŸ’¬</button>
         </div>
       </footer>
     </div>
@@ -784,7 +518,7 @@ function Room({ session, onLeave }) {
 }
 
 // ── Remote Video Tile ─────────────────────────────────────────────────────────
-function RemoteVideoTile({ peer, isActiveSpeaker }) {
+function RemoteVideoTile({ peer }) {
   const videoRef = useRef(null);
   const audioRef = useRef(null);
 
@@ -806,7 +540,7 @@ function RemoteVideoTile({ peer, isActiveSpeaker }) {
   const initials = peer.userId.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase();
 
   return (
-    <div className={`video-tile animate-fade-in ${isActiveSpeaker ? 'active-speaker' : ''}`}>
+    <div className="video-tile animate-fade-in">
       <video ref={videoRef} autoPlay playsInline className="video-feed" style={{ opacity: hasVideo ? 1 : 0 }} />
       <audio ref={audioRef} autoPlay />
       {!hasVideo && <div className="avatar-placeholder">{initials}</div>}

@@ -30,12 +30,10 @@ public class MeetingHub : Hub
 
         if (!alreadyInChat)
         {
-            var (lkCount, identityPresent) = await LiveKitRoomService.GetParticipantInfoAsync(roomId, userId);
             var chatCount = await _presence.CountAsync(roomId);
-            var effectiveCount = Math.Max(lkCount, chatCount);
-            if (!identityPresent && effectiveCount >= room!.MaxParticipants)
+            if (chatCount >= room!.MaxParticipants)
                 throw new HubException(
-                    $"Room is full ({room.MaxParticipants} seats on {room.PlanName} plan). Upgrade for more participants.");
+                    $"Room is full ({room.MaxParticipants} seats on {room.PlanName} plan).");
         }
 
         var session = new UserSession(userId, roomId, connectionId);

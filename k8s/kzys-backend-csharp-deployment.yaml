@@ -20,24 +20,12 @@ spec:
         - name: http
           containerPort: 8080
         env:
-        - name: LIVEKIT_API_KEY
-          valueFrom:
-            secretKeyRef:
-              name: livekit-secrets
-              key: api-key
-        - name: LIVEKIT_API_SECRET
-          valueFrom:
-            secretKeyRef:
-              name: livekit-secrets
-              key: api-secret
-        - name: REDIS_URL
-          value: "kzys-redis:6379"
-        - name: ASPNETCORE_ENVIRONMENT
-          value: "Development"
-        - name: LIVEKIT_URL
-          value: "http://livekit-sfu:7880"
         - name: KZYS_DB_PATH
           value: "/app/data/kzys.db"
+        - name: JANUS_ADMIN_URL
+          value: "http://janus:7088/admin"
+        - name: JANUS_ADMIN_SECRET
+          value: "janusoverlord"
         - name: TURN_USERNAME
           valueFrom:
             secretKeyRef:
@@ -50,6 +38,10 @@ spec:
               key: password
         - name: TURN_PORT
           value: "30478"
+        - name: REDIS_URL
+          value: "kzys-redis:6379"
+        - name: ASPNETCORE_ENVIRONMENT
+          value: "Development"
         resources:
           requests:
             memory: "128Mi"
