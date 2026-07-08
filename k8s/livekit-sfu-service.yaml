@@ -1,18 +1,17 @@
+# Internal only — browsers reach LiveKit signaling via frontend nginx at /rtc/
 apiVersion: v1
 kind: Service
 metadata:
   name: livekit-sfu
 spec:
-  type: NodePort
+  type: ClusterIP
   selector:
     app: livekit-sfu
   ports:
   - name: rtc-ws
     port: 7880
     targetPort: 7880
-    nodePort: 30780
   - name: rtc-tcp
     port: 7881
     targetPort: 7881
     protocol: TCP
-    nodePort: 30781

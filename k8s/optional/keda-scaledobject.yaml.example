@@ -1,4 +1,6 @@
 # KEDA: warm standby (min 1) + scale on active rooms via C# metrics API.
+# Requires KEDA CRDs — run once: bash k8s/install-keda.sh
+# Then: kubectl apply -f k8s/optional/keda-scaledobject.yaml.example
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:

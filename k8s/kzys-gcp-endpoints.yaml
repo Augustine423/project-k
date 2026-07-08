@@ -1,0 +1,7 @@
+# Populated by deploy-dev.sh after GCP LoadBalancer IPs are assigned.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-gcp-endpoints
+data:
+  turn-host: "127.0.0.1"

@@ -13,9 +13,6 @@ spec:
         app: kzys-coturn
         kzys.io/tier: spot
     spec:
-      # Dev: bind TURN on the node; NodePort 30478/30479 still works cluster-wide.
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       initContainers:
       - name: config-init
         image: busybox:1.36
@@ -36,10 +33,11 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: realm
-        - name: NODE_IP
+        - name: EXTERNAL_IP
           valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+            configMapKeyRef:
+              name: kzys-gcp-endpoints
+              key: turn-host
         volumeMounts:
         - name: config
           mountPath: /config

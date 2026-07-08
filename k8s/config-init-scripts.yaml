@@ -6,21 +6,16 @@ data:
   init.sh: |
     #!/bin/sh
     set -eu
-    # NODE_IP = scheduling node's IP (status.hostIP) for WebRTC ICE candidates in dev/test.
     cat > /config/livekit.yaml <<EOF
     port: 7880
     keys:
       ${LIVEKIT_API_KEY}: ${LIVEKIT_API_SECRET}
     rtc:
       use_external_ip: false
-      node_ip: ${NODE_IP}
-      ips:
-        includes:
-          - ${NODE_IP}/32
       stun_servers:
         - stun.l.google.com:19302
       turn_servers:
-        - host: ${NODE_IP}
+        - host: ${TURN_HOST}
           port: 3478
           protocol: udp
           username: ${TURN_USERNAME}
@@ -28,6 +23,7 @@ data:
       tcp_port: 7881
       port_range_start: 50000
       port_range_end: 50100
+      allow_tcp_fallback: true
     logging:
       level: info
     EOF
@@ -41,12 +37,10 @@ data:
   init.sh: |
     #!/bin/sh
     set -eu
-    # NODE_IP = scheduling node's IP — required for TURN relay across NAT in dev/test.
     cat > /config/turnserver.conf <<EOF
     listening-port=3478
     listening-ip=0.0.0.0
-    relay-ip=${NODE_IP}
-    external-ip=${NODE_IP}
+    external-ip=${EXTERNAL_IP}
     fingerprint
     lt-cred-mech
     user=${TURN_USERNAME}:${TURN_PASSWORD}

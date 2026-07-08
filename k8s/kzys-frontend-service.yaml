@@ -3,12 +3,11 @@ kind: Service
 metadata:
   name: kzys-frontend
 spec:
-  type: NodePort
+  type: LoadBalancer
   selector:
     app: kzys-frontend
   ports:
   - name: http
-    nodePort: 31498
     port: 80
     protocol: TCP
     targetPort: 80

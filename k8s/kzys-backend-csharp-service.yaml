@@ -3,6 +3,7 @@ kind: Service
 metadata:
   name: kzys-backend-csharp
 spec:
+  type: ClusterIP
   selector:
     app: kzys-backend-csharp
   ports:

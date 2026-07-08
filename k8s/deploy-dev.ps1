@@ -3,16 +3,31 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDir = $PSScriptRoot
 
-Write-Host "=== KZYS dev deploy (no DNS, auto node IP) ===" -ForegroundColor Cyan
+Write-Host "=== KZYS GCP deploy (LoadBalancer frontend + TURN) ===" -ForegroundColor Cyan
 
 kubectl version --client *> $null
 if ($LASTEXITCODE -ne 0) {
-    Write-Error "kubectl not found. Install kubectl and enable Kubernetes (Docker Desktop)."
+    Write-Error "kubectl not found. Install kubectl and enable Kubernetes."
+}
+
+function Wait-LbIp {
+    param([string]$ServiceName)
+    Write-Host "Waiting for LoadBalancer IP on service/$ServiceName..." -ForegroundColor Yellow
+    for ($i = 0; $i -lt 60; $i++) {
+        $ip = kubectl get svc $ServiceName -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>$null
+        if (-not $ip) {
+            $ip = kubectl get svc $ServiceName -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>$null
+        }
+        if ($ip) { return $ip }
+        Start-Sleep -Seconds 5
+    }
+    throw "Timed out waiting for LoadBalancer on $ServiceName"
 }
 
 $manifests = @(
     "livekit-secrets.yaml",
     "turn-secrets.yaml",
+    "kzys-gcp-endpoints.yaml",
     "config-init-scripts.yaml",
     "kzys-redis-service.yaml",
     "kzys-redis-statefulset.yaml",
@@ -34,6 +49,18 @@ foreach ($manifest in $manifests) {
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
+$frontendIp = Wait-LbIp "kzys-frontend"
+$turnIp = Wait-LbIp "kzys-coturn"
+
+Write-Host "Patching kzys-gcp-endpoints (turn-host=$turnIp)..." -ForegroundColor Yellow
+kubectl patch configmap kzys-gcp-endpoints --type merge -p "{`"data`":{`"turn-host`":`"$turnIp`"}}"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+Write-Host "Restarting workloads that use TURN / external IP config..." -ForegroundColor Yellow
+foreach ($d in @("deployment/kzys-coturn", "deployment/livekit-sfu", "deployment/kzys-backend-csharp")) {
+    kubectl rollout restart $d
+}
+
 $deployments = @(
     "deployment/kzys-frontend",
     "deployment/kzys-backend-csharp",
@@ -51,19 +78,15 @@ foreach ($d in $deployments) {
     }
 }
 
-$nodeIp = kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="InternalIP")].address}'
-if (-not $nodeIp) {
-    $nodeIp = kubectl get nodes -o jsonpath='{.items[0].status.addresses[?(@.type=="ExternalIP")].address}'
-}
-if (-not $nodeIp) {
-    $nodeIp = "<NODE_IP>"
-}
-
 Write-Host ""
 Write-Host "=== Ready ===" -ForegroundColor Green
-Write-Host "Open app:        http://${nodeIp}:31498/"
-Write-Host "LiveKit direct:  ws://${nodeIp}:7880/  (or via app at /rtc)"
-Write-Host "TURN:            turn:${nodeIp}:3478"
+Write-Host "Open app:        http://${frontendIp}/"
+Write-Host "LiveKit signal:  ws://${frontendIp}/rtc  (proxied via frontend nginx)"
+Write-Host "TURN (coturn):   turn:${turnIp}:3478"
 Write-Host ""
-Write-Host "TURN_HOST + LiveKit node_ip use status.hostIP (no DNS needed)."
-Write-Host "Rebuild images if you changed App.js / TurnController / nginx.conf."
+Write-Host "Service types:"
+Write-Host "  kzys-frontend     LoadBalancer  (public HTTP)"
+Write-Host "  kzys-coturn       LoadBalancer  (public UDP/TCP TURN)"
+Write-Host "  livekit-sfu       ClusterIP     (internal, via /rtc proxy)"
+Write-Host "  kzys-backend-*    ClusterIP     (internal)"
+Write-Host "  kzys-redis        ClusterIP     (internal headless)"

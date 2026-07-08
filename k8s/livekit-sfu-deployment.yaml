@@ -1,5 +1,5 @@
-# LiveKit SFU — dev/test: NodePort + node IP auto-detect (status.hostIP in config init).
-# Optional prod scaling: kubectl apply -f k8s/keda-scaledobject.yaml (requires KEDA).
+# LiveKit SFU — cluster-internal; signaling proxied by frontend nginx at /rtc/
+# Optional KEDA scaling: bash k8s/install-keda.sh (requires Helm + KEDA CRDs).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,18 +19,6 @@ spec:
         app: livekit-sfu
         kzys.io/tier: spot
     spec:
-      # Bind RTC ports on the node so ICE candidates match what browsers reach.
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
-      affinity:
-        podAffinity:
-          preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
-                matchLabels:
-                  app: kzys-coturn
-              topologyKey: kubernetes.io/hostname
       initContainers:
       - name: config-init
         image: busybox:1.36
@@ -56,10 +44,11 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
-        - name: NODE_IP
+        - name: TURN_HOST
           valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+            configMapKeyRef:
+              name: kzys-gcp-endpoints
+              key: turn-host
         volumeMounts:
         - name: config
           mountPath: /config
@@ -73,11 +62,6 @@ spec:
         args:
         - --config
         - /etc/livekit/livekit.yaml
-        env:
-        - name: NODE_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
         ports:
         - name: rtc-ws
           containerPort: 7880

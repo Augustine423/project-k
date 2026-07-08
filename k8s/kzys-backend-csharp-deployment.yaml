@@ -65,11 +65,12 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
-        # Coturn uses hostNetwork (port 3478 on node); TURN_HOST is auto node IP.
+        # TURN_HOST = kzys-coturn LoadBalancer IP (set by deploy-dev.sh).
         - name: TURN_HOST
           valueFrom:
-            fieldRef:
-              fieldPath: status.hostIP
+            configMapKeyRef:
+              name: kzys-gcp-endpoints
+              key: turn-host
         - name: TURN_PORT
           value: "3478"
         - name: TURN_PORT_TCP
