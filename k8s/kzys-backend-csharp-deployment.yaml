@@ -97,15 +97,3 @@ spec:
       volumes:
       - name: billing-data
         emptyDir: {}
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kzys-backend-csharp
-spec:
-  selector:
-    app: kzys-backend-csharp
-  ports:
-  - name: http
-    port: 8080
-    targetPort: 8080

@@ -17,7 +17,9 @@ data:
       stun_servers:
         - stun.l.google.com:19302
       turn_servers:
-        - urls: turn:kzys-coturn:3478
+        - host: ${NODE_IP}
+          port: 3478
+          protocol: udp
           username: ${TURN_USERNAME}
           credential: ${TURN_PASSWORD}
       tcp_port: 7881

@@ -1,18 +1,4 @@
 # Persistent Redis — room state survives pod/node restarts (required for scale-to-zero).
-apiVersion: v1
-kind: Service
-metadata:
-  name: kzys-redis
-  labels:
-    app: kzys-redis
-spec:
-  ports:
-  - port: 6379
-    targetPort: 6379
-  clusterIP: None
-  selector:
-    app: kzys-redis
----
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:

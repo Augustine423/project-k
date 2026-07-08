@@ -1,7 +1,7 @@
 #Requires -Version 5.1
 $ErrorActionPreference = "Stop"
 
-$Root = Split-Path -Parent $PSScriptRoot
+$ScriptDir = $PSScriptRoot
 
 Write-Host "=== KZYS dev deploy (no DNS, auto node IP) ===" -ForegroundColor Cyan
 
@@ -10,13 +10,34 @@ if ($LASTEXITCODE -ne 0) {
     Write-Error "kubectl not found. Install kubectl and enable Kubernetes (Docker Desktop)."
 }
 
+$manifests = @(
+    "livekit-secrets.yaml",
+    "turn-secrets.yaml",
+    "config-init-scripts.yaml",
+    "kzys-redis-service.yaml",
+    "kzys-redis-statefulset.yaml",
+    "kzys-backend-csharp-deployment.yaml",
+    "kzys-backend-csharp-service.yaml",
+    "kzys-backend-go-deployment.yaml",
+    "kzys-backend-go-service.yaml",
+    "kzys-frontend-deployment.yaml",
+    "kzys-frontend-service.yaml",
+    "kzys-coturn-deployment.yaml",
+    "kzys-coturn-service.yaml",
+    "livekit-sfu-deployment.yaml",
+    "livekit-sfu-service.yaml"
+)
+
 Write-Host "Applying manifests..." -ForegroundColor Yellow
-kubectl apply -k "$PSScriptRoot/overlays/dev"
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+foreach ($manifest in $manifests) {
+    kubectl apply -f (Join-Path $ScriptDir $manifest)
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
 $deployments = @(
     "deployment/kzys-frontend",
     "deployment/kzys-backend-csharp",
+    "deployment/kzys-backend-go",
     "deployment/livekit-sfu",
     "deployment/kzys-coturn",
     "statefulset/kzys-redis"

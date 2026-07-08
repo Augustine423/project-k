@@ -16,7 +16,7 @@ The platform is designed around a modern, scalable, Kubernetes-native model:
 
 - `backend-go/`: High-performance Go signaling service for room orchestration and authentication.
 - `frontend/`: React SPA with premium UI components, leveraging LiveKit SFU for media.
-- `k8s/`: Kubernetes manifests (Deployment, Ingress, Kustomize setup, Secret management).
+- `k8s/`: Kubernetes manifests (Deployments, Services, Secrets, optional Ingress).
 - `.github/workflows/`: Automated CI/CD pipelines to build and push container images.
 
 ---
@@ -136,7 +136,7 @@ git push → main branch
 ### 9. Kubernetes Deployment
 
 ```
-kubectl apply -k k8s/     ← Kustomize
+bash k8s/deploy-dev.sh    ← plain kubectl apply
   ├─> kzys-frontend        (Nginx + React, NodePort 31498)
   ├─> kzys-backend-csharp  (ASP.NET Core, port 8080)
   ├─> kzys-backend-go      (Go, port 8080)
