@@ -477,9 +477,9 @@ function Room({ session, onLeave }) {
     const isLocal = isLocalDev();
     const apiBase = getApiBase();
     const proto = isLocal ? 'ws' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
-    // Force ws:// for local dev, wss:// for production
+    // LiveKit client appends /rtc itself — do not add /rtc here (avoids /rtc/rtc 404).
     const livekitUrl = process.env.REACT_APP_LIVEKIT_URL || (
-      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}/rtc`
+      isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
     );
 
     const room = new LiveKitRoom({ adaptiveStream: true, dynacast: true });
@@ -543,7 +543,29 @@ function Room({ session, onLeave }) {
         }
         const { token } = await res.json();
 
-        await room.connect(livekitUrl, token);
+        let connectOptions = {};
+        try {
+          const turnRes = await fetch(`${apiBase}/v1/turn/credentials`);
+          if (turnRes.ok) {
+            const turn = await turnRes.json();
+            const urls = turn.Urls || turn.urls;
+            if (Array.isArray(urls) && urls.length) {
+              connectOptions = {
+                rtcConfig: {
+                  iceServers: [{
+                    urls,
+                    username: turn.Username || turn.username,
+                    credential: turn.Credential || turn.credential,
+                  }],
+                },
+              };
+            }
+          }
+        } catch {
+          /* TURN optional — LiveKit may still supply ICE servers */
+        }
+
+        await room.connect(livekitUrl, token, connectOptions);
 
         // Publish local tracks via LiveKit (proper wrappers)
         const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
