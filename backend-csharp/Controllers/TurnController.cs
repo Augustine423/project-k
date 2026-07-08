@@ -16,13 +16,10 @@ public class TurnController : ControllerBase
         if (string.IsNullOrWhiteSpace(turnHost))
             turnHost = Request.Host.Host;
 
-        var turnPort = Environment.GetEnvironmentVariable("TURN_PORT") ?? "3478";
+        var turnPort = Environment.GetEnvironmentVariable("TURN_PORT") ?? "30478";
         var turnPortTcp = Environment.GetEnvironmentVariable("TURN_PORT_TCP") ?? turnPort;
-        var username = Environment.GetEnvironmentVariable("TURN_USERNAME");
-        var password = Environment.GetEnvironmentVariable("TURN_PASSWORD");
-
-        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
-            return StatusCode(503, new { error = "TURN credentials not configured." });
+        var username = Environment.GetEnvironmentVariable("TURN_USERNAME") ?? "kzys";
+        var password = Environment.GetEnvironmentVariable("TURN_PASSWORD") ?? "kzyspass123";
 
         return Ok(new TurnCredentialsResponse(
             Urls:

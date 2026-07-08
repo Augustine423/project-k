@@ -7,6 +7,8 @@ import {
   ConnectionState,
   createLocalTracks,
   createLocalScreenTracks,
+  LocalVideoTrack,
+  LocalAudioTrack,
 } from 'livekit-client';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -41,10 +43,6 @@ function parseInviteLink(text) {
   return null;
 }
 
-function isSecureCameraContext() {
-  return window.isSecureContext || isLocalDev();
-}
-
 function getLiveKitUrl() {
   const isLocal = isLocalDev();
   const proto = isLocal ? 'ws' : (window.location.protocol === 'https:' ? 'wss' : 'ws');
@@ -52,6 +50,11 @@ function getLiveKitUrl() {
     isLocal ? 'ws://localhost:7880' : `${proto}://${window.location.host}`
   );
 }
+
+const DEFAULT_STUN = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+];
 
 // ── KZYS Meeting Room App ───────────────────────────────────────────────────
 
@@ -202,19 +205,6 @@ function Lobby({ onJoin }) {
           </div>
         )}
 
-        {!isSecureCameraContext() && (
-          <div style={{
-            marginBottom: '16px', padding: '12px', borderRadius: '10px', fontSize: '0.85rem',
-            background: 'rgba(245, 158, 11, 0.12)', color: 'var(--accent-amber, #f59e0b)', textAlign: 'left',
-          }}>
-            Camera needs HTTPS or localhost. On this HTTP IP, use port-forward for testing:
-            <code style={{ display: 'block', marginTop: '8px', fontSize: '0.75rem', wordBreak: 'break-all' }}>
-              kubectl port-forward svc/kzys-frontend 8080:80
-            </code>
-            Then open <strong>http://localhost:8080</strong>
-          </div>
-        )}
-
         {step === 'home' && (
           <div style={{ textAlign: 'left' }}>
             <div className="form-group">
@@ -338,6 +328,7 @@ function Room({ session, onLeave }) {
   const screenTracksRef = useRef([]);
   const chatEndRef = useRef(null);
   const canvasIntervalsRef = useRef({});
+  const iceServersRef = useRef(DEFAULT_STUN);
 
   const addMessage = useCallback((from, text) => {
     setMessages((prev) => [...prev, { from, text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
@@ -351,50 +342,84 @@ function Room({ session, onLeave }) {
     setPeers((prev) => prev.filter((p) => p.connectionId !== identity));
   }, []);
 
-  // ── Local camera preview (before LiveKit connects) ────────────────────────
+  // ── STUN/TURN (same as dev branch P2P) ────────────────────────────────────
   useEffect(() => {
-    async function startPreview() {
-      const showCanvasFallback = (reason) => {
-        const canvas = document.createElement('canvas');
-        canvas.width = 640; canvas.height = 360;
-        const ctx = canvas.getContext('2d');
-        const id = setInterval(() => {
-          ctx.fillStyle = '#111428'; ctx.fillRect(0, 0, 640, 360);
-          ctx.font = '24px Outfit'; ctx.fillStyle = '#8b5cf6'; ctx.textAlign = 'center';
-          ctx.fillText(userId + ' (You)', 320, 160);
-          ctx.fillStyle = '#94a3b8'; ctx.font = '16px Outfit';
-          ctx.fillText(reason, 320, 200);
-          const t = Date.now() * 0.003;
-          ctx.beginPath(); ctx.arc(320 + Math.sin(t) * 100, 250 + Math.cos(t * 2) * 20, 8, 0, Math.PI * 2);
-          ctx.fillStyle = '#0ea5e9'; ctx.fill();
-        }, 33);
-        const s = canvas.captureStream(30);
-        localStreamRef.current = s;
-        if (localVideoRef.current) localVideoRef.current.srcObject = s;
-        canvasIntervalsRef.current['local'] = id;
-      };
+    async function loadIceServers() {
+      try {
+        const res = await fetch(`${getApiBase()}/v1/turn/credentials`);
+        if (!res.ok) return;
+        const data = await res.json();
+        iceServersRef.current = [
+          ...DEFAULT_STUN,
+          ...data.urls.map((url) => ({
+            urls: url,
+            username: data.username,
+            credential: data.credential,
+          })),
+        ];
+      } catch (err) {
+        console.warn('TURN credentials unavailable, using STUN only', err);
+      }
+    }
+    loadIceServers();
+  }, []);
 
-      if (!isSecureCameraContext()) {
-        showCanvasFallback('Use localhost for camera');
-        addMessage('System', 'Camera blocked on HTTP public IP. Port-forward frontend to localhost for camera access.');
-        setMediaReady(true);
-        return;
+  // ── Local camera (dev branch: always try getUserMedia) ────────────────────
+  useEffect(() => {
+    async function startMedia() {
+      if (!window.isSecureContext && !isLocalDev()) {
+        addMessage(
+          'System',
+          'Camera and microphone need HTTPS on phones. Desktop browsers may still allow camera on HTTP.'
+        );
       }
 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'user' },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
         localStreamRef.current = stream;
         if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      } catch {
-        showCanvasFallback('Camera unavailable');
-        addMessage('System', 'Camera unavailable. Preview mode active.');
+      } catch (err) {
+        console.warn('Failed to access camera/microphone, using fallback preview', err);
+        addMessage('System', 'Camera or microphone unavailable. Preview mode is active without live audio.');
+        const canvas = document.createElement('canvas');
+        canvas.width = 640;
+        canvas.height = 360;
+        const ctx = canvas.getContext('2d');
+        const id = setInterval(() => {
+          ctx.fillStyle = '#111428';
+          ctx.fillRect(0, 0, 640, 360);
+          ctx.font = '24px Outfit';
+          ctx.fillStyle = '#8b5cf6';
+          ctx.textAlign = 'center';
+          ctx.fillText(userId + ' (You)', 320, 160);
+          ctx.fillStyle = '#94a3b8';
+          ctx.font = '16px Outfit';
+          ctx.fillText('Camera preview simulation active', 320, 200);
+          const time = Date.now() * 0.003;
+          ctx.beginPath();
+          ctx.arc(320 + Math.sin(time) * 100, 250 + Math.cos(time * 2) * 20, 8, 0, Math.PI * 2);
+          ctx.fillStyle = '#0ea5e9';
+          ctx.fill();
+        }, 33);
+        const canvasStream = canvas.captureStream(30);
+        localStreamRef.current = canvasStream;
+        if (localVideoRef.current) localVideoRef.current.srcObject = canvasStream;
+        canvasIntervalsRef.current['local'] = id;
       }
       setMediaReady(true);
     }
-    startPreview();
+    startMedia();
     return () => {
+      setMediaReady(false);
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
-      Object.values(canvasIntervalsRef.current).forEach(clearInterval);
+      if (canvasIntervalsRef.current['local']) clearInterval(canvasIntervalsRef.current['local']);
     };
   }, [userId, addMessage]);
 
@@ -453,12 +478,9 @@ function Room({ session, onLeave }) {
 
     const connect = async () => {
       try {
-        const [tokenRes, turnRes] = await Promise.all([
-          fetch(
-            `${apiBase}/livekit/token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&joinKey=${encodeURIComponent(joinKey)}`
-          ),
-          fetch(`${apiBase}/v1/turn/credentials`).catch(() => null),
-        ]);
+        const tokenRes = await fetch(
+          `${apiBase}/livekit/token?roomId=${encodeURIComponent(roomId)}&userId=${encodeURIComponent(userId)}&joinKey=${encodeURIComponent(joinKey)}`
+        );
 
         if (!tokenRes.ok) {
           const data = await tokenRes.json().catch(() => ({}));
@@ -469,30 +491,58 @@ function Room({ session, onLeave }) {
         }
         const { token } = await tokenRes.json();
 
-        let connectOptions;
-        if (turnRes?.ok) {
-          const turn = await turnRes.json();
-          connectOptions = {
-            rtcConfig: {
-              iceServers: [{ urls: turn.urls, username: turn.username, credential: turn.credential }],
-            },
-          };
-        } else {
-          addMessage('System', 'TURN not configured — WebRTC may fail behind NAT. Run kzys-endpoint-setup job.');
+        let iceServers = iceServersRef.current;
+        try {
+          const turnRes = await fetch(`${apiBase}/v1/turn/credentials`);
+          if (turnRes.ok) {
+            const data = await turnRes.json();
+            iceServers = [
+              ...DEFAULT_STUN,
+              ...data.urls.map((url) => ({
+                urls: url,
+                username: data.username,
+                credential: data.credential,
+              })),
+            ];
+            iceServersRef.current = iceServers;
+          }
+        } catch (err) {
+          console.warn('TURN credentials unavailable at connect time', err);
         }
 
-        await room.connect(livekitUrl, token, connectOptions);
+        await room.connect(livekitUrl, token, {
+          rtcConfig: { iceServers },
+        });
 
-        if (isSecureCameraContext()) {
+        const published = [];
+        const localStream = localStreamRef.current;
+        const videoTrack = localStream?.getVideoTracks()[0];
+        const audioTrack = localStream?.getAudioTracks()[0];
+
+        if (audioTrack) {
+          const track = new LocalAudioTrack(audioTrack);
+          await room.localParticipant.publishTrack(track);
+          published.push(track);
+        }
+        if (videoTrack) {
+          const track = new LocalVideoTrack(videoTrack);
+          await room.localParticipant.publishTrack(track);
+          published.push(track);
+          if (localVideoRef.current) {
+            localVideoRef.current.srcObject = new MediaStream([videoTrack]);
+          }
+        }
+        if (published.length === 0) {
           const tracks = await createLocalTracks({ audio: true, video: { facingMode: 'user' } });
-          localTracksRef.current = tracks;
           for (const track of tracks) {
             await room.localParticipant.publishTrack(track);
+            published.push(track);
             if (track.kind === Track.Kind.Video && localVideoRef.current) {
               localVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
             }
           }
         }
+        localTracksRef.current = published;
 
         // Load participants already in the room
         room.remoteParticipants.forEach((p) => {

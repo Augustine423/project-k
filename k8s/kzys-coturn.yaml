@@ -1,25 +1,19 @@
+# Same proven layout as dev branch: NodePort TURN (30478/30479), no setup Job required.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: coturn-config-init
+  name: coturn-config
 data:
-  init.sh: |
-    #!/bin/sh
-    set -eu
-    cat > /config/turnserver.conf <<EOF
+  turnserver.conf: |
     listening-port=3478
-    listening-ip=0.0.0.0
-    external-ip=${EXTERNAL_IP}
     fingerprint
     lt-cred-mech
-    user=${TURN_USERNAME}:${TURN_PASSWORD}
-    realm=${TURN_REALM}
+    user=kzys:kzyspass123
+    realm=kzys.local
     log-file=stdout
     no-tls
     no-dtls
     no-cli
-    EOF
-    chmod 644 /config/turnserver.conf
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -35,36 +29,6 @@ spec:
       labels:
         app: kzys-coturn
     spec:
-      initContainers:
-      - name: config-init
-        image: busybox:1.36
-        command: ["sh", "/scripts/init.sh"]
-        env:
-        - name: TURN_USERNAME
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: username
-        - name: TURN_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: password
-        - name: TURN_REALM
-          valueFrom:
-            secretKeyRef:
-              name: turn-secrets
-              key: realm
-        - name: EXTERNAL_IP
-          valueFrom:
-            configMapKeyRef:
-              name: kzys-gcp-endpoints
-              key: turn-host
-        volumeMounts:
-        - name: config
-          mountPath: /config
-        - name: init-scripts
-          mountPath: /scripts
       containers:
       - name: coturn
         image: coturn/coturn:latest
@@ -77,20 +41,24 @@ spec:
         volumeMounts:
         - name: config
           mountPath: /etc/coturn
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
       volumes:
       - name: config
-        emptyDir: {}
-      - name: init-scripts
         configMap:
-          name: coturn-config-init
-          defaultMode: 0755
+          name: coturn-config
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kzys-coturn
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector:
     app: kzys-coturn
   ports:
@@ -98,7 +66,9 @@ spec:
     port: 3478
     targetPort: 3478
     protocol: UDP
+    nodePort: 30478
   - name: turn-tcp
     port: 3478
     targetPort: 3478
     protocol: TCP
+    nodePort: 30479

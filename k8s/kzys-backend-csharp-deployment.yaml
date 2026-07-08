@@ -48,13 +48,8 @@ spec:
             secretKeyRef:
               name: turn-secrets
               key: password
-        - name: TURN_HOST
-          valueFrom:
-            configMapKeyRef:
-              name: kzys-gcp-endpoints
-              key: turn-host
         - name: TURN_PORT
-          value: "3478"
+          value: "30478"
         resources:
           requests:
             memory: "128Mi"
