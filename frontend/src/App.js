@@ -71,7 +71,7 @@ export default function App() {
 // ── Lobby Component ───────────────────────────────────────────────────────────
 function Lobby({ onJoin }) {
   const inviteFromUrl = parseInviteFromUrl();
-  const [mode, setMode] = useState(inviteFromUrl ? 'invite' : 'choose');
+  const [mode, setMode] = useState(inviteFromUrl ? 'invite' : 'create');
   const [userId, setUserId] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
@@ -245,26 +245,8 @@ function Lobby({ onJoin }) {
           </div>
         )}
 
-        {mode === 'choose' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginBottom: '24px' }}>
-            <button className="btn-primary" onClick={() => setMode('pick-plan')} disabled={loading}>
-              ➕ Create New Meeting
-            </button>
-            <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Or paste invite link</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input className="form-input" style={{ flex: 1 }} placeholder="https://…/join?room=…&key=…"
-                  value={inviteLinkInput} onChange={(e) => setInviteLinkInput(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handlePasteInvite()} />
-                <button className="btn-secondary" style={{ width: 'auto', margin: 0, padding: '0 16px', borderRadius: '12px' }}
-                  onClick={handlePasteInvite}>Join</button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {mode === 'pick-plan' && (
-          <div style={{ marginBottom: '24px' }}>
+        {mode === 'create' && (
+          <div style={{ marginBottom: '24px', textAlign: 'left' }}>
             <div className="form-group">
               <label className="form-label">Display Name (host)</label>
               <input className="form-input" placeholder="e.g. John Doe" value={userId}
@@ -314,12 +296,20 @@ function Lobby({ onJoin }) {
                 Dev mode: payment is auto-created from your display name — no checkout needed.
               </p>
             )}
-            <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={handleCreateRoom} disabled={loading}>
-                {loading ? 'Creating…' : 'Create Room'}
-              </button>
-              <button className="btn-secondary" style={{ flex: 0, margin: 0, padding: '0 20px' }}
-                onClick={() => { setMode('choose'); setErrorMsg(''); }}>Back</button>
+            <button className="btn-primary" style={{ marginTop: '16px' }} onClick={handleCreateRoom} disabled={loading}>
+              {loading ? 'Creating…' : 'Create Room'}
+            </button>
+
+            <div className="lobby-divider">or join with invite link</div>
+            <div className="form-group" style={{ marginBottom: 0 }}>
+              <label className="form-label">Paste invite link</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input className="form-input" style={{ flex: 1 }} placeholder="https://…/join?room=…&key=…"
+                  value={inviteLinkInput} onChange={(e) => setInviteLinkInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handlePasteInvite()} />
+                <button className="btn-secondary" style={{ width: 'auto', margin: 0, padding: '0 16px', borderRadius: '12px' }}
+                  onClick={handlePasteInvite}>Join</button>
+              </div>
             </div>
           </div>
         )}
@@ -365,7 +355,7 @@ function Lobby({ onJoin }) {
               {mode === 'created' ? 'Start Meeting as Host' : 'Join Meeting'}
             </button>
             {mode === 'invite' && (
-              <button className="btn-secondary" style={{ marginTop: '12px' }} onClick={() => { setMode('choose'); setInvite(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
+              <button className="btn-secondary" style={{ marginTop: '12px' }} onClick={() => { setMode('create'); setInvite(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
                 Back
               </button>
             )}
@@ -373,7 +363,7 @@ function Lobby({ onJoin }) {
         )}
 
         {activeRoomId && mode === 'created' && (
-          <button className="btn-secondary" style={{ marginTop: '12px' }} onClick={() => { setMode('choose'); setCreatedRoom(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
+          <button className="btn-secondary" style={{ marginTop: '12px' }} onClick={() => { setMode('create'); setCreatedRoom(null); setErrorMsg(''); window.history.replaceState(null, '', '/'); }}>
             Cancel
           </button>
         )}
