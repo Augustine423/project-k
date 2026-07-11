@@ -1,0 +1,9 @@
+# All rooms are created dynamically by the control plane (server/src/janus)
+# via the plugin's Admin API "create" request, keyed off our own room
+# registry in Redis -- nothing is hardcoded here. This keeps the platform's
+# idea of a "room" and Janus's idea of a "videoroom" always in sync.
+general: {
+    admin_key = "${JANUS_VIDEOROOM_ADMIN_KEY}"
+    lock_rtp_forward = true
+    string_ids = true
+}

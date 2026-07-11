@@ -1,0 +1,3 @@
+* text=auto eol=lf
+*.sh text eol=lf
+*.jcfg.template text eol=lf
