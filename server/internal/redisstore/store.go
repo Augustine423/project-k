@@ -130,6 +130,21 @@ func (s *Store) GetNodeLoad(ctx context.Context, nodeID string) (int64, error) {
 	return v, err
 }
 
+func (s *Store) IsNodeDraining(ctx context.Context, nodeID string) (bool, error) {
+	exists, err := s.rdb.Exists(ctx, "nodedraining:"+nodeID).Result()
+	if err != nil {
+		return false, err
+	}
+	return exists > 0, nil
+}
+
+func (s *Store) SetNodeDraining(ctx context.Context, nodeID string, draining bool) error {
+	if draining {
+		return s.rdb.Set(ctx, "nodedraining:"+nodeID, "1", 0).Err()
+	}
+	return s.rdb.Del(ctx, "nodedraining:"+nodeID).Err()
+}
+
 func broadcastKey(roomID string) string { return "broadcast:" + roomID }
 
 // BroadcastTarget is the webinar fan-out's record of which edge node and

@@ -33,6 +33,25 @@ services:
       - "10000-10200:10000-10200/udp"
       - "15000-15200:15000-15200/udp"
 
+  janus-2:
+    build:
+      context: ./media/janus
+    restart: unless-stopped
+    environment:
+      JANUS_NODE_ID: janus-2
+      STUN_SERVER: ${STUN_SERVER}
+      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
+      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
+      JANUS_CORS_ORIGIN: "*"
+      JANUS_RTP_PORT_RANGE: "11000-11200"
+      JANUS_STREAMING_PORT_RANGE: "16000-16200"
+    ports:
+      - "8089:8088"
+      - "7089:7088"
+      - "8189:8188"
+      - "11000-11200:11000-11200/udp"
+      - "16000-16200:15000-15200/udp"
+
   coturn:
     image: coturn/coturn:4.6.2
     restart: unless-stopped
@@ -63,7 +82,7 @@ services:
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
       TURN_HOST: ${PUBLIC_HOST}
       TURN_PORT: ${TURN_PORT}
-      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT}"
+      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT},janus-2|http://janus-2:7088/admin|ws://janus-2:8188|ws://${PUBLIC_HOST}:8189"
       JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
       JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
       JANUS_STREAMING_PORT_RANGE: "15000-15200"

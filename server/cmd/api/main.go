@@ -78,6 +78,7 @@ func main() {
 		Hub:     hub,
 		JWT:     jwtIssuer,
 		Redis:   store,
+		Router:  nodeRouter,
 		Log:     log,
 	}
 	hub.SetClientMessageHandler(handlers.HandleWSClientMessage)

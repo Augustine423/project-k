@@ -12,7 +12,9 @@ import (
 	"github.com/go-chi/cors"
 
 	"projectk/server/internal/auth"
+	"projectk/server/internal/redisstore"
 	"projectk/server/internal/rooms"
+	"projectk/server/internal/router"
 	"projectk/server/internal/webinar"
 	"projectk/server/internal/wshub"
 )
@@ -26,7 +28,8 @@ type Handlers struct {
 	Webinar *webinar.Service
 	Hub     *wshub.Hub
 	JWT     *auth.Issuer
-	Redis   Pinger
+	Redis   *redisstore.Store
+	Router  *router.Router
 	Log     *slog.Logger
 }
 
@@ -52,6 +55,12 @@ func NewRouter(h *Handlers, corsOrigin string) http.Handler {
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(15 * time.Second))
+
+		r.Route("/api/nodes", func(r chi.Router) {
+			r.Get("/", h.handleListNodes)
+			r.Post("/{nodeID}/drain", h.handleDrainNode)
+			r.Post("/{nodeID}/undrain", h.handleUndrainNode)
+		})
 
 		r.Route("/api/rooms", func(r chi.Router) {
 			r.Post("/", h.handleCreateRoom)

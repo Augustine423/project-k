@@ -15,6 +15,7 @@ import (
 
 type LoadReader interface {
 	GetNodeLoad(ctx context.Context, nodeID string) (int64, error)
+	IsNodeDraining(ctx context.Context, nodeID string) (bool, error)
 }
 
 type Router struct {
@@ -35,39 +36,81 @@ func (r *Router) NodeByID(id string) (config.JanusNode, bool) {
 	return config.JanusNode{}, false
 }
 
-// PickLeastLoaded returns the node currently hosting the fewest rooms.
+// PickLeastLoaded returns the node currently hosting the fewest rooms,
+// skipping any nodes that are currently draining.
 func (r *Router) PickLeastLoaded(ctx context.Context) (config.JanusNode, error) {
 	if len(r.nodes) == 0 {
 		return config.JanusNode{}, fmt.Errorf("no janus nodes configured")
 	}
-	best := r.nodes[0]
+
+	var best config.JanusNode
 	bestLoad := int64(-1)
+	nonDrainingFound := false
+
+	// Try to find a non-draining node first
 	for _, n := range r.nodes {
+		draining, err := r.loads.IsNodeDraining(ctx, n.ID)
+		if err != nil {
+			return config.JanusNode{}, err
+		}
+		if draining {
+			continue
+		}
 		load, err := r.loads.GetNodeLoad(ctx, n.ID)
 		if err != nil {
 			return config.JanusNode{}, err
 		}
-		if bestLoad == -1 || load < bestLoad {
+		if !nonDrainingFound || load < bestLoad {
 			best = n
 			bestLoad = load
+			nonDrainingFound = true
 		}
 	}
+
+	// Fallback to absolute least-loaded node (even if draining) if all are draining
+	if !nonDrainingFound {
+		best = r.nodes[0]
+		var err error
+		bestLoad, err = r.loads.GetNodeLoad(ctx, best.ID)
+		if err != nil {
+			return config.JanusNode{}, err
+		}
+		for _, n := range r.nodes[1:] {
+			load, err := r.loads.GetNodeLoad(ctx, n.ID)
+			if err != nil {
+				return config.JanusNode{}, err
+			}
+			if load < bestLoad {
+				best = n
+				bestLoad = load
+			}
+		}
+	}
+
 	return best, nil
 }
 
 // PickEdgeNode returns a node other than excludeID to host webinar viewer
-// fan-out, so viewer traffic for a broadcast doesn't compete with the
-// on-stage publishers' own node. Falls back to the stage node itself if
-// it's the only one available (single-node dev setups).
+// fan-out, skipping draining nodes if possible.
 func (r *Router) PickEdgeNode(ctx context.Context, excludeID string) (config.JanusNode, error) {
 	if len(r.nodes) == 1 {
 		return r.nodes[0], nil
 	}
+
 	var best config.JanusNode
 	bestLoad := int64(-1)
 	found := false
+
+	// 1. Try to find a non-draining edge node first
 	for _, n := range r.nodes {
 		if n.ID == excludeID {
+			continue
+		}
+		draining, err := r.loads.IsNodeDraining(ctx, n.ID)
+		if err != nil {
+			return config.JanusNode{}, err
+		}
+		if draining {
 			continue
 		}
 		load, err := r.loads.GetNodeLoad(ctx, n.ID)
@@ -80,6 +123,26 @@ func (r *Router) PickEdgeNode(ctx context.Context, excludeID string) (config.Jan
 			found = true
 		}
 	}
+
+	// 2. Fallback to any node (even if draining) other than excludeID
+	if !found {
+		for _, n := range r.nodes {
+			if n.ID == excludeID {
+				continue
+			}
+			load, err := r.loads.GetNodeLoad(ctx, n.ID)
+			if err != nil {
+				return config.JanusNode{}, err
+			}
+			if !found || load < bestLoad {
+				best = n
+				bestLoad = load
+				found = true
+			}
+		}
+	}
+
+	// 3. Absolute fallback to the excluded node itself if it's all we have
 	if !found {
 		node, ok := r.NodeByID(excludeID)
 		if !ok {
@@ -87,6 +150,7 @@ func (r *Router) PickEdgeNode(ctx context.Context, excludeID string) (config.Jan
 		}
 		return node, nil
 	}
+
 	return best, nil
 }
 

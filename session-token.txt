@@ -10,3 +10,4 @@ Messages:       79 (17 user, 46 tool calls)
 ===========================================================================
 
 agent --resume=02c0bc1c-35b5-41ed-856e-f293b2227857
+agy --conversation=7495ac8c-df8e-4e6e-8f0b-99e392b5b1fb
