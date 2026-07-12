@@ -1,0 +1,8 @@
+# KZYS Phase A — GKE microservices (Gateway ALB + NLB UDP)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/name: kzys

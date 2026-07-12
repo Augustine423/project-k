@@ -1,3 +1,5 @@
+import { CameraIcon, LeaveIcon, MicIcon, ShareScreenIcon } from "./MediaIcons";
+
 interface ControlBarProps {
   audioEnabled: boolean;
   videoEnabled: boolean;
@@ -18,30 +20,49 @@ export function ControlBar({
   showScreenShare = true,
 }: ControlBarProps) {
   return (
-    <div className="control-bar">
+    <div className="control-bar" role="toolbar" aria-label="Meeting controls">
       <button
         type="button"
         className={`control-btn ${audioEnabled ? "" : "off"}`}
         onClick={onToggleAudio}
-        title={audioEnabled ? "Mute" : "Unmute"}
+        aria-pressed={audioEnabled}
+        aria-label={audioEnabled ? "Mute microphone" : "Unmute microphone"}
       >
-        {audioEnabled ? "Mic on" : "Mic off"}
+        <span className="control-icon" aria-hidden="true">
+          <MicIcon muted={!audioEnabled} />
+        </span>
+        <span className="control-label">{audioEnabled ? "Mic on" : "Mic off"}</span>
       </button>
       <button
         type="button"
         className={`control-btn ${videoEnabled ? "" : "off"}`}
         onClick={onToggleVideo}
-        title={videoEnabled ? "Stop video" : "Start video"}
+        aria-pressed={videoEnabled}
+        aria-label={videoEnabled ? "Turn camera off" : "Turn camera on"}
       >
-        {videoEnabled ? "Cam on" : "Cam off"}
+        <span className="control-icon" aria-hidden="true">
+          <CameraIcon off={!videoEnabled} />
+        </span>
+        <span className="control-label">{videoEnabled ? "Camera on" : "Camera off"}</span>
       </button>
       {showScreenShare && (
-        <button type="button" className="control-btn" onClick={onShareScreen} title="Share screen">
-          Share
+        <button
+          type="button"
+          className="control-btn"
+          onClick={onShareScreen}
+          aria-label="Share screen"
+        >
+          <span className="control-icon" aria-hidden="true">
+            <ShareScreenIcon />
+          </span>
+          <span className="control-label">Share</span>
         </button>
       )}
-      <button type="button" className="control-btn danger" onClick={onLeave} title="Leave">
-        Leave
+      <button type="button" className="control-btn danger" onClick={onLeave} aria-label="Leave meeting">
+        <span className="control-icon" aria-hidden="true">
+          <LeaveIcon />
+        </span>
+        <span className="control-label">Leave</span>
       </button>
     </div>
   );

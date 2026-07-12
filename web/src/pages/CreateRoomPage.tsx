@@ -2,14 +2,14 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiRequestError, createRoom } from "../api/client";
 import { saveTicket } from "../api/ticketStore";
-import type { RoomMode } from "../api/types";
+
+const MAX_TEST_USERS = 10;
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
-  const [mode, setMode] = useState<RoomMode>("interactive");
   const [pin, setPin] = useState("");
-  const [maxPublishers, setMaxPublishers] = useState(16);
+  const [maxUsers, setMaxUsers] = useState(MAX_TEST_USERS);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,10 +19,9 @@ export function CreateRoomPage() {
     setLoading(true);
     try {
       const ticket = await createRoom({
-        mode,
         displayName: displayName.trim(),
         pin: pin.trim() || undefined,
-        maxPublishers: mode === "interactive" ? maxPublishers : undefined,
+        maxUsers,
       });
       saveTicket(ticket);
       navigate(`/room/${ticket.room.id}`);
@@ -40,6 +39,9 @@ export function CreateRoomPage() {
       </Link>
       <form className="form-card" onSubmit={onSubmit}>
         <h1>Create meeting</h1>
+        <p className="form-hint">
+          Symmetrical multiparty video — everyone publishes camera and microphone via LiveKit SFU.
+        </p>
         <label>
           Your name
           <input
@@ -51,24 +53,15 @@ export function CreateRoomPage() {
           />
         </label>
         <label>
-          Mode
-          <select value={mode} onChange={(e) => setMode(e.target.value as RoomMode)}>
-            <option value="interactive">Interactive (VideoRoom)</option>
-            <option value="webinar">Webinar (stage + viewers)</option>
-          </select>
+          Max participants (testing)
+          <input
+            type="number"
+            min={2}
+            max={MAX_TEST_USERS}
+            value={maxUsers}
+            onChange={(e) => setMaxUsers(Number(e.target.value))}
+          />
         </label>
-        {mode === "interactive" && (
-          <label>
-            Max publishers
-            <input
-              type="number"
-              min={2}
-              max={64}
-              value={maxPublishers}
-              onChange={(e) => setMaxPublishers(Number(e.target.value))}
-            />
-          </label>
-        )}
         <label>
           Room PIN (optional)
           <input

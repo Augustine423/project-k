@@ -5,6 +5,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,8 +15,6 @@ import (
 	"projectk/server/internal/auth"
 	"projectk/server/internal/redisstore"
 	"projectk/server/internal/rooms"
-	"projectk/server/internal/router"
-	"projectk/server/internal/webinar"
 	"projectk/server/internal/wshub"
 )
 
@@ -24,13 +23,13 @@ type Pinger interface {
 }
 
 type Handlers struct {
-	Rooms   *rooms.Service
-	Webinar *webinar.Service
-	Hub     *wshub.Hub
-	JWT     *auth.Issuer
-	Redis   *redisstore.Store
-	Router  *router.Router
-	Log     *slog.Logger
+	Rooms       *rooms.Service
+	Hub         *wshub.Hub
+	JWT         *auth.Issuer
+	Redis       *redisstore.Store
+	Log         *slog.Logger
+	ServiceName string
+	MediaHost   string
 }
 
 func NewRouter(h *Handlers, corsOrigin string) http.Handler {
@@ -39,15 +38,22 @@ func NewRouter(h *Handlers, corsOrigin string) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins:   []string{corsOrigin},
+
+	corsOpts := cors.Options{
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Accept", "Content-Type", "Authorization"},
 		AllowCredentials: true,
 		MaxAge:           300,
-	}))
+	}
+	if corsOrigin == "*" {
+		corsOpts.AllowOriginFunc = func(_ *http.Request, _ string) bool { return true }
+	} else {
+		corsOpts.AllowedOrigins = strings.Split(corsOrigin, ",")
+	}
+	r.Use(cors.Handler(corsOpts))
 
 	r.Get("/health", h.handleHealth)
+	r.Get("/ready", h.handleReady)
 
 	// WebSocket sessions are long-lived; do not wrap them in the 15s HTTP
 	// timeout middleware or the control plane will drop chat/presence events.
@@ -56,18 +62,11 @@ func NewRouter(h *Handlers, corsOrigin string) http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(15 * time.Second))
 
-		r.Route("/api/nodes", func(r chi.Router) {
-			r.Get("/", h.handleListNodes)
-			r.Post("/{nodeID}/drain", h.handleDrainNode)
-			r.Post("/{nodeID}/undrain", h.handleUndrainNode)
-		})
-
 		r.Route("/api/rooms", func(r chi.Router) {
 			r.Post("/", h.handleCreateRoom)
 			r.Post("/{roomID}/join", h.handleJoinRoom)
 			r.Get("/{roomID}", h.handleGetRoom)
 			r.Get("/{roomID}/participants", h.handleListParticipants)
-			r.Get("/{roomID}/webinar/viewer-info", h.handleViewerInfo)
 
 			r.Group(func(r chi.Router) {
 				r.Use(h.requireHost)
@@ -75,12 +74,6 @@ func NewRouter(h *Handlers, corsOrigin string) http.Handler {
 				r.Post("/{roomID}/lock", h.handleSetLocked)
 				r.Post("/{roomID}/participants/{participantID}/mute", h.handleMuteParticipant)
 				r.Post("/{roomID}/participants/{participantID}/kick", h.handleKickParticipant)
-			})
-
-			r.Group(func(r chi.Router) {
-				r.Use(h.requireParticipant)
-				r.Post("/{roomID}/webinar/publishers/{participantID}/forward", h.handleForwardPublisher)
-				r.Post("/{roomID}/chat", h.handleSendChat)
 			})
 		})
 	})

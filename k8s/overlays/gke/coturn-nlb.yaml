@@ -1,0 +1,231 @@
+﻿# GKE external passthrough NLB for Coturn STUN/TURN (UDP/TCP + relay range).
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn-media
+  namespace: kzys
+  labels:
+    app: coturn
+    app.kubernetes.io/part-of: project-k
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: coturn
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      protocol: UDP
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP
+    - name: turn-relay-20000
+      port: 20000
+      targetPort: 20000
+      protocol: UDP
+    - name: turn-relay-20001
+      port: 20001
+      targetPort: 20001
+      protocol: UDP
+    - name: turn-relay-20002
+      port: 20002
+      targetPort: 20002
+      protocol: UDP
+    - name: turn-relay-20003
+      port: 20003
+      targetPort: 20003
+      protocol: UDP
+    - name: turn-relay-20004
+      port: 20004
+      targetPort: 20004
+      protocol: UDP
+    - name: turn-relay-20005
+      port: 20005
+      targetPort: 20005
+      protocol: UDP
+    - name: turn-relay-20006
+      port: 20006
+      targetPort: 20006
+      protocol: UDP
+    - name: turn-relay-20007
+      port: 20007
+      targetPort: 20007
+      protocol: UDP
+    - name: turn-relay-20008
+      port: 20008
+      targetPort: 20008
+      protocol: UDP
+    - name: turn-relay-20009
+      port: 20009
+      targetPort: 20009
+      protocol: UDP
+    - name: turn-relay-20010
+      port: 20010
+      targetPort: 20010
+      protocol: UDP
+    - name: turn-relay-20011
+      port: 20011
+      targetPort: 20011
+      protocol: UDP
+    - name: turn-relay-20012
+      port: 20012
+      targetPort: 20012
+      protocol: UDP
+    - name: turn-relay-20013
+      port: 20013
+      targetPort: 20013
+      protocol: UDP
+    - name: turn-relay-20014
+      port: 20014
+      targetPort: 20014
+      protocol: UDP
+    - name: turn-relay-20015
+      port: 20015
+      targetPort: 20015
+      protocol: UDP
+    - name: turn-relay-20016
+      port: 20016
+      targetPort: 20016
+      protocol: UDP
+    - name: turn-relay-20017
+      port: 20017
+      targetPort: 20017
+      protocol: UDP
+    - name: turn-relay-20018
+      port: 20018
+      targetPort: 20018
+      protocol: UDP
+    - name: turn-relay-20019
+      port: 20019
+      targetPort: 20019
+      protocol: UDP
+    - name: turn-relay-20020
+      port: 20020
+      targetPort: 20020
+      protocol: UDP
+    - name: turn-relay-20021
+      port: 20021
+      targetPort: 20021
+      protocol: UDP
+    - name: turn-relay-20022
+      port: 20022
+      targetPort: 20022
+      protocol: UDP
+    - name: turn-relay-20023
+      port: 20023
+      targetPort: 20023
+      protocol: UDP
+    - name: turn-relay-20024
+      port: 20024
+      targetPort: 20024
+      protocol: UDP
+    - name: turn-relay-20025
+      port: 20025
+      targetPort: 20025
+      protocol: UDP
+    - name: turn-relay-20026
+      port: 20026
+      targetPort: 20026
+      protocol: UDP
+    - name: turn-relay-20027
+      port: 20027
+      targetPort: 20027
+      protocol: UDP
+    - name: turn-relay-20028
+      port: 20028
+      targetPort: 20028
+      protocol: UDP
+    - name: turn-relay-20029
+      port: 20029
+      targetPort: 20029
+      protocol: UDP
+    - name: turn-relay-20030
+      port: 20030
+      targetPort: 20030
+      protocol: UDP
+    - name: turn-relay-20031
+      port: 20031
+      targetPort: 20031
+      protocol: UDP
+    - name: turn-relay-20032
+      port: 20032
+      targetPort: 20032
+      protocol: UDP
+    - name: turn-relay-20033
+      port: 20033
+      targetPort: 20033
+      protocol: UDP
+    - name: turn-relay-20034
+      port: 20034
+      targetPort: 20034
+      protocol: UDP
+    - name: turn-relay-20035
+      port: 20035
+      targetPort: 20035
+      protocol: UDP
+    - name: turn-relay-20036
+      port: 20036
+      targetPort: 20036
+      protocol: UDP
+    - name: turn-relay-20037
+      port: 20037
+      targetPort: 20037
+      protocol: UDP
+    - name: turn-relay-20038
+      port: 20038
+      targetPort: 20038
+      protocol: UDP
+    - name: turn-relay-20039
+      port: 20039
+      targetPort: 20039
+      protocol: UDP
+    - name: turn-relay-20040
+      port: 20040
+      targetPort: 20040
+      protocol: UDP
+    - name: turn-relay-20041
+      port: 20041
+      targetPort: 20041
+      protocol: UDP
+    - name: turn-relay-20042
+      port: 20042
+      targetPort: 20042
+      protocol: UDP
+    - name: turn-relay-20043
+      port: 20043
+      targetPort: 20043
+      protocol: UDP
+    - name: turn-relay-20044
+      port: 20044
+      targetPort: 20044
+      protocol: UDP
+    - name: turn-relay-20045
+      port: 20045
+      targetPort: 20045
+      protocol: UDP
+    - name: turn-relay-20046
+      port: 20046
+      targetPort: 20046
+      protocol: UDP
+    - name: turn-relay-20047
+      port: 20047
+      targetPort: 20047
+      protocol: UDP
+    - name: turn-relay-20048
+      port: 20048
+      targetPort: 20048
+      protocol: UDP
+    - name: turn-relay-20049
+      port: 20049
+      targetPort: 20049
+      protocol: UDP
+    - name: turn-relay-20050
+      port: 20050
+      targetPort: 20050
+      protocol: UDP
+

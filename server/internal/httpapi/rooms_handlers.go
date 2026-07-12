@@ -11,10 +11,9 @@ import (
 )
 
 type createRoomRequest struct {
-	Mode          string `json:"mode"`
-	MaxPublishers int    `json:"maxPublishers"`
-	DisplayName   string `json:"displayName"`
-	PIN           string `json:"pin"`
+	MaxUsers    int    `json:"maxUsers"`
+	DisplayName string `json:"displayName"`
+	PIN         string `json:"pin"`
 }
 
 func (h *Handlers) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
@@ -27,16 +26,12 @@ func (h *Handlers) handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "displayName is required")
 		return
 	}
-	mode := rooms.ModeInteractive
-	if req.Mode == string(rooms.ModeWebinar) {
-		mode = rooms.ModeWebinar
-	}
 
 	ticket, err := h.Rooms.CreateRoom(r.Context(), rooms.CreateRoomInput{
-		Mode:          mode,
-		MaxPublishers: req.MaxPublishers,
-		DisplayName:   req.DisplayName,
-		PIN:           req.PIN,
+		MaxUsers:    req.MaxUsers,
+		DisplayName: req.DisplayName,
+		PIN:         req.PIN,
+		MediaHost:   mediaHostFromRequest(r, h.MediaHost),
 	})
 	if err != nil {
 		h.Log.Error("create room failed", "err", err)
@@ -67,6 +62,7 @@ func (h *Handlers) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		RoomID:      roomID,
 		DisplayName: req.DisplayName,
 		PIN:         req.PIN,
+		MediaHost:   mediaHostFromRequest(r, h.MediaHost),
 	})
 	switch {
 	case errors.Is(err, rooms.ErrRoomNotFound):
@@ -77,6 +73,9 @@ func (h *Handlers) handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	case errors.Is(err, rooms.ErrBadPIN):
 		writeError(w, http.StatusForbidden, "incorrect pin")
+		return
+	case errors.Is(err, rooms.ErrRoomFull):
+		writeError(w, http.StatusConflict, "room is full")
 		return
 	case err != nil:
 		h.Log.Error("join room failed", "err", err)

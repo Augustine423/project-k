@@ -9,7 +9,6 @@ export function JoinRoomPage() {
   const [roomId, setRoomId] = useState(routeRoomId ?? "");
   const [displayName, setDisplayName] = useState("");
   const [pin, setPin] = useState("");
-  const [asViewer, setAsViewer] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -19,10 +18,6 @@ export function JoinRoomPage() {
     setLoading(true);
     try {
       const id = roomId.trim();
-      if (asViewer) {
-        navigate(`/watch/${id}`);
-        return;
-      }
       const ticket = await joinRoom(id, {
         displayName: displayName.trim(),
         pin: pin.trim() || undefined,
@@ -52,40 +47,32 @@ export function JoinRoomPage() {
             required
           />
         </label>
-        {!asViewer && (
-          <label>
-            Your name
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="Display name"
-              required={!asViewer}
-              maxLength={64}
-            />
-          </label>
-        )}
-        {!asViewer && (
-          <label>
-            Room PIN (if required)
-            <input
-              value={pin}
-              onChange={(e) => setPin(e.target.value)}
-              placeholder="Optional"
-              maxLength={32}
-            />
-          </label>
-        )}
-        <label className="checkbox-row">
-          <input type="checkbox" checked={asViewer} onChange={(e) => setAsViewer(e.target.checked)} />
-          Join as webinar viewer (watch only)
+        <label>
+          Your name
+          <input
+            value={displayName}
+            onChange={(e) => setDisplayName(e.target.value)}
+            placeholder="Display name"
+            required
+            maxLength={64}
+          />
+        </label>
+        <label>
+          Room PIN (if required)
+          <input
+            value={pin}
+            onChange={(e) => setPin(e.target.value)}
+            placeholder="Optional"
+            maxLength={32}
+          />
         </label>
         {error && <p className="form-error">{error}</p>}
         <button
           className="btn btn-primary"
           type="submit"
-          disabled={loading || !roomId.trim() || (!asViewer && !displayName.trim())}
+          disabled={loading || !roomId.trim() || !displayName.trim()}
         >
-          {loading ? "Joining…" : asViewer ? "Watch webinar" : "Join room"}
+          {loading ? "Joining…" : "Join room"}
         </button>
       </form>
     </div>

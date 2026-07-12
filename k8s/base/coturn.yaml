@@ -1,0 +1,181 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: kzys
+  labels:
+    app: coturn
+    app.kubernetes.io/part-of: project-k
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      containers:
+        - name: coturn
+          image: coturn/coturn:4.6.2
+          args:
+            - "-c"
+            - "/etc/coturn/turnserver.conf"
+            - "--realm=$(TURN_REALM)"
+            - "--static-auth-secret=$(TURN_SHARED_SECRET)"
+          env:
+            - name: TURN_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: TURN_REALM
+            - name: TURN_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: TURN_SHARED_SECRET
+          ports:
+            - containerPort: 3478
+              protocol: UDP
+            - containerPort: 3478
+              protocol: TCP
+            - containerPort: 20000
+              protocol: UDP
+            - containerPort: 20001
+              protocol: UDP
+            - containerPort: 20002
+              protocol: UDP
+            - containerPort: 20003
+              protocol: UDP
+            - containerPort: 20004
+              protocol: UDP
+            - containerPort: 20005
+              protocol: UDP
+            - containerPort: 20006
+              protocol: UDP
+            - containerPort: 20007
+              protocol: UDP
+            - containerPort: 20008
+              protocol: UDP
+            - containerPort: 20009
+              protocol: UDP
+            - containerPort: 20010
+              protocol: UDP
+            - containerPort: 20011
+              protocol: UDP
+            - containerPort: 20012
+              protocol: UDP
+            - containerPort: 20013
+              protocol: UDP
+            - containerPort: 20014
+              protocol: UDP
+            - containerPort: 20015
+              protocol: UDP
+            - containerPort: 20016
+              protocol: UDP
+            - containerPort: 20017
+              protocol: UDP
+            - containerPort: 20018
+              protocol: UDP
+            - containerPort: 20019
+              protocol: UDP
+            - containerPort: 20020
+              protocol: UDP
+            - containerPort: 20021
+              protocol: UDP
+            - containerPort: 20022
+              protocol: UDP
+            - containerPort: 20023
+              protocol: UDP
+            - containerPort: 20024
+              protocol: UDP
+            - containerPort: 20025
+              protocol: UDP
+            - containerPort: 20026
+              protocol: UDP
+            - containerPort: 20027
+              protocol: UDP
+            - containerPort: 20028
+              protocol: UDP
+            - containerPort: 20029
+              protocol: UDP
+            - containerPort: 20030
+              protocol: UDP
+            - containerPort: 20031
+              protocol: UDP
+            - containerPort: 20032
+              protocol: UDP
+            - containerPort: 20033
+              protocol: UDP
+            - containerPort: 20034
+              protocol: UDP
+            - containerPort: 20035
+              protocol: UDP
+            - containerPort: 20036
+              protocol: UDP
+            - containerPort: 20037
+              protocol: UDP
+            - containerPort: 20038
+              protocol: UDP
+            - containerPort: 20039
+              protocol: UDP
+            - containerPort: 20040
+              protocol: UDP
+            - containerPort: 20041
+              protocol: UDP
+            - containerPort: 20042
+              protocol: UDP
+            - containerPort: 20043
+              protocol: UDP
+            - containerPort: 20044
+              protocol: UDP
+            - containerPort: 20045
+              protocol: UDP
+            - containerPort: 20046
+              protocol: UDP
+            - containerPort: 20047
+              protocol: UDP
+            - containerPort: 20048
+              protocol: UDP
+            - containerPort: 20049
+              protocol: UDP
+            - containerPort: 20050
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coturn/turnserver.conf
+              subPath: turnserver.conf
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: config
+          configMap:
+            name: coturn-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn
+  namespace: kzys
+  labels:
+    app: coturn
+spec:
+  selector:
+    app: coturn
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      protocol: UDP
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP

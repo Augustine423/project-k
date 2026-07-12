@@ -14,59 +14,36 @@ services:
       timeout: 3s
       retries: 5
 
-  janus:
-    build:
-      context: ./media/janus
-    restart: unless-stopped
-    environment:
-      JANUS_NODE_ID: janus-1
-      STUN_SERVER: ${STUN_SERVER}
-      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
-      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
-      JANUS_CORS_ORIGIN: "*"
-      JANUS_RTP_PORT_RANGE: "10000-10200"
-      JANUS_STREAMING_PORT_RANGE: "15000-15200"
-    ports:
-      - "${JANUS_HTTP_PORT}:8088"
-      - "${JANUS_ADMIN_PORT}:7088"
-      - "${JANUS_WS_PORT}:8188"
-      - "10000-10200:10000-10200/udp"
-      - "15000-15200:15000-15200/udp"
-
-  janus-2:
-    build:
-      context: ./media/janus
-    restart: unless-stopped
-    environment:
-      JANUS_NODE_ID: janus-2
-      STUN_SERVER: ${STUN_SERVER}
-      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
-      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
-      JANUS_CORS_ORIGIN: "*"
-      JANUS_RTP_PORT_RANGE: "11000-11200"
-      JANUS_STREAMING_PORT_RANGE: "16000-16200"
-    ports:
-      - "8089:8088"
-      - "7089:7088"
-      - "8189:8188"
-      - "11000-11200:11000-11200/udp"
-      - "16000-16200:15000-15200/udp"
-
   coturn:
     image: coturn/coturn:4.6.2
     restart: unless-stopped
     command:
       - "-c"
       - "/etc/coturn/turnserver.conf"
-      - "--realm=projectk.local"
+      - "--realm=${TURN_REALM}"
       - "--static-auth-secret=${TURN_SHARED_SECRET}"
-      - "--external-ip=${PUBLIC_HOST}"
     volumes:
       - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     ports:
       - "${TURN_PORT}:3478"
       - "${TURN_PORT}:3478/udp"
       - "20000-20200:20000-20200/udp"
+
+  livekit:
+    image: livekit/livekit-server:v1.9.12
+    restart: unless-stopped
+    command: ["--config", "/etc/livekit.yaml"]
+    environment:
+      NODE_IP: ${PUBLIC_HOST}
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./infra/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "${LIVEKIT_HTTP_PORT}:7880"
+      - "${LIVEKIT_RTC_TCP_PORT}:7881"
+      - "51000-51030:51000-51030/udp"
 
   server:
     build:
@@ -75,20 +52,32 @@ services:
     depends_on:
       redis:
         condition: service_healthy
+      livekit:
+        condition: service_started
     environment:
       PORT: 4000
       REDIS_URL: redis://redis:6379
       JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      LIVEKIT_URL: "${LIVEKIT_PUBLIC_URL}"
+      LIVEKIT_INTERNAL_URL: "ws://livekit:7880"
+      MAX_ROOM_PARTICIPANTS: "10"
+      CORS_ORIGIN: "${CORS_ORIGIN}"
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
       TURN_HOST: ${PUBLIC_HOST}
       TURN_PORT: ${TURN_PORT}
-      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT},janus-2|http://janus-2:7088/admin|ws://janus-2:8188|ws://${PUBLIC_HOST}:8189"
-      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
-      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
-      JANUS_STREAMING_PORT_RANGE: "15000-15200"
-      CORS_ORIGIN: "http://${PUBLIC_HOST}:${WEB_PORT}"
+      TURN_TLS_PORT: ${TURN_TLS_PORT}
+      TURN_USE_TLS: ${TURN_USE_TLS}
+      SERVICE_NAME: kzys-control-plane
     ports:
       - "${SERVER_PORT}:4000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:4000/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
 
   web:
     build:
@@ -96,9 +85,13 @@ services:
       target: dev
     restart: unless-stopped
     depends_on:
-      - server
+      server:
+        condition: service_healthy
     environment:
-      VITE_API_URL: "http://${PUBLIC_HOST}:${SERVER_PORT}"
+      VITE_API_URL: "${PUBLIC_API_URL}"
+      VITE_LIVEKIT_URL: "${LIVEKIT_PUBLIC_URL}"
+      VITE_PROXY_TARGET: "http://server:4000"
+      VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
     ports:
       - "${WEB_PORT}:5173"
     volumes:

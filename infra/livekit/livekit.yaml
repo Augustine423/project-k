@@ -1,0 +1,36 @@
+# LiveKit SFU — Phase A: Join Never Fails
+# TURN secret must match TURN_SHARED_SECRET in docker-compose / K8s Secret.
+port: 7880
+bind_addresses:
+  - ""
+
+rtc:
+  tcp_port: 7881
+  port_range_start: 51000
+  port_range_end: 51030
+  use_external_ip: false
+  allow_tcp_fallback: true
+  congestion_control:
+    enabled: true
+    allow_pause: true
+  stun_servers:
+    - localhost
+  # TURN credentials are issued per-participant by the Go control plane (join ticket iceServers).
+  # Coturn runs separately; no embedded turn_servers block needed for local dev.
+
+redis:
+  address: redis:6379
+
+keys:
+  devkey: devsecret
+
+room:
+  auto_create: true
+  empty_timeout: 300
+  max_participants: 10
+
+logging:
+  level: info
+
+# Prometheus (enable in K8s for KEDA custom metrics)
+# prometheus_port: 6789

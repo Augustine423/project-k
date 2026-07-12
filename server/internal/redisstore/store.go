@@ -1,7 +1,4 @@
-// Package redisstore is the shared room/participant registry. Every control
-// plane instance reads/writes here instead of keeping state in memory, which
-// is what lets us run many control-plane replicas behind a load balancer
-// (horizontal scaling of the signaling layer itself, not just the media layer).
+// Package redisstore is the shared room/participant registry for the control plane.
 package redisstore
 
 import (
@@ -112,87 +109,4 @@ func (s *Store) GetParticipant(ctx context.Context, roomID, participantID string
 		return nil, err
 	}
 	return &p, nil
-}
-
-// IncrNodeLoad / node load tracking backs the Router's least-loaded node
-// selection (internal/router). Each node's "load" is simply how many rooms
-// are currently assigned to it -- cheap, and good enough for room-level
-// sharding since rooms are the unit of placement.
-func (s *Store) IncrNodeLoad(ctx context.Context, nodeID string, delta int64) error {
-	return s.rdb.IncrBy(ctx, "nodeload:"+nodeID, delta).Err()
-}
-
-func (s *Store) GetNodeLoad(ctx context.Context, nodeID string) (int64, error) {
-	v, err := s.rdb.Get(ctx, "nodeload:"+nodeID).Int64()
-	if err == redis.Nil {
-		return 0, nil
-	}
-	return v, err
-}
-
-func (s *Store) IsNodeDraining(ctx context.Context, nodeID string) (bool, error) {
-	exists, err := s.rdb.Exists(ctx, "nodedraining:"+nodeID).Result()
-	if err != nil {
-		return false, err
-	}
-	return exists > 0, nil
-}
-
-func (s *Store) SetNodeDraining(ctx context.Context, nodeID string, draining bool) error {
-	if draining {
-		return s.rdb.Set(ctx, "nodedraining:"+nodeID, "1", 0).Err()
-	}
-	return s.rdb.Del(ctx, "nodedraining:"+nodeID).Err()
-}
-
-func broadcastKey(roomID string) string { return "broadcast:" + roomID }
-
-// BroadcastTarget is the webinar fan-out's record of which edge node and
-// Streaming-plugin mountpoint viewers of a given room should subscribe to.
-// See internal/webinar for how it's created and used.
-type BroadcastTarget struct {
-	EdgeNodeID   string `json:"edgeNodeId"`
-	MountpointID string `json:"mountpointId"`
-	AudioPort    int    `json:"audioPort"`
-	VideoPort    int    `json:"videoPort"`
-}
-
-func (s *Store) SaveBroadcastTarget(ctx context.Context, roomID string, target BroadcastTarget) error {
-	data, err := json.Marshal(target)
-	if err != nil {
-		return err
-	}
-	return s.rdb.Set(ctx, broadcastKey(roomID), data, roomTTL).Err()
-}
-
-func (s *Store) GetBroadcastTarget(ctx context.Context, roomID string) (*BroadcastTarget, error) {
-	data, err := s.rdb.Get(ctx, broadcastKey(roomID)).Bytes()
-	if err == redis.Nil {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var target BroadcastTarget
-	if err := json.Unmarshal(data, &target); err != nil {
-		return nil, err
-	}
-	return &target, nil
-}
-
-// AllocatePort hands out the next port in [rangeStart, rangeEnd) for a given
-// node, cycling round-robin via an atomic counter. Phase 1 scope: good
-// enough for demo/moderate broadcast fan-out; a production version should
-// track freed ports explicitly instead of assuming the range never wraps
-// into still-in-use ports.
-func (s *Store) AllocatePort(ctx context.Context, nodeID string, rangeStart, rangeEnd int) (int, error) {
-	span := int64(rangeEnd - rangeStart)
-	if span <= 0 {
-		return 0, fmt.Errorf("invalid port range %d-%d", rangeStart, rangeEnd)
-	}
-	n, err := s.rdb.Incr(ctx, "portalloc:"+nodeID).Result()
-	if err != nil {
-		return 0, err
-	}
-	return rangeStart + int((n-1)%span), nil
 }

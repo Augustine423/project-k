@@ -11,9 +11,10 @@ interface ChatPanelProps {
   messages: ChatMessage[];
   onSend: (message: string) => void;
   disabled?: boolean;
+  disabledHint?: string;
 }
 
-export function ChatPanel({ messages, onSend, disabled }: ChatPanelProps) {
+export function ChatPanel({ messages, onSend, disabled, disabledHint }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
 
   function submit(e: React.FormEvent) {
@@ -39,7 +40,7 @@ export function ChatPanel({ messages, onSend, disabled }: ChatPanelProps) {
         <input
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder={disabled ? "Chat unavailable" : "Type a message"}
+          placeholder={disabled ? (disabledHint ?? "Chat unavailable") : "Type a message"}
           disabled={disabled}
           maxLength={500}
         />

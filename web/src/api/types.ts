@@ -1,17 +1,15 @@
 // Mirrors the JSON shapes returned by the Go control plane
 // (server/internal/rooms/types.go and related handlers).
 
-export type RoomMode = "interactive" | "webinar";
-export type ParticipantRole = "host" | "cohost" | "publisher" | "participant" | "viewer";
+export type RoomMode = "interactive";
+export type ParticipantRole = "host" | "cohost" | "participant";
 
 export interface Room {
   id: string;
   mode: RoomMode;
-  janusNodeId: string;
-  janusRoomId: string;
-  maxPublishers: number;
+  livekitRoomName: string;
+  maxParticipants: number;
   locked: boolean;
-  waitingRoom: boolean;
   createdAt: string;
   hostParticipantId: string;
 }
@@ -25,24 +23,19 @@ export interface Participant {
   joinedAt: string;
 }
 
-export interface TurnInfo {
-  urls: string[];
-  username: string;
-  credential: string;
-}
-
 export interface JoinTicket {
   room: Room;
   participant: Participant;
-  janusWsUrl: string;
+  livekitUrl: string;
+  livekitToken: string;
   participantToken: string;
-  janusJoinPin?: string;
-  turn: TurnInfo;
+  iceServers?: IceServer[];
 }
 
-export interface ViewerJoinInfo {
-  janusWsUrl: string;
-  mountpointId: string;
+export interface IceServer {
+  urls: string[];
+  username?: string;
+  credential?: string;
 }
 
 export interface ApiError {

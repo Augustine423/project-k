@@ -1,7 +1,5 @@
-// Package auth issues and verifies the short-lived JWTs participants use to
-// prove, to both this control plane and (via the Janus room "pin"/secret
-// handed out alongside it) implicitly to Janus, that they were legitimately
-// admitted to a specific room.
+// Package auth issues and verifies short-lived JWTs participants use to
+// authenticate to the control plane (REST host actions + WebSocket chat).
 package auth
 
 import (

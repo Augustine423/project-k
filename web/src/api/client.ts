@@ -1,6 +1,14 @@
-import type { ApiError, JoinTicket, Participant, Room, ViewerJoinInfo } from "./types";
+import type { ApiError, JoinTicket, Participant, Room } from "./types";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+/** Same-origin in dev (Vite proxy) so phones on the LAN hit the PC, not phone-localhost. */
+function apiBase(): string {
+  const configured = import.meta.env.VITE_API_URL as string | undefined;
+  if (!configured) return "";
+  if (/localhost|127\.0\.0\.1/i.test(configured)) return "";
+  return configured.replace(/\/$/, "");
+}
+
+const API_URL = apiBase();
 
 export class ApiRequestError extends Error {
   status: number;
@@ -33,9 +41,8 @@ function authHeader(token: string): Record<string, string> {
 }
 
 export interface CreateRoomInput {
-  mode: "interactive" | "webinar";
   displayName: string;
-  maxPublishers?: number;
+  maxUsers?: number;
   pin?: string;
 }
 
@@ -60,10 +67,6 @@ export function listParticipants(roomId: string): Promise<Participant[]> {
   return request(`/api/rooms/${roomId}/participants`);
 }
 
-export function getViewerInfo(roomId: string): Promise<ViewerJoinInfo> {
-  return request(`/api/rooms/${roomId}/webinar/viewer-info`);
-}
-
 export function endRoom(roomId: string, token: string): Promise<void> {
   return request(`/api/rooms/${roomId}/end`, { method: "POST", headers: authHeader(token) });
 }
@@ -76,20 +79,6 @@ export function setRoomLocked(roomId: string, token: string, locked: boolean): P
   });
 }
 
-export function muteParticipant(
-  roomId: string,
-  token: string,
-  participantId: string,
-  mid: string,
-  mute: boolean,
-): Promise<void> {
-  return request(`/api/rooms/${roomId}/participants/${participantId}/mute`, {
-    method: "POST",
-    headers: authHeader(token),
-    body: JSON.stringify({ mid, mute }),
-  });
-}
-
 export function kickParticipant(roomId: string, token: string, participantId: string): Promise<void> {
   return request(`/api/rooms/${roomId}/participants/${participantId}/kick`, {
     method: "POST",
@@ -97,33 +86,13 @@ export function kickParticipant(roomId: string, token: string, participantId: st
   });
 }
 
-export function forwardPublisherStreams(
-  roomId: string,
-  token: string,
-  participantId: string,
-  streams: { mid: string; type: "audio" | "video" }[],
-): Promise<void> {
-  return request(`/api/rooms/${roomId}/webinar/publishers/${participantId}/forward`, {
-    method: "POST",
-    headers: authHeader(token),
-    body: JSON.stringify({ streams }),
-  });
-}
-
-export function sendChatMessage(
-  roomId: string,
-  token: string,
-  displayName: string,
-  message: string,
-): Promise<void> {
-  return request(`/api/rooms/${roomId}/chat`, {
-    method: "POST",
-    headers: authHeader(token),
-    body: JSON.stringify({ displayName, message }),
-  });
-}
-
 export function wsUrlFor(roomId: string, token: string): string {
+  if (!API_URL) {
+    const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${window.location.host}/ws/rooms/${roomId}?token=${encodeURIComponent(token)}`;
+  }
   const base = API_URL.replace(/^http/, "ws");
   return `${base}/ws/rooms/${roomId}?token=${encodeURIComponent(token)}`;
 }
+
+export const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL ?? "ws://localhost:7880";

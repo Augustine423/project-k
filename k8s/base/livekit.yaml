@@ -1,0 +1,138 @@
+# LiveKit SFU — internal ClusterIP for Gateway signaling; UDP via gke/livekit-nlb.yaml.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  namespace: kzys
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:v1.9.12
+          args: ["--config", "/etc/livekit.yaml"]
+          env:
+            - name: LIVEKIT_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: LIVEKIT_KEYS
+            - name: NODE_IP
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: MEDIA_NODE_IP
+          ports:
+            - containerPort: 7880
+              protocol: TCP
+            - containerPort: 7881
+              protocol: TCP
+            - containerPort: 51000
+              protocol: UDP
+            - containerPort: 51001
+              protocol: UDP
+            - containerPort: 51002
+              protocol: UDP
+            - containerPort: 51003
+              protocol: UDP
+            - containerPort: 51004
+              protocol: UDP
+            - containerPort: 51005
+              protocol: UDP
+            - containerPort: 51006
+              protocol: UDP
+            - containerPort: 51007
+              protocol: UDP
+            - containerPort: 51008
+              protocol: UDP
+            - containerPort: 51009
+              protocol: UDP
+            - containerPort: 51010
+              protocol: UDP
+            - containerPort: 51011
+              protocol: UDP
+            - containerPort: 51012
+              protocol: UDP
+            - containerPort: 51013
+              protocol: UDP
+            - containerPort: 51014
+              protocol: UDP
+            - containerPort: 51015
+              protocol: UDP
+            - containerPort: 51016
+              protocol: UDP
+            - containerPort: 51017
+              protocol: UDP
+            - containerPort: 51018
+              protocol: UDP
+            - containerPort: 51019
+              protocol: UDP
+            - containerPort: 51020
+              protocol: UDP
+            - containerPort: 51021
+              protocol: UDP
+            - containerPort: 51022
+              protocol: UDP
+            - containerPort: 51023
+              protocol: UDP
+            - containerPort: 51024
+              protocol: UDP
+            - containerPort: 51025
+              protocol: UDP
+            - containerPort: 51026
+              protocol: UDP
+            - containerPort: 51027
+              protocol: UDP
+            - containerPort: 51028
+              protocol: UDP
+            - containerPort: 51029
+              protocol: UDP
+            - containerPort: 51030
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit.yaml
+              subPath: livekit.yaml
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 2000m
+              memory: 2Gi
+      volumes:
+        - name: config
+          configMap:
+            name: livekit-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+  namespace: kzys
+  labels:
+    app: livekit
+spec:
+  selector:
+    app: livekit
+  ports:
+    - name: signal
+      port: 7880
+      targetPort: 7880
+      protocol: TCP
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881
+      protocol: TCP

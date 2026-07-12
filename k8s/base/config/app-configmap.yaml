@@ -1,0 +1,25 @@
+# Non-secret runtime configuration for GKE testing.
+# Replace placeholder hostnames/IPs before applying.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-app-config
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  # Public HTTPS host served by GKE Gateway (ALB / L7).
+  APP_HOST: "app.CHANGE_ME.example.com"
+  # Browser-facing LiveKit signaling URL (path on APP_HOST).
+  LIVEKIT_URL: "wss://app.CHANGE_ME.example.com/livekit"
+  # NLB external IP for WebRTC ICE candidates (set after livekit-media-svc is created).
+  MEDIA_NODE_IP: "CHANGE_ME_LIVEKIT_NLB_IP"
+  # Coturn NLB hostname or IP for TURN/STUN in join tickets.
+  TURN_HOST: "CHANGE_ME_TURN_NLB_IP"
+  TURN_PORT: "3478"
+  TURN_TLS_PORT: "5349"
+  TURN_USE_TLS: "false"
+  TURN_REALM: "kzys"
+  CORS_ORIGIN: "https://app.CHANGE_ME.example.com"
+  MAX_ROOM_PARTICIPANTS: "10"
+  SERVICE_NAME: "kzys-control-plane"

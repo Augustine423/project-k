@@ -5,9 +5,10 @@ export function HomePage() {
     <div className="page landing">
       <header className="landing-hero">
         <p className="eyebrow">Project K</p>
-        <h1>Video meetings built on Janus</h1>
+        <h1>Symmetrical video meetings on LiveKit</h1>
         <p className="subtitle">
-          Create an interactive room or join a webinar. Local dev stack: Go control plane, Janus SFU, Redis, coturn.
+          KZYS Phase A — Join Never Fails. Multiparty SFU with TURN fallback, adaptive bitrate,
+          and audio-first join on constrained networks.
         </p>
         <div className="landing-actions">
           <Link className="btn btn-primary" to="/create">
@@ -20,12 +21,12 @@ export function HomePage() {
       </header>
       <section className="card-grid">
         <article className="card">
-          <h2>Interactive</h2>
-          <p>Everyone can publish camera and microphone in a VideoRoom.</p>
+          <h2>Multiparty SFU</h2>
+          <p>Up to 10 participants per room for current testing — camera, mic, and screen share.</p>
         </article>
         <article className="card">
-          <h2>Webinar</h2>
-          <p>Hosts publish on stage; viewers watch via the Streaming plugin.</p>
+          <h2>Host controls</h2>
+          <p>Lock the room, remove participants, end the meeting, and chat over WebSocket.</p>
         </article>
       </section>
     </div>

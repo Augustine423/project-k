@@ -1,0 +1,38 @@
+# KEDA scale-to-zero for LiveKit when no participants (example).
+# Replace prometheus query with your metric once prometheus_port is enabled on LiveKit.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: livekit-scaler
+  namespace: kzys
+spec:
+  scaleTargetRef:
+    name: livekit
+  minReplicaCount: 0
+  maxReplicaCount: 10
+  cooldownPeriod: 300
+  triggers:
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc.cluster.local:9090
+        metricName: livekit_room_participants
+        query: sum(livekit_room_participant_total)
+        threshold: "1"
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: control-plane-scaler
+  namespace: kzys
+spec:
+  scaleTargetRef:
+    name: kzys-control-plane
+  minReplicaCount: 0
+  maxReplicaCount: 5
+  cooldownPeriod: 120
+  triggers:
+    - type: redis
+      metadata:
+        address: redis.kzys.svc.cluster.local:6379
+        listName: kzys:active_rooms
+        listLength: "1"

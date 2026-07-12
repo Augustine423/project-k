@@ -1,0 +1,26 @@
+# Environment & secrets
+.env
+infra/.env
+
+# Dependencies & build output
+node_modules/
+web/dist/
+web/node_modules/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Go
+server/nul
+*.exe
+
+# Local reference clones (use janus-logic branch or clone upstream separately)
+Reference/
+janus-gateway/
+
+# Session scratch
+session-token.txt

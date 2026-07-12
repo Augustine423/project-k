@@ -1,0 +1,99 @@
+# Path-based routing on APP_HOST — same origin for web, API, chat WS, LiveKit signaling.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kzys-api
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+spec:
+  parentRefs:
+    - name: kzys-gateway
+      sectionName: https
+    - name: kzys-gateway
+      sectionName: http
+  hostnames:
+    - app.CHANGE_ME.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api
+      backendRefs:
+        - name: kzys-control-plane
+          port: 4000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ws
+      backendRefs:
+        - name: kzys-control-plane
+          port: 4000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /health
+      backendRefs:
+        - name: kzys-control-plane
+          port: 4000
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ready
+      backendRefs:
+        - name: kzys-control-plane
+          port: 4000
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kzys-livekit
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+spec:
+  parentRefs:
+    - name: kzys-gateway
+      sectionName: https
+    - name: kzys-gateway
+      sectionName: http
+  hostnames:
+    - app.CHANGE_ME.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /livekit
+      filters:
+        - type: URLRewrite
+          urlRewrite:
+            path:
+              type: ReplacePrefixMatch
+              replacePrefixMatch: /
+      backendRefs:
+        - name: livekit
+          port: 7880
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: kzys-web
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+spec:
+  parentRefs:
+    - name: kzys-gateway
+      sectionName: https
+    - name: kzys-gateway
+      sectionName: http
+  hostnames:
+    - app.CHANGE_ME.example.com
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: kzys-web
+          port: 80

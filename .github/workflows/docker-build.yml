@@ -18,13 +18,18 @@ jobs:
           - service: server
             context: ./server
             file: ./server/Dockerfile
+            target: ""
+            build-args: ""
+          # Web: Vite bakes VITE_* at image build time only.
+          # Leave VITE_API_URL empty so the browser uses same-origin routing
+          # through the GKE Gateway (HTTPS /api, /ws). LiveKit URL comes from
+          # the join ticket (server runtime LIVEKIT_URL), not the web image.
           - service: web
             context: ./web
             file: ./web/Dockerfile
             target: production
-          - service: janus
-            context: ./media/janus
-            file: ./media/janus/Dockerfile
+            build-args: |
+              VITE_API_URL=
 
     steps:
       - name: Checkout
@@ -45,9 +50,11 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.file }}
           push: true
+          platforms: linux/amd64
           tags: |
             ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
             ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
+          build-args: ${{ matrix.build-args }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           target: ${{ matrix.target }}

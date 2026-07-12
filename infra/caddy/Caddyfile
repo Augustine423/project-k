@@ -1,0 +1,28 @@
+# Optional TLS termination for local/staging (docker compose --profile tls up)
+# Production: use cert-manager + ingress-nginx / traefik instead.
+
+{$PUBLIC_HOST} {
+  encode gzip
+
+  handle /api/* {
+    reverse_proxy server:4000
+  }
+
+  handle /ws/* {
+    reverse_proxy server:4000
+  }
+
+  handle /health* {
+    reverse_proxy server:4000
+  }
+
+  handle /ready* {
+    reverse_proxy server:4000
+  }
+
+  handle_path /livekit/* {
+    reverse_proxy livekit:7880
+  }
+
+  reverse_proxy web:5173
+}

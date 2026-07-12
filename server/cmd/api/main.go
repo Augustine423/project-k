@@ -1,6 +1,5 @@
-// Command api is the control-plane entrypoint: loads config, wires up
-// Redis, the Janus Admin API clients for each configured media node, the
-// room service, and the HTTP/WebSocket router, then serves.
+// Command api is the control-plane entrypoint: Redis room registry, LiveKit
+// token issuance, and HTTP/WebSocket signaling for chat and host controls.
 package main
 
 import (
@@ -14,13 +13,11 @@ import (
 	"projectk/server/internal/auth"
 	"projectk/server/internal/config"
 	"projectk/server/internal/httpapi"
-	"projectk/server/internal/janusadmin"
+	"projectk/server/internal/livekit"
 	"projectk/server/internal/logger"
 	"projectk/server/internal/redisstore"
 	"projectk/server/internal/rooms"
-	"projectk/server/internal/router"
 	"projectk/server/internal/turn"
-	"projectk/server/internal/webinar"
 	"projectk/server/internal/wshub"
 )
 
@@ -39,47 +36,29 @@ func main() {
 		os.Exit(1)
 	}
 
-	janusAdmins := make(map[string]*janusadmin.Client, len(cfg.JanusNodes))
-	for _, node := range cfg.JanusNodes {
-		janusAdmins[node.ID] = janusadmin.New(node.AdminURL, cfg.JanusAdminSecret)
-	}
-
-	nodeRouter := router.New(cfg.JanusNodes, store)
 	jwtIssuer := auth.NewIssuer(cfg.JWTSigningSecret)
-	turnIssuer := turn.NewIssuer(cfg.TURNSharedSecret, cfg.TURNHost, cfg.TURNPort)
+	lkIssuer := livekit.NewTokenIssuer(cfg.LiveKitAPIKey, cfg.LiveKitAPISecret, cfg.LiveKitPublicURL)
+	turnIssuer := turn.NewIssuer(cfg.TURNSharedSecret, cfg.TURNHost, cfg.TURNPort, cfg.TURNTLSPort, cfg.TURNUseTLS)
 
 	roomService := rooms.NewService(
 		store,
-		nodeRouter,
-		janusAdmins,
 		jwtIssuer,
+		lkIssuer,
 		turnIssuer,
-		cfg.JanusAdminSecret,
-		cfg.JanusVideoRoomKey,
-		log,
-	)
-
-	webinarService := webinar.NewService(
-		store,
-		nodeRouter,
-		janusAdmins,
-		cfg.JanusAdminSecret,
-		cfg.JanusVideoRoomKey,
-		cfg.StreamingPortRangeStart,
-		cfg.StreamingPortRangeEnd,
+		cfg.MaxRoomParticipants,
 		log,
 	)
 
 	hub := wshub.New(log)
 
 	handlers := &httpapi.Handlers{
-		Rooms:   roomService,
-		Webinar: webinarService,
-		Hub:     hub,
-		JWT:     jwtIssuer,
-		Redis:   store,
-		Router:  nodeRouter,
-		Log:     log,
+		Rooms:       roomService,
+		Hub:         hub,
+		JWT:         jwtIssuer,
+		Redis:       store,
+		Log:         log,
+		ServiceName: cfg.ServiceName,
+		MediaHost:   cfg.TURNHost,
 	}
 	hub.SetClientMessageHandler(handlers.HandleWSClientMessage)
 
@@ -92,7 +71,7 @@ func main() {
 	}
 
 	go func() {
-		log.Info("control plane listening", "port", cfg.Port, "janusNodes", len(cfg.JanusNodes))
+		log.Info("control plane listening", "port", cfg.Port, "maxParticipants", cfg.MaxRoomParticipants)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Error("server error", "err", err)
 			os.Exit(1)

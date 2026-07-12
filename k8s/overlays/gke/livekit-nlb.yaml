@@ -1,0 +1,149 @@
+﻿# GKE external passthrough NLB for LiveKit WebRTC media (UDP) + RTC TCP fallback.
+# After apply: kubectl get svc livekit-media -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+# Set that IP in kzys-app-config MEDIA_NODE_IP and re-apply control-plane.
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-media
+  namespace: kzys
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: livekit
+  ports:
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881
+      protocol: TCP
+    - name: rtc-udp-51000
+      port: 51000
+      targetPort: 51000
+      protocol: UDP
+    - name: rtc-udp-51001
+      port: 51001
+      targetPort: 51001
+      protocol: UDP
+    - name: rtc-udp-51002
+      port: 51002
+      targetPort: 51002
+      protocol: UDP
+    - name: rtc-udp-51003
+      port: 51003
+      targetPort: 51003
+      protocol: UDP
+    - name: rtc-udp-51004
+      port: 51004
+      targetPort: 51004
+      protocol: UDP
+    - name: rtc-udp-51005
+      port: 51005
+      targetPort: 51005
+      protocol: UDP
+    - name: rtc-udp-51006
+      port: 51006
+      targetPort: 51006
+      protocol: UDP
+    - name: rtc-udp-51007
+      port: 51007
+      targetPort: 51007
+      protocol: UDP
+    - name: rtc-udp-51008
+      port: 51008
+      targetPort: 51008
+      protocol: UDP
+    - name: rtc-udp-51009
+      port: 51009
+      targetPort: 51009
+      protocol: UDP
+    - name: rtc-udp-51010
+      port: 51010
+      targetPort: 51010
+      protocol: UDP
+    - name: rtc-udp-51011
+      port: 51011
+      targetPort: 51011
+      protocol: UDP
+    - name: rtc-udp-51012
+      port: 51012
+      targetPort: 51012
+      protocol: UDP
+    - name: rtc-udp-51013
+      port: 51013
+      targetPort: 51013
+      protocol: UDP
+    - name: rtc-udp-51014
+      port: 51014
+      targetPort: 51014
+      protocol: UDP
+    - name: rtc-udp-51015
+      port: 51015
+      targetPort: 51015
+      protocol: UDP
+    - name: rtc-udp-51016
+      port: 51016
+      targetPort: 51016
+      protocol: UDP
+    - name: rtc-udp-51017
+      port: 51017
+      targetPort: 51017
+      protocol: UDP
+    - name: rtc-udp-51018
+      port: 51018
+      targetPort: 51018
+      protocol: UDP
+    - name: rtc-udp-51019
+      port: 51019
+      targetPort: 51019
+      protocol: UDP
+    - name: rtc-udp-51020
+      port: 51020
+      targetPort: 51020
+      protocol: UDP
+    - name: rtc-udp-51021
+      port: 51021
+      targetPort: 51021
+      protocol: UDP
+    - name: rtc-udp-51022
+      port: 51022
+      targetPort: 51022
+      protocol: UDP
+    - name: rtc-udp-51023
+      port: 51023
+      targetPort: 51023
+      protocol: UDP
+    - name: rtc-udp-51024
+      port: 51024
+      targetPort: 51024
+      protocol: UDP
+    - name: rtc-udp-51025
+      port: 51025
+      targetPort: 51025
+      protocol: UDP
+    - name: rtc-udp-51026
+      port: 51026
+      targetPort: 51026
+      protocol: UDP
+    - name: rtc-udp-51027
+      port: 51027
+      targetPort: 51027
+      protocol: UDP
+    - name: rtc-udp-51028
+      port: 51028
+      targetPort: 51028
+      protocol: UDP
+    - name: rtc-udp-51029
+      port: 51029
+      targetPort: 51029
+      protocol: UDP
+    - name: rtc-udp-51030
+      port: 51030
+      targetPort: 51030
+      protocol: UDP
+

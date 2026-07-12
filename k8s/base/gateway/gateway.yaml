@@ -1,0 +1,38 @@
+# GKE L7 external managed Gateway (ALB) — HTTPS/WSS for web, API, chat WS, LiveKit signaling.
+# Prereqs: GKE Gateway controller enabled, DNS → Gateway IP, TLS cert (see tls-secret.example.yaml).
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: kzys-gateway
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+  annotations:
+    networking.gke.io/certmap: ""
+spec:
+  gatewayClassName: gke-l7-global-external-managed
+  # Optional: reserve a global static IP in GCP, then uncomment:
+  # addresses:
+  #   - type: NamedAddress
+  #     value: kzys-gateway-ip
+  listeners:
+    - name: https
+      protocol: HTTPS
+      port: 443
+      hostname: app.CHANGE_ME.example.com
+      allowedRoutes:
+        namespaces:
+          from: Same
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: kzys-tls
+            namespace: kzys
+    - name: http
+      protocol: HTTP
+      port: 80
+      hostname: app.CHANGE_ME.example.com
+      allowedRoutes:
+        namespaces:
+          from: Same

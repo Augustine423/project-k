@@ -1,0 +1,88 @@
+# KZYS / Project-K — Future Vision & Roadmap
+# Open-source video conferencing: speed, cost, developer experience.
+
+## North Star
+Beat Zoom/Meet on join latency (<3s to first frame), infra cost (scale-to-zero),
+self-hosting simplicity, and embeddable APIs — without sacrificing multiparty quality.
+
+## Core Principles (non-negotiable)
+1. SCALE-TO-ZERO — KEDA scales media + control plane to ~0 when idle.
+2. SPEED-FIRST — Join link → first video frame < 3s (p95).
+3. PRIVACY — Self-host friendly; no vendor lock-in on signaling or SFU.
+4. OPEN / API-FIRST — gRPC + REST; modular services other devs can embed.
+5. LOW-BANDWIDTH RESILIENCE — Audio-first fallbacks, adaptive bitrate (ABR).
+
+## Technology Stack (target)
+| Layer            | Technology                                      |
+|------------------|-------------------------------------------------|
+| Frontend         | React/Next.js + LiveKit Client SDK              |
+| API Gateway      | C# .NET 9+ (billing, users, public REST)        |
+| Signaling/Auth   | Go control plane (rooms, JWT, WS chat)          |
+| Media            | LiveKit SFU (K8s-native)                        |
+| State            | Redis (rooms, chat, SignalR backplane)          |
+| Database         | PostgreSQL (billing, accounts)                  |
+| Orchestration    | K3s / EKS + Karpenter / Cluster Autoscaler       |
+
+## Phase Roadmap
+
+### Phase A — Join Never Fails (CURRENT)
+Goal: Reliable join on bad networks, mobile, and NAT-heavy environments.
+- [x] LiveKit SFU multiparty (symmetrical conference)
+- [x] Coturn STUN/TURN with REST ephemeral credentials
+- [x] LiveKit `adaptiveStream` + `dynacast` + TCP/TURN fallback
+- [x] Audio-first join (mic before camera on constrained links)
+- [x] Mobile-responsive room UI + touch-friendly controls
+- [x] `/health` + `/ready` endpoints for K8s probes
+- [ ] TLS/WSS everywhere (Caddy/ingress templates; dev plain, prod TLS)
+- [ ] Prometheus metrics on Go + LiveKit
+- [ ] Join latency SLO dashboard (<3s)
+
+K8s/KEDA: LiveKit ScaledObject scales 0→N on `livekit_room_participants` or
+custom Redis metric; control plane scales on HTTP RPS / active WS connections.
+
+### Phase B — Developer Platform
+- Public REST + gRPC SDKs (create room, issue token, webhooks)
+- Embeddable React components package (`@kzys/meet`)
+- PostgreSQL user/billing schema + .NET API gateway
+- Webhook events: `room.started`, `participant.joined`, `room.ended`
+
+### Phase C — Cost & Scale
+- Spot-instance node pools for LiveKit workers
+- Regional edge TURN (Anycast or geo DNS)
+- Recording / egress to S3-compatible storage (optional module)
+- KEDA scale-to-zero validated in production (<$X/month idle)
+
+### Phase D — Differentiators
+- AI noise suppression (optional LiveKit plugins)
+- Live captions pipeline
+- Breakout rooms API
+- Enterprise SSO (OIDC/SAML via .NET gateway)
+
+## Branch Strategy
+- `main` — LiveKit SFU path (active development)
+- `janus-logic` — Legacy Janus implementation (preserved reference)
+
+Upstream reference repos (LiveKit server, Janus gateway) are not vendored in this
+tree — clone them separately when needed for SFU internals research.
+
+## Join Never Fails — Engineering Checklist
+1. Issue TURN credentials per participant (short TTL, HMAC).
+2. Configure LiveKit `turn_servers` + `allow_tcp_fallback`.
+3. Client: `adaptiveStream`, `dynacast`, reconnect UX.
+4. On `ConnectionQuality.Poor`: drop local/remote video, keep audio.
+5. WSS for signaling in production; TURN/TLS on 5349 behind ingress.
+6. Health probes must pass before Service receives traffic.
+
+## Local Dev (Phase A)
+```bash
+docker compose up --build
+# UI:  http://localhost:5173
+# API: http://localhost:4000/health
+# LK:  ws://localhost:7880
+```
+
+## Production TLS (sketch)
+- Ingress terminates TLS for web + API.
+- LiveKit signaling: `wss://livekit.example.com` (port 443 via ingress).
+- TURN: `turns:turn.example.com:5349` with cert from cert-manager.
+- Secrets: K8s Secrets / Vault — never commit `.env`.

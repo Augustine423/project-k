@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { wsUrlFor } from "./client";
 
 export interface RoomEvent {
@@ -64,34 +64,51 @@ function acquire(url: string): SharedSocket {
     }
   };
 
+  ws.onopen = () => {
+    for (const listener of sock!.listeners) listener({ type: "ws.open", data: null });
+  };
+
   ws.onclose = () => {
     if (shared.get(url)?.ws === ws) shared.delete(url);
+    for (const listener of sock!.listeners) listener({ type: "ws.close", data: null });
   };
 
   return sock;
 }
 
 /** Subscribes to the control plane's per-room event stream (presence, host
- * actions, chat) -- separate from the Janus WebSocket, which only carries
- * WebRTC signaling. See server/internal/wshub for the server side. */
+ * actions, chat) -- separate from the LiveKit SFU session. */
 export function useRoomEvents(roomId: string, token: string, onEvent: (evt: RoomEvent) => void) {
   const onEventRef = useRef(onEvent);
   onEventRef.current = onEvent;
+  const [chatReady, setChatReady] = useState(false);
 
   useEffect(() => {
-    if (!roomId || !token) return;
+    if (!roomId || !token) {
+      setChatReady(false);
+      return;
+    }
 
     const url = wsUrlFor(roomId, token);
     const sock = acquire(url);
 
-    const listener: Listener = (evt) => onEventRef.current(evt);
+    const listener: Listener = (evt) => {
+      if (evt.type === "ws.open") setChatReady(true);
+      if (evt.type === "ws.close") setChatReady(false);
+      onEventRef.current(evt);
+    };
     sock.listeners.add(listener);
+
+    if (sock.ws.readyState === WebSocket.OPEN) setChatReady(true);
 
     return () => {
       sock.listeners.delete(listener);
+      setChatReady(false);
       if (sock.listeners.size === 0) scheduleClose(url, sock);
     };
   }, [roomId, token]);
+
+  return { chatReady };
 }
 
 /** Send a typed message to the control plane over the room WebSocket. */

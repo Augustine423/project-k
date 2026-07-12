@@ -1,0 +1,57 @@
+# Static frontend — built in CI with empty VITE_API_URL (same-origin via Gateway).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kzys-web
+  namespace: kzys
+  labels:
+    app: kzys-web
+    app.kubernetes.io/part-of: project-k
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kzys-web
+  template:
+    metadata:
+      labels:
+        app: kzys-web
+    spec:
+      containers:
+        - name: web
+          image: kyawzayarsoe/project-k-web:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-web
+  namespace: kzys
+  labels:
+    app: kzys-web
+spec:
+  selector:
+    app: kzys-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
