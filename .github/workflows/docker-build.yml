@@ -20,6 +20,16 @@ jobs:
             file: ./server/Dockerfile
             target: ""
             build-args: ""
+          - service: livekit
+            context: ./media/livekit
+            file: ./media/livekit/Dockerfile
+            target: ""
+            build-args: ""
+          - service: coturn
+            context: ./media/coturn
+            file: ./media/coturn/Dockerfile
+            target: ""
+            build-args: ""
           # Web: Vite bakes VITE_* at image build time only.
           # Leave VITE_API_URL empty so the browser uses same-origin routing
           # through the GKE Gateway (HTTPS /api, /ws). LiveKit URL comes from

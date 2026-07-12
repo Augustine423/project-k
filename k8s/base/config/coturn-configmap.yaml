@@ -11,7 +11,7 @@ data:
     tls-listening-port=5349
     use-auth-secret
     min-port=20000
-    max-port=20050
+    max-port=29000
     no-tls
     no-dtls
     fingerprint
