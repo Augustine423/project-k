@@ -86,6 +86,31 @@ export function kickParticipant(roomId: string, token: string, participantId: st
   });
 }
 
+export function leaveRoom(roomId: string, token: string): Promise<void> {
+  return request(`/api/rooms/${roomId}/leave`, {
+    method: "POST",
+    headers: authHeader(token),
+  });
+}
+
+export interface MediaPresenceInput {
+  publishing: boolean;
+  audio: boolean;
+  video: boolean;
+}
+
+export function reportMediaPresence(
+  roomId: string,
+  token: string,
+  state: MediaPresenceInput,
+): Promise<{ mode: string; listenerOnly: boolean }> {
+  return request(`/api/rooms/${roomId}/media`, {
+    method: "POST",
+    headers: authHeader(token),
+    body: JSON.stringify(state),
+  });
+}
+
 export function wsUrlFor(roomId: string, token: string): string {
   if (!API_URL) {
     const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -94,5 +119,3 @@ export function wsUrlFor(roomId: string, token: string): string {
   const base = API_URL.replace(/^http/, "ws");
   return `${base}/ws/rooms/${roomId}?token=${encodeURIComponent(token)}`;
 }
-
-export const LIVEKIT_URL = import.meta.env.VITE_LIVEKIT_URL ?? "ws://localhost:7880";

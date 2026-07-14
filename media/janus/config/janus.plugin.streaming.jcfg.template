@@ -1,0 +1,12 @@
+# Mountpoints are created dynamically by the control plane's webinar
+# fan-out logic (server/src/webinar): when a publisher goes on stage in a
+# broadcast room, we rtp_forward their stream from the VideoRoom on the
+# "stage" node into a Streaming-plugin mountpoint here on an "edge" node,
+# and viewers subscribe read-only to that mountpoint instead of joining
+# the VideoRoom directly. This is what lets one broadcast fan out across
+# many edge nodes without limit.
+general: {
+    admin_key = "${JANUS_VIDEOROOM_ADMIN_KEY}"
+    rtp_port_range = "${JANUS_STREAMING_PORT_RANGE}"
+    string_ids = true
+}

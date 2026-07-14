@@ -1,14 +1,15 @@
 import { Link } from "react-router-dom";
+import { BrandLogo } from "../components/BrandLogo";
 
 export function HomePage() {
   return (
     <div className="page landing">
       <header className="landing-hero">
-        <p className="eyebrow">Project K</p>
-        <h1>Symmetrical video meetings on LiveKit</h1>
+        <BrandLogo size={48} />
+        <h1>Video meetings that just work</h1>
         <p className="subtitle">
-          KZYS Phase A — Join Never Fails. Multiparty SFU with TURN fallback, adaptive bitrate,
-          and audio-first join on constrained networks.
+          Project-K multiparty SFU on Janus — lightweight WebRTC video meetings with TURN
+          for mobile and constrained networks.
         </p>
         <div className="landing-actions">
           <Link className="btn btn-primary" to="/create">
@@ -22,11 +23,11 @@ export function HomePage() {
       <section className="card-grid">
         <article className="card">
           <h2>Multiparty SFU</h2>
-          <p>Up to 10 participants per room for current testing — camera, mic, and screen share.</p>
+          <p>Up to 50 participants — auto-switches to webinar mode for large audiences.</p>
         </article>
         <article className="card">
           <h2>Host controls</h2>
-          <p>Lock the room, remove participants, end the meeting, and chat over WebSocket.</p>
+          <p>Lock the room, remove participants, end the meeting, and chat in real time.</p>
         </article>
       </section>
     </div>

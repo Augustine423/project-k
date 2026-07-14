@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ApiRequestError, createRoom } from "../api/client";
 import { saveTicket } from "../api/ticketStore";
+import { BrandLogo } from "../components/BrandLogo";
 
 const MAX_TEST_USERS = 10;
 
@@ -38,9 +39,10 @@ export function CreateRoomPage() {
         ← Back
       </Link>
       <form className="form-card" onSubmit={onSubmit}>
+        <BrandLogo size={40} showText={false} />
         <h1>Create meeting</h1>
         <p className="form-hint">
-          Symmetrical multiparty video — everyone publishes camera and microphone via LiveKit SFU.
+          Symmetrical multiparty video — direct WebRTC via Janus VideoRoom SFU.
         </p>
         <label>
           Your name

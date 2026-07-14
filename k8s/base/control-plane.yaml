@@ -1,4 +1,5 @@
-# Go control plane — runtime env from ConfigMap + Secret (never baked in Docker image).
+# C# ASP.NET control plane — room registry, Janus provisioning, Redis-backed WebSocket hub.
+# Stateless: chat/events fan out via Redis pub/sub — no Gateway sticky sessions required.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,7 +20,8 @@ spec:
     spec:
       containers:
         - name: api
-          image: kyawzayarsoe/project-k-server:latest
+          # C# backend image — built from backend-csharp/Dockerfile
+          image: kyawzayarsoe/project-k-csharp:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 4000
@@ -28,33 +30,26 @@ spec:
               value: "4000"
             - name: REDIS_URL
               value: redis://redis.kzys.svc.cluster.local:6379
-            - name: LIVEKIT_INTERNAL_URL
-              value: ws://livekit.kzys.svc.cluster.local:7880
             - name: JWT_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
                   name: kzys-secrets
                   key: JWT_SIGNING_SECRET
-            - name: LIVEKIT_API_KEY
-              valueFrom:
-                secretKeyRef:
-                  name: kzys-secrets
-                  key: LIVEKIT_API_KEY
-            - name: LIVEKIT_API_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: kzys-secrets
-                  key: LIVEKIT_API_SECRET
             - name: TURN_SHARED_SECRET
               valueFrom:
                 secretKeyRef:
                   name: kzys-secrets
                   key: TURN_SHARED_SECRET
-            - name: LIVEKIT_URL
+            - name: JANUS_ADMIN_SECRET
               valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: LIVEKIT_URL
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: JANUS_ADMIN_SECRET
+            - name: JANUS_VIDEOROOM_ADMIN_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: JANUS_VIDEOROOM_ADMIN_KEY
             - name: CORS_ORIGIN
               valueFrom:
                 configMapKeyRef:
@@ -85,28 +80,62 @@ spec:
                 configMapKeyRef:
                   name: kzys-app-config
                   key: MAX_ROOM_PARTICIPANTS
+            - name: WEBINAR_ENTER_LISTENERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: WEBINAR_ENTER_LISTENERS
+            - name: WEBINAR_ENTER_RATIO
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: WEBINAR_ENTER_RATIO
+            - name: WEBINAR_EXIT_LISTENERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: WEBINAR_EXIT_LISTENERS
+            - name: INTERACTIVE_MAX_PUBLISHERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: INTERACTIVE_MAX_PUBLISHERS
+            - name: WEBINAR_MAX_PUBLISHERS
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: WEBINAR_MAX_PUBLISHERS
             - name: SERVICE_NAME
               valueFrom:
                 configMapKeyRef:
                   name: kzys-app-config
                   key: SERVICE_NAME
+            - name: JANUS_NODES
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: JANUS_NODES
           livenessProbe:
             httpGet:
               path: /health
               port: 4000
+            initialDelaySeconds: 15
             periodSeconds: 15
+            timeoutSec: 5
           readinessProbe:
             httpGet:
               path: /ready
               port: 4000
+            initialDelaySeconds: 10
             periodSeconds: 5
+            timeoutSec: 3
           resources:
             requests:
-              cpu: 50m
-              memory: 64Mi
+              cpu: 100m
+              memory: 128Mi
             limits:
-              cpu: 500m
-              memory: 256Mi
+              cpu: 1000m
+              memory: 512Mi
 ---
 apiVersion: v1
 kind: Service
@@ -122,3 +151,31 @@ spec:
     - name: http
       port: 4000
       targetPort: 4000
+---
+# HPA: scale 1→10 replicas based on CPU.
+# WebSocket chat is Redis-backed — any replica can serve any connection.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: kzys-control-plane-hpa
+  namespace: kzys
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: kzys-control-plane
+  minReplicas: 1
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 70

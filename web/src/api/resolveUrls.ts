@@ -23,40 +23,40 @@ export function clientReachableHost(): string {
   return window.location.hostname;
 }
 
-function devProxiedLiveKitUrl(): string | null {
+function devProxiedJanusUrl(): string | null {
   if (!import.meta.env.DEV || typeof window === "undefined") return null;
   const wsProto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${wsProto}//${window.location.host}/livekit`;
+  return `${wsProto}//${window.location.host}/janus`;
 }
 
-/** Rewrite loopback LiveKit / TURN URLs so mobile clients on the LAN can connect. */
+/** Rewrite loopback Janus / TURN URLs so mobile clients on the LAN can connect. */
 export function resolveJoinTicketMedia(
   ticket: JoinTicket,
-): Pick<JoinTicket, "livekitUrl" | "iceServers"> {
-  const proxied = devProxiedLiveKitUrl();
+): Pick<JoinTicket, "janusWsUrl" | "turn"> {
+  const proxied = devProxiedJanusUrl();
   const host = clientReachableHost();
 
   if (proxied) {
     return {
-      livekitUrl: proxied,
-      iceServers: isLoopbackHost(host)
-        ? ticket.iceServers
-        : ticket.iceServers?.map((server) => ({
-            ...server,
-            urls: server.urls.map((url) => rewriteHost(url, host)),
-          })),
+      janusWsUrl: proxied,
+      turn: isLoopbackHost(host)
+        ? ticket.turn
+        : {
+            ...ticket.turn,
+            urls: ticket.turn.urls.map((url) => rewriteHost(url, host)),
+          },
     };
   }
 
   if (isLoopbackHost(host)) {
-    return { livekitUrl: ticket.livekitUrl, iceServers: ticket.iceServers };
+    return { janusWsUrl: ticket.janusWsUrl, turn: ticket.turn };
   }
 
   return {
-    livekitUrl: rewriteHost(ticket.livekitUrl, host),
-    iceServers: ticket.iceServers?.map((server) => ({
-      ...server,
-      urls: server.urls.map((url) => rewriteHost(url, host)),
-    })),
+    janusWsUrl: rewriteHost(ticket.janusWsUrl, host),
+    turn: {
+      ...ticket.turn,
+      urls: ticket.turn.urls.map((url) => rewriteHost(url, host)),
+    },
   };
 }

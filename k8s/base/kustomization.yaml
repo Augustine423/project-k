@@ -4,13 +4,14 @@ namespace: kzys
 resources:
   - namespace.yaml
   - config/app-configmap.yaml
-  - config/livekit-configmap.yaml
   - config/coturn-configmap.yaml
   - redis.yaml
   - coturn.yaml
-  - livekit.yaml
+  - janus.yaml
+  - media-core.yaml
   - control-plane.yaml
   - web.yaml
   - gateway/gateway.yaml
   - gateway/httproutes.yaml
   - gateway/healthchecks.yaml
+  - ../keda/scaledobjects.yaml

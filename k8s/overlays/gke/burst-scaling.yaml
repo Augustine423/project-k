@@ -1,0 +1,29 @@
+# GKE burst scaling notes for Project-K media tier.
+#
+# GKE Autopilot (recommended):
+#   - No NodePool manifest needed — Autopilot adds nodes when Janus pods
+#     request higher CPU (see janus.yaml limits: 2000m–4000m).
+#   - Ensure Janus StatefulSet resource requests are honest so Autopilot
+#     can scale the node pool before OOM/throttling.
+#
+# GKE Standard + Node auto-provisioning:
+#   - Enable cluster autoscaling on your node pool with max nodes ≥ 20.
+#   - KEDA ScaledObject (keda/scaledobjects.yaml) drives Janus replica count
+#     from kzys:total_node_load and kzys:webinar_rooms Redis keys.
+#
+# Optional Karpenter (AWS EKS only):
+#   - Apply karpenter-nodepool.yaml on EKS clusters with Karpenter installed.
+#   - Do NOT apply on GKE — use this file as documentation instead.
+#
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-burst-scaling-notes
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  README: |
+    Janus scales 1→20 pods via KEDA on kzys:total_node_load.
+    Webinar rooms add weight via kzys:webinar_rooms (2× load per webinar room).
+    media-core C++ service writes both metrics from Redis room state.

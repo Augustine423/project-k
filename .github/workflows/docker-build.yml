@@ -1,49 +1,63 @@
-name: Build and Push Docker Images
+name: Build · Push · Deploy
 
 on:
   push:
+    branches: [main, master]
+  pull_request:
     branches: [main, master]
 
 env:
   REGISTRY: docker.io
   IMAGE_PREFIX: kyawzayarsoe/project-k
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - service: server
-            context: ./server
-            file: ./server/Dockerfile
-            target: ""
-            build-args: ""
-          - service: livekit
-            context: ./media/livekit
-            file: ./media/livekit/Dockerfile
-            target: ""
-            build-args: ""
-          - service: coturn
-            context: ./media/coturn
-            file: ./media/coturn/Dockerfile
-            target: ""
-            build-args: ""
-          # Web: Vite bakes VITE_* at image build time only.
-          # Leave VITE_API_URL empty so the browser uses same-origin routing
-          # through the GKE Gateway (HTTPS /api, /ws). LiveKit URL comes from
-          # the join ticket (server runtime LIVEKIT_URL), not the web image.
-          - service: web
-            context: ./web
-            file: ./web/Dockerfile
-            target: production
-            build-args: |
-              VITE_API_URL=
+# Cancel in-progress runs on the same branch so a fast follow-up push
+# doesn't queue behind a slow build.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
+# ── Change detection ──────────────────────────────────────────────────────────
+# Each service job only runs when its source files actually changed.
+# A K8s-only change skips all Docker builds and goes straight to deploy.
+jobs:
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      csharp:  ${{ steps.filter.outputs.csharp }}
+      janus:   ${{ steps.filter.outputs.janus }}
+      media-core: ${{ steps.filter.outputs.media-core }}
+      coturn:  ${{ steps.filter.outputs.coturn }}
+      web:     ${{ steps.filter.outputs.web }}
+      k8s:     ${{ steps.filter.outputs.k8s }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            csharp:
+              - 'backend-csharp/**'
+            janus:
+              - 'media/janus/**'
+            coturn:
+              - 'media/coturn/**'
+              - 'infra/coturn/**'
+            web:
+              - 'web/**'
+            media-core:
+              - 'media-core/**'
+            k8s:
+              - 'k8s/**'
+
+  # ── C# backend ──────────────────────────────────────────────────────────────
+  build-csharp:
+    name: Build C# control plane
+    needs: changes
+    if: needs.changes.outputs.csharp == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -54,17 +68,233 @@ jobs:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
-      - name: Build and push ${{ matrix.service }}
+      - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: ${{ matrix.context }}
-          file: ${{ matrix.file }}
-          push: true
+          context: .
+          file: ./backend-csharp/Dockerfile
+          push: ${{ github.event_name == 'push' }}
           platforms: linux/amd64
           tags: |
-            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:latest
-            ${{ env.IMAGE_PREFIX }}-${{ matrix.service }}:${{ github.sha }}
-          build-args: ${{ matrix.build-args }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          target: ${{ matrix.target }}
+            ${{ env.IMAGE_PREFIX }}-csharp:latest
+            ${{ env.IMAGE_PREFIX }}-csharp:${{ github.sha }}
+          cache-from: type=gha,scope=csharp
+          cache-to: type=gha,mode=max,scope=csharp
+
+  # ── Janus WebRTC Gateway ─────────────────────────────────────────────────────
+  build-janus:
+    name: Build Janus media server
+    needs: changes
+    if: needs.changes.outputs.janus == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./media/janus
+          file: ./media/janus/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-janus:latest
+            ${{ env.IMAGE_PREFIX }}-janus:${{ github.sha }}
+          cache-from: type=gha,scope=janus
+          cache-to: type=gha,mode=max,scope=janus
+          # Janus build is slow (compiles from source) — cache aggressively
+          build-args: |
+            JANUS_VERSION=v1.4.1
+
+  # ── C++ media-core (Janus orchestrator) ────────────────────────────────────
+  build-media-core:
+    name: Build C++ media-core
+    needs: changes
+    if: needs.changes.outputs.media-core == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./media-core
+          file: ./media-core/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-media-core:latest
+            ${{ env.IMAGE_PREFIX }}-media-core:${{ github.sha }}
+          cache-from: type=gha,scope=media-core
+          cache-to: type=gha,mode=max,scope=media-core
+
+  # ── coturn TURN server ───────────────────────────────────────────────────────
+  build-coturn:
+    name: Build coturn
+    needs: changes
+    if: needs.changes.outputs.coturn == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./media/coturn
+          file: ./media/coturn/Dockerfile
+          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-coturn:latest
+            ${{ env.IMAGE_PREFIX }}-coturn:${{ github.sha }}
+          cache-from: type=gha,scope=coturn
+          cache-to: type=gha,mode=max,scope=coturn
+
+  # ── React web frontend ───────────────────────────────────────────────────────
+  build-web:
+    name: Build web frontend
+    needs: changes
+    if: needs.changes.outputs.web == 'true' || github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ./web
+          file: ./web/Dockerfile
+          target: production
+          push: ${{ github.event_name == 'push' }}
+          platforms: linux/amd64
+          tags: |
+            ${{ env.IMAGE_PREFIX }}-web:latest
+            ${{ env.IMAGE_PREFIX }}-web:${{ github.sha }}
+          # VITE_API_URL empty = same-origin routing through GKE Gateway.
+          build-args: |
+            VITE_API_URL=
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,mode=max,scope=web
+
+  # ── Deploy to GKE ────────────────────────────────────────────────────────────
+  # Only runs on push to main/master (not on PRs).
+  # Waits for all build jobs to finish (skipped jobs count as success).
+  # Rolls out only the images that were actually rebuilt this run.
+  deploy:
+    name: Deploy to GKE
+    needs: [changes, build-csharp, build-janus, build-media-core, build-coturn, build-web]
+    # Run on push only, and only if at least one build succeeded or K8s changed
+    if: |
+      github.event_name == 'push' && (
+        needs.changes.outputs.csharp == 'true' ||
+        needs.changes.outputs.janus  == 'true' ||
+        needs.changes.outputs.media-core == 'true' ||
+        needs.changes.outputs.coturn == 'true' ||
+        needs.changes.outputs.web    == 'true' ||
+        needs.changes.outputs.k8s    == 'true'
+      )
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud + kubectl
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Get GKE credentials
+        run: |
+          gcloud container clusters get-credentials ${{ secrets.GKE_CLUSTER_NAME }} \
+            --region ${{ secrets.GKE_REGION }} \
+            --project ${{ secrets.GCP_PROJECT_ID }}
+
+      - name: Apply K8s base manifests (config, namespace, services)
+        run: kubectl apply -k k8s/base
+
+      # Rolling update: only patch the images that changed this run.
+      # Unchanged images keep their current running version — no unnecessary restarts.
+
+      - name: Roll out C# control plane
+        if: needs.changes.outputs.csharp == 'true'
+        run: |
+          kubectl set image deployment/kzys-control-plane \
+            api=${{ env.IMAGE_PREFIX }}-csharp:${{ github.sha }} \
+            -n kzys
+          kubectl rollout status deployment/kzys-control-plane -n kzys --timeout=120s
+
+      - name: Roll out Janus
+        if: needs.changes.outputs.janus == 'true'
+        run: |
+          kubectl set image statefulset/janus \
+            janus=${{ env.IMAGE_PREFIX }}-janus:${{ github.sha }} \
+            -n kzys
+          kubectl rollout status statefulset/janus -n kzys --timeout=180s
+
+      - name: Roll out media-core
+        if: needs.changes.outputs.media-core == 'true'
+        run: |
+          kubectl set image deployment/kzys-media-core \
+            media-core=${{ env.IMAGE_PREFIX }}-media-core:${{ github.sha }} \
+            -n kzys
+          kubectl rollout status deployment/kzys-media-core -n kzys --timeout=120s
+
+      - name: Roll out coturn
+        if: needs.changes.outputs.coturn == 'true'
+        run: |
+          kubectl set image deployment/coturn \
+            coturn=${{ env.IMAGE_PREFIX }}-coturn:${{ github.sha }} \
+            -n kzys
+          kubectl rollout status deployment/coturn -n kzys --timeout=60s
+
+      - name: Roll out web frontend
+        if: needs.changes.outputs.web == 'true'
+        run: |
+          kubectl set image deployment/kzys-web \
+            web=${{ env.IMAGE_PREFIX }}-web:${{ github.sha }} \
+            -n kzys
+          kubectl rollout status deployment/kzys-web -n kzys --timeout=60s
+
+      - name: Verify all pods healthy
+        run: kubectl get pods -n kzys

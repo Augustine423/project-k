@@ -43,26 +43,3 @@ spec:
     group: ""
     kind: Service
     name: kzys-web
----
-apiVersion: networking.gke.io/v1
-kind: HealthCheckPolicy
-metadata:
-  name: livekit-hc
-  namespace: kzys
-  labels:
-    app.kubernetes.io/part-of: project-k
-spec:
-  default:
-    checkIntervalSec: 10
-    timeoutSec: 5
-    healthyThreshold: 1
-    unhealthyThreshold: 3
-    config:
-      type: HTTP
-      httpHealthCheck:
-        requestPath: /
-        port: 7880
-  targetRef:
-    group: ""
-    kind: Service
-    name: livekit

@@ -1,4 +1,5 @@
-# Path-based routing on APP_HOST — same origin for web, API, chat WS, LiveKit signaling.
+# Path-based routing on APP_HOST via GKE Gateway (ALB).
+# All traffic arrives at the Gateway; routes forward to the right service.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
@@ -15,6 +16,7 @@ spec:
   hostnames:
     - app.CHANGE_ME.example.com
   rules:
+    # REST API
     - matches:
         - path:
             type: PathPrefix
@@ -22,6 +24,7 @@ spec:
       backendRefs:
         - name: kzys-control-plane
           port: 4000
+    # Room WebSocket (presence / chat / host controls)
     - matches:
         - path:
             type: PathPrefix
@@ -29,6 +32,15 @@ spec:
       backendRefs:
         - name: kzys-control-plane
           port: 4000
+    # SignalR hub (C# realtime events — used by RoomEventHub)
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /meetinghub
+      backendRefs:
+        - name: kzys-control-plane
+          port: 4000
+    # Health / readiness probes (also used by GKE health check policy)
     - matches:
         - path:
             type: PathPrefix
@@ -44,10 +56,12 @@ spec:
         - name: kzys-control-plane
           port: 4000
 ---
+# Janus WebSocket signaling — browser connects here for WebRTC negotiation.
+# The Gateway strips /janus prefix and forwards to Janus WS port 8188.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:
-  name: kzys-livekit
+  name: kzys-janus
   namespace: kzys
   labels:
     app.kubernetes.io/part-of: project-k
@@ -63,7 +77,7 @@ spec:
     - matches:
         - path:
             type: PathPrefix
-            value: /livekit
+            value: /janus
       filters:
         - type: URLRewrite
           urlRewrite:
@@ -71,9 +85,10 @@ spec:
               type: ReplacePrefixMatch
               replacePrefixMatch: /
       backendRefs:
-        - name: livekit
-          port: 7880
+        - name: janus
+          port: 8188
 ---
+# Static web frontend — catch-all, must be last.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

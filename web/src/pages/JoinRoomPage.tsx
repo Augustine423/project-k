@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiRequestError, joinRoom } from "../api/client";
 import { saveTicket } from "../api/ticketStore";
+import { BrandLogo } from "../components/BrandLogo";
 
 export function JoinRoomPage() {
   const { roomId: routeRoomId } = useParams();
@@ -37,6 +38,7 @@ export function JoinRoomPage() {
         ← Back
       </Link>
       <form className="form-card" onSubmit={onSubmit}>
+        <BrandLogo size={40} showText={false} />
         <h1>Join meeting</h1>
         <label>
           Room ID

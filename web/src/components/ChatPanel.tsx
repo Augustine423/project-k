@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { ChatIcon } from "./MediaIcons";
 
 export interface ChatMessage {
   id: string;
@@ -12,9 +13,34 @@ interface ChatPanelProps {
   onSend: (message: string) => void;
   disabled?: boolean;
   disabledHint?: string;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
+  selfName?: string;
 }
 
-export function ChatPanel({ messages, onSend, disabled, disabledHint }: ChatPanelProps) {
+function formatTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
+function avatarInitials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+export function ChatPanel({
+  messages,
+  onSend,
+  disabled,
+  disabledHint,
+  collapsed = false,
+  onToggleCollapse,
+  selfName,
+}: ChatPanelProps) {
   const [draft, setDraft] = useState("");
 
   function submit(e: React.FormEvent) {
@@ -26,28 +52,63 @@ export function ChatPanel({ messages, onSend, disabled, disabledHint }: ChatPane
   }
 
   return (
-    <aside className="chat-panel">
-      <h3>Chat</h3>
-      <div className="chat-messages">
-        {messages.length === 0 && <p className="chat-empty">No messages yet.</p>}
-        {messages.map((msg) => (
-          <div key={msg.id} className="chat-message">
-            <strong>{msg.displayName}:</strong> {msg.message}
+    <section className={`side-panel chat-panel ${collapsed ? "collapsed" : ""}`}>
+      <button
+        type="button"
+        className="side-panel-header"
+        onClick={onToggleCollapse}
+        aria-expanded={!collapsed}
+      >
+        <span className="side-panel-title">
+          <ChatIcon size={18} />
+          Chat
+        </span>
+        <span className="side-panel-chevron" aria-hidden="true">
+          {collapsed ? "▾" : "▴"}
+        </span>
+      </button>
+      {!collapsed && (
+        <div className="side-panel-body chat-panel-body">
+          <div className="chat-messages">
+            {messages.length === 0 && <p className="chat-empty">No messages yet.</p>}
+            {messages.map((msg) => {
+              const isSelf = selfName && msg.displayName === selfName;
+              return (
+                <div
+                  key={msg.id}
+                  className={`chat-bubble-row ${isSelf ? "self" : "other"}`}
+                >
+                  {!isSelf && (
+                    <span className="chat-avatar" aria-hidden="true">
+                      {avatarInitials(msg.displayName)}
+                    </span>
+                  )}
+                  <div className="chat-bubble">
+                    {!isSelf && <span className="chat-sender">{msg.displayName}</span>}
+                    <p className="chat-text">{msg.message}</p>
+                    <time className="chat-time" dateTime={msg.at}>
+                      {formatTime(msg.at)}
+                    </time>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </div>
-      <form className="chat-form" onSubmit={submit}>
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          placeholder={disabled ? (disabledHint ?? "Chat unavailable") : "Type a message"}
-          disabled={disabled}
-          maxLength={500}
-        />
-        <button type="submit" disabled={disabled || !draft.trim()}>
-          Send
-        </button>
-      </form>
-    </aside>
+          <form className="chat-form" onSubmit={submit}>
+            <input
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={disabled ? (disabledHint ?? "Chat unavailable") : "Type a message…"}
+              disabled={disabled}
+              maxLength={500}
+              aria-label="Chat message"
+            />
+            <button type="submit" disabled={disabled || !draft.trim()} aria-label="Send message">
+              ➤
+            </button>
+          </form>
+        </div>
+      )}
+    </section>
   );
 }

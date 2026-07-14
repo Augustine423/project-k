@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 
 const proxyTarget = process.env.VITE_PROXY_TARGET ?? "http://server:4000";
-const livekitTarget = process.env.VITE_LIVEKIT_PROXY_TARGET ?? "http://livekit:7880";
+const janusTarget = process.env.VITE_JANUS_PROXY_TARGET ?? "http://janus:8188";
 
 export default defineConfig({
   plugins: [react(), basicSsl()],
@@ -13,13 +13,12 @@ export default defineConfig({
     proxy: {
       "/api": { target: proxyTarget, changeOrigin: true },
       "/ws": { target: proxyTarget, ws: true, changeOrigin: true },
-      // LiveKit signaling (WS + HTTP validate) through the Vite dev server so
-      // phones on the LAN never need to reach localhost:7880 directly.
-      "/livekit": {
-        target: livekitTarget,
+      // Janus WebSocket signaling through Vite dev server for LAN/mobile testing.
+      "/janus": {
+        target: janusTarget,
         changeOrigin: true,
         ws: true,
-        rewrite: (path) => path.replace(/^\/livekit/, ""),
+        rewrite: (path) => path.replace(/^\/janus/, ""),
       },
     },
   },

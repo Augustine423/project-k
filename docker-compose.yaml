@@ -14,6 +14,40 @@ services:
       timeout: 3s
       retries: 5
 
+  janus:
+    build:
+      context: ./media/janus
+    restart: unless-stopped
+    environment:
+      JANUS_NODE_ID: janus-1
+      STUN_SERVER: ${STUN_SERVER}
+      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
+      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
+      JANUS_CORS_ORIGIN: "*"
+      JANUS_RTP_PORT_RANGE: "10000-10200"
+      JANUS_STREAMING_PORT_RANGE: "15000-15200"
+    ports:
+      - "${JANUS_HTTP_PORT}:8088"
+      - "${JANUS_ADMIN_PORT}:7088"
+      - "${JANUS_WS_PORT}:8188"
+      - "10000-10200:10000-10200/udp"
+      - "15000-15200:15000-15200/udp"
+
+  media-core:
+    build:
+      context: ./media-core
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      janus:
+        condition: service_started
+    environment:
+      REDIS_URL: redis://redis:6379
+      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
+      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT}"
+      MEDIA_CORE_POLL_MS: "1000"
+
   coturn:
     image: coturn/coturn:4.6.2
     restart: unless-stopped
@@ -22,6 +56,7 @@ services:
       - "/etc/coturn/turnserver.conf"
       - "--realm=${TURN_REALM}"
       - "--static-auth-secret=${TURN_SHARED_SECRET}"
+      - "--external-ip=${PUBLIC_HOST}"
     volumes:
       - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
     ports:
@@ -29,55 +64,44 @@ services:
       - "${TURN_PORT}:3478/udp"
       - "20000-20200:20000-20200/udp"
 
-  livekit:
-    image: livekit/livekit-server:v1.9.12
-    restart: unless-stopped
-    command: ["--config", "/etc/livekit.yaml"]
-    environment:
-      NODE_IP: ${PUBLIC_HOST}
-    depends_on:
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./infra/livekit/livekit.yaml:/etc/livekit.yaml:ro
-    ports:
-      - "${LIVEKIT_HTTP_PORT}:7880"
-      - "${LIVEKIT_RTC_TCP_PORT}:7881"
-      - "51000-51030:51000-51030/udp"
-
   server:
     build:
-      context: ./server
+      context: .
+      dockerfile: backend-csharp/Dockerfile
     restart: unless-stopped
     depends_on:
       redis:
         condition: service_healthy
-      livekit:
+      janus:
         condition: service_started
     environment:
       PORT: 4000
       REDIS_URL: redis://redis:6379
       JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-      LIVEKIT_URL: "${LIVEKIT_PUBLIC_URL}"
-      LIVEKIT_INTERNAL_URL: "ws://livekit:7880"
-      MAX_ROOM_PARTICIPANTS: "10"
-      CORS_ORIGIN: "${CORS_ORIGIN}"
       TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
       TURN_HOST: ${PUBLIC_HOST}
       TURN_PORT: ${TURN_PORT}
       TURN_TLS_PORT: ${TURN_TLS_PORT}
       TURN_USE_TLS: ${TURN_USE_TLS}
+      MAX_ROOM_PARTICIPANTS: "50"
+      WEBINAR_ENTER_LISTENERS: "12"
+      WEBINAR_ENTER_RATIO: "2.0"
+      WEBINAR_EXIT_LISTENERS: "8"
+      INTERACTIVE_MAX_PUBLISHERS: "50"
+      WEBINAR_MAX_PUBLISHERS: "8"
+      CORS_ORIGIN: "${CORS_ORIGIN}"
       SERVICE_NAME: kzys-control-plane
+      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT}"
+      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
+      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
     ports:
       - "${SERVER_PORT}:4000"
     healthcheck:
-      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:4000/ready"]
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/ready"]
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 5s
+      start_period: 10s
 
   web:
     build:
@@ -89,9 +113,8 @@ services:
         condition: service_healthy
     environment:
       VITE_API_URL: "${PUBLIC_API_URL}"
-      VITE_LIVEKIT_URL: "${LIVEKIT_PUBLIC_URL}"
       VITE_PROXY_TARGET: "http://server:4000"
-      VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
+      VITE_JANUS_PROXY_TARGET: "http://janus:8188"
     ports:
       - "${WEB_PORT}:5173"
     volumes:
