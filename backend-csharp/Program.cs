@@ -29,12 +29,8 @@ builder.Services.AddSingleton<JwtTokenService>(_ => new JwtTokenService(config.J
 builder.Services.AddSingleton<TurnCredentialService>(_ =>
     new TurnCredentialService(config.TurnSharedSecret, config.TurnHost, config.TurnPort, config.TurnTlsPort, config.TurnUseTls));
 
-var janusAdmins = config.JanusNodes.ToDictionary(
-    n => n.Id,
-    n => new JanusAdminClient(n.AdminUrl, config.JanusAdminSecret));
-builder.Services.AddSingleton(janusAdmins);
-builder.Services.AddSingleton<JanusNodeRouter>(sp =>
-    new JanusNodeRouter(config.JanusNodes, sp.GetRequiredService<ControlPlaneStore>()));
+builder.Services.AddSingleton<LiveKitTokenService>(_ =>
+    new LiveKitTokenService(config.LiveKitApiKey, config.LiveKitApiSecret));
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<RoomModeService>();
 builder.Services.AddSingleton<RoomEventHub>();

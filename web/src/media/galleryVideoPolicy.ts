@@ -71,7 +71,16 @@ export const GALLERY_VIDEO_TIERS: readonly GalleryVideoTier[] = [
     mediumSlots: 4,
     lowSlots: 20,
     estDownloadMbps: { min: 4, max: 10 },
-    label: "Max (50–200)",
+    label: "Large (50–200)",
+  },
+  {
+    maxRoomSize: 10_000,
+    videosPerPage: 25,
+    hdSlots: 1,
+    mediumSlots: 4,
+    lowSlots: 20,
+    estDownloadMbps: { min: 4, max: 10 },
+    label: "Unlimited (200+)",
   },
 ] as const;
 

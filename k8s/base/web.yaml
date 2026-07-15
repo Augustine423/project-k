@@ -70,7 +70,7 @@ spec:
     kind: Deployment
     name: kzys-web
   minReplicas: 1
-  maxReplicas: 5
+  maxReplicas: 10
   metrics:
     - type: Resource
       resource:

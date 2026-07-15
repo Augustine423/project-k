@@ -55,6 +55,8 @@ public static class MediaHostHelper
 {
     public static string FromRequest(HttpRequest request, string configuredHost)
     {
+        // Prefer Origin / Host so LAN phone clients get LiveKit/TURN on the Wi‑Fi IP,
+        // not loopback (localhost is unreachable from other devices).
         if (!string.IsNullOrWhiteSpace(request.Headers.Origin))
         {
             if (Uri.TryCreate(request.Headers.Origin!, UriKind.Absolute, out var origin))
@@ -64,6 +66,11 @@ public static class MediaHostHelper
                     return host;
             }
         }
+
+        var reqHost = request.Host.Host;
+        if (!string.IsNullOrWhiteSpace(reqHost) && !IsLoopback(reqHost))
+            return reqHost;
+
         if (!string.IsNullOrWhiteSpace(configuredHost) && !IsLoopback(configuredHost))
             return configuredHost;
         return "";

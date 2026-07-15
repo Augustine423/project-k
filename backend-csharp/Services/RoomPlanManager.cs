@@ -14,6 +14,7 @@ public sealed class RoomPlanManager
     public const string Plus500 = "plus500";
     public const string Plus1000 = "plus1000";
     public const string Plus2000 = "plus2000";
+    public const string Plus10000 = "plus10000";
 
   // Margin model (USD) — baseline $60–100/mo shared across rooms + variable participant-hours.
     public const decimal MonthlyBaselineCostUsd = 70m;
@@ -180,6 +181,8 @@ public sealed class RoomPlanManager
             "Up to 1000 participants — $24.99 per room (24h)"),
         BuildCatalogPlan(Plus2000, "Plus 2000", 2000, 39.99m, true,
             "Up to 2000 participants — $39.99 per room (24h)"),
+        BuildCatalogPlan(Plus10000, "Plus 10000", 10000, 99.99m, true,
+            "Up to 10,000 participants (webinar-scale) — $99.99 per room (24h)"),
     ];
 
     /// <summary>

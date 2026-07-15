@@ -1,0 +1,16 @@
+# Advertise a reachable host IP for ICE (LAN/public). Override via --node-ip / LIVEKIT_NODE_IP.
+# Do not use 127.0.0.1 when phones or other devices join over Wi‑Fi.
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+  node_ip: 127.0.0.1
+  enable_loopback_candidate: true
+keys:
+  devkey: dev-livekit-local-secret-32chars-min
+logging:
+  level: info

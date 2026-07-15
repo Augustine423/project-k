@@ -1,10 +1,6 @@
 import { useMemo, useState } from "react";
 import type { Participant } from "../api/types";
 import { MicMutedSmall } from "./MediaIcons";
-import { VirtualScrollList } from "./VirtualScrollList";
-
-/** Matches .participant-row virtual scroll slot height in style.css */
-export const PARTICIPANT_ROW_HEIGHT = 48;
 
 interface ParticipantsPanelProps {
   participants: Participant[];
@@ -15,8 +11,6 @@ interface ParticipantsPanelProps {
   onToggleLock?: () => void;
   onKick?: (participantId: string) => void;
   hostBusy?: boolean;
-  /** Webinar audience UI — emphasize name list over video gallery. */
-  webinarMode?: boolean;
 }
 
 function avatarInitials(name: string): string {
@@ -46,7 +40,6 @@ export function ParticipantsPanel({
   onToggleLock,
   onKick,
   hostBusy,
-  webinarMode = false,
 }: ParticipantsPanelProps) {
   const [query, setQuery] = useState("");
 
@@ -64,11 +57,6 @@ export function ParticipantsPanel({
     return sorted.filter((p) => p.displayName.toLowerCase().includes(q));
   }, [sorted, query]);
 
-  const speakers = useMemo(
-    () => sorted.filter((p) => p.role === "host" || p.role === "cohost"),
-    [sorted],
-  );
-
   return (
     <section className={`side-panel participants-panel ${collapsed ? "collapsed" : ""}`}>
       <button
@@ -77,12 +65,7 @@ export function ParticipantsPanel({
         onClick={onToggleCollapse}
         aria-expanded={!collapsed}
       >
-        <span className="side-panel-title">
-          Participants ({participants.length})
-          {webinarMode && participants.length > 50 && (
-            <span className="participants-webinar-badge">Webinar</span>
-          )}
-        </span>
+        <span className="side-panel-title">Participants ({participants.length})</span>
         <span className="side-panel-chevron" aria-hidden="true">
           {collapsed ? "▾" : "▴"}
         </span>
@@ -117,18 +100,14 @@ export function ParticipantsPanel({
           <p className="participants-count-line muted">
             {query.trim()
               ? `${filtered.length} of ${participants.length}`
-              : webinarMode && speakers.length > 0
-                ? `${speakers.length} speakers · ${participants.length} total`
-                : `${participants.length} in meeting`}
+              : `${participants.length} in meeting`}
           </p>
-          <VirtualScrollList
-            items={filtered}
-            rowHeight={PARTICIPANT_ROW_HEIGHT}
-            rowKey={(p) => p.id}
-            className="participants-virtual-list"
-            empty={<p className="muted participants-empty">No matching participants.</p>}
-            renderRow={(p) => (
-              <div className="participant-row">
+          <ul className="participants-list" role="list">
+            {filtered.length === 0 && (
+              <li className="participants-empty muted">No matching participants.</li>
+            )}
+            {filtered.map((p) => (
+              <li key={p.id} className="participant-row">
                 <span className="participant-avatar" aria-hidden="true">
                   {avatarInitials(p.displayName)}
                 </span>
@@ -149,9 +128,9 @@ export function ParticipantsPanel({
                     </button>
                   )}
                 </span>
-              </div>
-            )}
-          />
+              </li>
+            ))}
+          </ul>
         </div>
       )}
     </section>

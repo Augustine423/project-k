@@ -19,17 +19,17 @@ data:
   SERVICE_NAME: "kzys-control-plane"
 
   # ── Room limits ────────────────────────────────────────────────────────────
-  # Light profile (2 vCPU / 4 GB single node, ~200 users audio+chat, camera off default):
-  #   one webinar room, 8 speakers + ~192 listeners, or several smaller rooms.
-  MAX_ROOM_PARTICIPANTS: "200"
+  # Scaled GKE profile: up to 10k joins per room (webinar-style audiences).
+  # Interactive still caps cam/mic publishers; large rooms auto-switch toward webinar.
+  MAX_ROOM_PARTICIPANTS: "10000"
 
   # ── Room mode auto-switch (interactive ↔ webinar) ─────────────────────────
-  # Switch to webinar early so most users are audio/chat listeners (light on CPU).
-  WEBINAR_ENTER_LISTENERS: "15"
+  # Flip to webinar before publisher pressure grows in large rooms.
+  WEBINAR_ENTER_LISTENERS: "45"
   WEBINAR_ENTER_RATIO: "2.0"
-  WEBINAR_EXIT_LISTENERS: "10"
-  INTERACTIVE_MAX_PUBLISHERS: "200"
-  WEBINAR_MAX_PUBLISHERS: "8"
+  WEBINAR_EXIT_LISTENERS: "20"
+  INTERACTIVE_MAX_PUBLISHERS: "50"
+  WEBINAR_MAX_PUBLISHERS: "16"
 
   # ── TURN / coturn ──────────────────────────────────────────────────────────
   # Set TURN_HOST to the NLB external IP created by coturn-nlb.yaml overlay.
@@ -39,16 +39,6 @@ data:
   TURN_USE_TLS: "false"
   TURN_REALM: "kzys"
 
-  # ── Janus media nodes ─────────────────────────────────────────────────────
-  # Format: nodeId|adminHttpURL|internalWsURL|publicWsURL
-  # Add more nodes separated by commas for horizontal scaling.
-  # internalWsURL  = in-cluster ClusterIP service (used by control plane)
-  # publicWsURL    = browser-facing URL (NLB IP or domain + path via Gateway)
-  #
-  # Single node example (expand with more janus-N entries as you scale):
-  JANUS_NODES: "janus-1|http://janus.kzys.svc.cluster.local:7088/admin|ws://janus.kzys.svc.cluster.local:8188|wss://app.CHANGE_ME.example.com/janus"
-
-  # ── Janus RTP port ranges ─────────────────────────────────────────────────
-  # Must match the ports exposed on the Janus NLB overlay.
-  JANUS_RTP_PORT_RANGE: "10000-11000"
-  JANUS_STREAMING_PORT_RANGE: "15000-15200"
+  # ── LiveKit SFU ────────────────────────────────────────────────────────────
+  LIVEKIT_PUBLIC_URL: "wss://app.CHANGE_ME.example.com/livekit"
+  LIVEKIT_RTC_UDP_PORT_RANGE: "50000-50100"

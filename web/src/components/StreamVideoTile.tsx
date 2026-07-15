@@ -2,32 +2,31 @@ import { useEffect, useRef } from "react";
 
 interface StreamVideoTileProps {
   stream: MediaStream | null;
+  /** When stream object is reused, bump this so track add/remove rebinds cleanly. */
+  trackSignature?: string;
   label: string;
   muted?: boolean;
   mirror?: boolean;
   isSpeaking?: boolean;
   /** When false, tile shows avatar but audio may still play (off-page / audio-only). */
   hasVideo?: boolean;
-  /** Show decoded WxH badge like Janus demo #curres (dev/quality check). */
+  /** Show decoded WxH badge (dev/quality check). */
   showStats?: boolean;
 }
 
-/** Same as Janus.attachMediaStream — element.srcObject = stream. */
 function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null) {
   try {
+    element.pause();
     element.srcObject = stream;
   } catch {
     /* legacy fallback unused on modern browsers */
   }
 }
 
-/**
- * Janus demo playback (mvideoroom.js):
- * - one <video> per video track, width 100%, rounded centered
- * - hidden <audio> for remote sound (local tile stays muted on video)
- */
+/** One video element per tile; hidden audio for remote sound. */
 export function StreamVideoTile({
   stream,
+  trackSignature = "",
   label,
   muted = false,
   mirror = false,
@@ -39,28 +38,44 @@ export function StreamVideoTile({
   const audioRef = useRef<HTMLAudioElement>(null);
   const statsRef = useRef<HTMLSpanElement>(null);
 
+  const videoTrack = stream?.getVideoTracks()[0] ?? null;
+  const audioTrack = stream?.getAudioTracks()[0] ?? null;
+  const videoTrackId = videoTrack?.id ?? "";
+  const audioTrackId = audioTrack?.id ?? "";
+
+  // Video bind — independent of audio so quality/layer changes don't restart sound.
   useEffect(() => {
     const videoEl = videoRef.current;
-    const audioEl = audioRef.current;
     if (!videoEl) return;
 
-    const videoTrack = stream?.getVideoTracks()[0] ?? null;
-    const audioTrack = stream?.getAudioTracks()[0] ?? null;
-
     const videoStream = videoTrack ? new MediaStream([videoTrack]) : null;
-    const audioStream = audioTrack && !muted ? new MediaStream([audioTrack]) : null;
-
     attachMediaStream(videoEl, videoStream);
-    if (audioEl) attachMediaStream(audioEl, audioStream);
+    if (videoStream) void videoEl.play().catch(() => undefined);
 
-    void videoEl.play().catch(() => undefined);
-    if (audioEl && audioStream) void audioEl.play().catch(() => undefined);
-
+    const onEnded = () => attachMediaStream(videoEl, null);
+    videoTrack?.addEventListener("ended", onEnded);
     return () => {
+      videoTrack?.removeEventListener("ended", onEnded);
       attachMediaStream(videoEl, null);
-      if (audioEl) attachMediaStream(audioEl, null);
     };
-  }, [stream, muted]);
+  }, [videoTrack, videoTrackId, trackSignature]);
+
+  // Audio bind — local tile is muted so mic never plays into speakers (echo).
+  useEffect(() => {
+    const audioEl = audioRef.current;
+    if (!audioEl) return;
+
+    const audioStream = audioTrack && !muted ? new MediaStream([audioTrack]) : null;
+    attachMediaStream(audioEl, audioStream);
+    if (audioStream) void audioEl.play().catch(() => undefined);
+
+    const onEnded = () => attachMediaStream(audioEl, null);
+    audioTrack?.addEventListener("ended", onEnded);
+    return () => {
+      audioTrack?.removeEventListener("ended", onEnded);
+      attachMediaStream(audioEl, null);
+    };
+  }, [audioTrack, audioTrackId, muted]);
 
   const showVideo =
     hasVideo !== undefined
@@ -89,7 +104,7 @@ export function StreamVideoTile({
       videoEl.removeEventListener("resize", update);
       window.clearInterval(timer);
     };
-  }, [stream, showStats]);
+  }, [videoTrackId, showStats]);
 
   return (
     <div className={`video-tile relative${isSpeaking ? " is-speaking" : ""}`}>

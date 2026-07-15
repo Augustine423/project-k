@@ -10,6 +10,7 @@ public static class RoomPlans
     public const string Plus500 = RoomPlanManager.Plus500;
     public const string Plus1000 = RoomPlanManager.Plus1000;
     public const string Plus2000 = RoomPlanManager.Plus2000;
+    public const string Plus10000 = RoomPlanManager.Plus10000;
 
     public static IReadOnlyList<Models.RoomPlan> All(RoomPlanManager manager) =>
         manager.GetAllPlans();

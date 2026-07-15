@@ -5,8 +5,7 @@ using Kzys.Backend.Realtime;
 namespace Kzys.Backend.Services;
 
 /// <summary>
-/// Auto-switches interactive ↔ webinar based on publisher vs listener counts.
-/// Janus media tuning is delegated to the C++ media-core sidecar via Redis.
+/// Tracks publisher vs listener counts for room mode metrics (always interactive today).
 /// </summary>
 public sealed class RoomModeService
 {
@@ -122,35 +121,18 @@ public sealed class RoomModeService
 
     public string EvaluateMode(string currentMode, int totalParticipants, int publishers, int listeners)
     {
-        if (totalParticipants <= 0) return RoomModes.Interactive;
-
-        var ratio = publishers > 0 ? (double)listeners / publishers : listeners;
-
-        if (string.Equals(currentMode, RoomModes.Webinar, StringComparison.Ordinal))
-        {
-            if (totalParticipants < _config.WebinarExitListeners
-                || listeners < _config.WebinarExitListeners
-                || ratio < _config.WebinarEnterRatio * 0.75)
-            {
-                return RoomModes.Interactive;
-            }
-            return RoomModes.Webinar;
-        }
-
-        if (totalParticipants >= _config.WebinarEnterListeners
-            && listeners >= _config.WebinarEnterListeners
-            && ratio >= _config.WebinarEnterRatio)
-        {
-            return RoomModes.Webinar;
-        }
-
+        _ = currentMode;
+        _ = totalParticipants;
+        _ = publishers;
+        _ = listeners;
         return RoomModes.Interactive;
     }
 
     public bool ShouldJoinAsListener(RoomRecord room, ParticipantRecord participant)
     {
-        if (room.Mode != RoomModes.Webinar) return false;
-        return participant.Role is not (ParticipantRoles.Host or ParticipantRoles.CoHost);
+        _ = room;
+        _ = participant;
+        return false;
     }
 }
 

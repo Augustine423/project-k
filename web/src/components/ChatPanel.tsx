@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChatIcon } from "./MediaIcons";
 
 export interface ChatMessage {
@@ -42,6 +42,15 @@ export function ChatPanel({
   selfName,
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
+  const messagesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = messagesRef.current;
+    if (!el || collapsed) return;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+    });
+  }, [messages, collapsed]);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -69,8 +78,8 @@ export function ChatPanel({
       </button>
       {!collapsed && (
         <div className="side-panel-body chat-panel-body">
-          <div className="chat-messages">
-            {messages.length === 0 && <p className="chat-empty">No messages yet.</p>}
+          <div className="chat-messages" ref={messagesRef}>
+            {messages.length === 0 && <p className="chat-empty">No messages yet. Say hello!</p>}
             {messages.map((msg) => {
               const isSelf = selfName && msg.displayName === selfName;
               return (
@@ -104,7 +113,7 @@ export function ChatPanel({
               aria-label="Chat message"
             />
             <button type="submit" disabled={disabled || !draft.trim()} aria-label="Send message">
-              ➤
+              Send
             </button>
           </form>
         </div>

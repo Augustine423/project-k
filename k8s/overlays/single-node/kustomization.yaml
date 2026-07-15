@@ -1,10 +1,5 @@
 # Single-node light profile (~2 vCPU / 4 GB VM).
-# Target: ~200 users in one webinar-style room — audio + chat, camera off by default.
-#
 # Apply: kubectl apply -k k8s/overlays/single-node
-#
-# Janus stays a StatefulSet (stable pod name for JANUS_NODES config) but runs
-# as 1 replica on a small node. C# control plane is stateless (Redis pub/sub).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -13,18 +8,18 @@ resources:
 
 patches:
   - target:
-      kind: StatefulSet
-      name: janus
+      kind: Deployment
+      name: livekit
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/resources
         value:
           requests:
-            cpu: 1200m
-            memory: 1536Mi
+            cpu: 500m
+            memory: 512Mi
           limits:
-            cpu: 1800m
-            memory: 2560Mi
+            cpu: 1500m
+            memory: 1536Mi
   - target:
       kind: Deployment
       name: kzys-control-plane

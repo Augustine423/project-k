@@ -1,7 +1,8 @@
 # Redis — single StatefulSet with persistent SSD storage.
 # Room state and participant presence are stored here. Not horizontally
-# scaled (Redis Cluster is overkill at this scale; a single fast instance
+# scaled (Redis Cluster is overkill at this stage; a single fast instance
 # handles 100,000+ ops/sec). Use managed Cloud Memorystore for production HA.
+# Memory bumped for large presence sets (10k-participant rooms).
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -29,7 +30,7 @@ spec:
             - "--appendonly"
             - "yes"
             - "--maxmemory"
-            - "200mb"
+            - "1gb"
             - "--maxmemory-policy"
             - "allkeys-lru"
           ports:
@@ -46,11 +47,11 @@ spec:
             timeoutSeconds: 3
           resources:
             requests:
-              cpu: 50m
-              memory: 128Mi
+              cpu: 100m
+              memory: 512Mi
             limits:
-              cpu: 500m
-              memory: 256Mi
+              cpu: "1"
+              memory: 1280Mi
           volumeMounts:
             - name: data
               mountPath: /data
@@ -65,7 +66,7 @@ spec:
         storageClassName: "standard-rwo"
         resources:
           requests:
-            storage: 5Gi
+            storage: 10Gi
 ---
 # Headless service — gives each StatefulSet pod stable DNS.
 # Control plane connects via: redis://redis.kzys.svc.cluster.local:6379

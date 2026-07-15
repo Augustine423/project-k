@@ -1,131 +1,47 @@
-# Project-K — GCP Firewall Port Reference
-# Use this when creating VPC firewall rules and Load Balancer health checks.
-# Last updated: matches k8s/base config (GKE production) + docker-compose (local dev).
+# Project-K port reference — LiveKit stack
 #
-# IMPORTANT
-# - Open PUBLIC rules only on the correct Load Balancer / target tags — NOT on every VM.
-# - Use 0.0.0.0/0 for sources only on internet-facing media endpoints (or restrict by region if needed).
-# - INTERNAL ports must stay cluster-private (never expose to the internet).
+# Public (internet-facing):
+#   • GKE Gateway / ALB  — HTTPS app + LiveKit WSS proxy (/livekit)
+#   • LiveKit media NLB  — UDP WebRTC (production overlay)
 #
-# =============================================================================
-# GKE PRODUCTION — OPEN TO INTERNET (required for WebRTC to work)
-# =============================================================================
+# --- 1) Web app + API + LiveKit signaling (GKE Gateway) --------------------
 #
-# Apply these to:
-#   • GKE Gateway / Application Load Balancer  (HTTPS app + Janus WSS proxy)
-#   • coturn NLB external IP                   (k8s/overlays/gke/coturn-nlb.yaml)
-#   • Janus media NLB external IP              (k8s/base/janus.yaml → janus-media-nlb)
+# Browser traffic hits your domain; Gateway routes to control-plane + LiveKit WS.
 #
-# --- 1) Web app + API + Janus signaling (GKE Gateway) ------------------------
-# Service: k8s/base/gateway/gateway.yaml, httproutes.yaml
-# Browser traffic hits your domain; Gateway routes to control-plane + janus WS.
+# Protocol   Port    Direction   Purpose
+# TCP        443     INBOUND     HTTPS — web UI, REST API (/api/*), WSS LiveKit (/livekit)
 #
-PROTOCOL   PORT(S)     DIRECTION   PURPOSE
---------   ---------   ---------   ---------------------------------------------
-TCP        443         INBOUND     HTTPS — web UI, REST API (/api/*), WSS Janus (/janus)
-TCP        80          INBOUND     HTTP — optional redirect to HTTPS only (do not serve app on plain HTTP in prod)
+# --- 2) TURN / coturn --------------------------------------------------------
 #
-# --- 2) coturn STUN/TURN (dedicated NLB) -------------------------------------
-# Service: coturn-media LoadBalancer
-# Config:  k8s/base/config/coturn-configmap.yaml (min-port / max-port)
-# Set TURN_HOST in app-configmap to the coturn NLB external IP.
+# TCP/UDP    3478    INBOUND     TURN relay (NAT traversal fallback)
+# UDP        20000-20200         TURN relay allocation range (dev compose)
 #
-PROTOCOL   PORT(S)           DIRECTION   PURPOSE
---------   ----------------  ---------   ---------------------------------------------
-UDP        3478              INBOUND     STUN + TURN signaling (primary)
-TCP        3478              INBOUND     TURN signaling fallback (TCP)
-UDP        20000-29000       INBOUND     TURN relay media (allocated on demand per session)
+# --- 3) LiveKit SFU — WebRTC media -------------------------------------------
 #
-# Optional (enable when TURN_USE_TLS=true in app-configmap):
-# TCP        5349              INBOUND     TURN over TLS (turns:)
+# UDP        50000-50100         LiveKit RTP/WebRTC media (dev compose)
+# TCP        7881                LiveKit RTC TCP fallback
 #
-# --- 3) Janus SFU — RTP media (dedicated NLB) --------------------------------
-# Service: janus-media-nlb LoadBalancer
-# Config:  JANUS_RTP_PORT_RANGE in k8s/base/config/app-configmap.yaml
+# NOTE: LiveKit WebSocket signaling (7880) is NOT opened directly in production.
+#       Browsers use wss://YOUR_DOMAIN/livekit via the GKE Gateway on port 443.
 #
-PROTOCOL   PORT(S)           DIRECTION   PURPOSE
---------   ----------------  ---------   ---------------------------------------------
-UDP        10000-11000       INBOUND     Janus VideoRoom RTP/WebRTC media
+# --- 4) Internal cluster only (never public) ---------------------------------
 #
-# Webinar / Streaming plugin rtp_forward (if using fan-out on same node):
-UDP        15000-15200       INBOUND     Janus Streaming plugin RTP (optional; only if webinar fan-out enabled)
+# TCP        4000        control-plane        REST + room WebSocket
+# TCP        6379        redis                Room state / pub-sub
+# TCP        7880        livekit              WS signaling (cluster; public uses Gateway :443)
 #
-# NOTE: Janus WebSocket signaling (8188) is NOT opened directly on the NLB.
-#       Browsers use wss://YOUR_DOMAIN/janus via the GKE Gateway on port 443.
+# --- 5) Local docker compose (localhost) -------------------------------------
 #
-# =============================================================================
-# GKE PRODUCTION — INTERNAL ONLY (DO NOT open in public firewall)
-# =============================================================================
+# TCP        4000        server               Control plane API
+# TCP        5173        web                  Vite dev UI (HTTPS)
+# TCP        7880        livekit              LiveKit WS signaling
+# TCP        7881        livekit              LiveKit RTC TCP
+# UDP        50000-50100 livekit              LiveKit media
+# TCP/UDP    3478        coturn               TURN
+# UDP        20000-20200 coturn               TURN relay range
+# TCP        6379        redis                Redis
 #
-PROTOCOL   PORT(S)     SERVICE              PURPOSE
---------   ---------   -------------------  ---------------------------------------------
-TCP        4000        kzys-control-plane   C# API / health (cluster + Gateway backend only)
-TCP        6379        redis                Room state, KEDA metrics (cluster only)
-TCP        7088        janus                Janus Admin API (cluster only — never public)
-TCP        8088        janus                Janus HTTP API (cluster only)
-TCP        8188        janus                Janus WebSocket (cluster; public uses Gateway :443)
-TCP        8090        media-core           C++ orchestrator (cluster only)
-TCP        5173        web (dev image)      Not used in production build
-#
-# =============================================================================
-# GCP VPC FIREWALL — SUGGESTED RULE GROUPS (copy/paste reference)
-# =============================================================================
-#
-# Rule name: kzys-allow-gateway-https
-#   Target:   GKE Gateway / node pool tag (or use GKE-managed firewall rules)
-#   Source:   0.0.0.0/0
-#   Allow:    tcp:443, tcp:80
-#
-# Rule name: kzys-allow-coturn
-#   Target:   coturn NLB backend / nodes with coturn pods
-#   Source:   0.0.0.0/0
-#   Allow:    udp:3478, tcp:3478, udp:20000-29000
-#
-# Rule name: kzys-allow-janus-media
-#   Target:   Janus NLB backend / janus StatefulSet nodes
-#   Source:   0.0.0.0/0
-#   Allow:    udp:10000-11000
-#   Optional: udp:15000-15200
-#
-# =============================================================================
-# LOCAL DOCKER COMPOSE (dev) — host port mappings from docker-compose.yaml
-# =============================================================================
-#
-# These are for LAN/mobile testing on your PC — NOT for GCP production.
-#
-PROTOCOL   HOST PORT(S)        CONTAINER   PURPOSE
---------   ------------------  ---------   ---------------------------------------------
-TCP        4000                server      C# control plane API
-TCP        5173                web         Vite dev UI (HTTPS via basicSsl plugin)
-TCP        6379                redis       Redis (dev only — do not expose in prod)
-TCP        8088                janus       Janus HTTP
-TCP        7088                janus       Janus Admin
-TCP        8188                janus       Janus WebSocket (direct in dev)
-UDP        3478                coturn      STUN/TURN signaling
-TCP        3478                coturn      TURN TCP
-UDP        20000-20200         coturn      TURN relay (smaller dev pool)
-UDP        10000-10200         janus       Janus RTP (dev range)
-UDP        15000-15200         janus       Janus Streaming RTP (dev)
-#
-# =============================================================================
-# QUICK CHECKLIST BEFORE GO-LIVE
-# =============================================================================
-#
-# [ ] TURN_HOST in k8s/base/config/app-configmap.yaml = coturn NLB external IP
-# [ ] GCP firewall allows udp/tcp 3478 + udp 20000-29000 to coturn NLB
-# [ ] GCP firewall allows udp 10000-11000 to Janus NLB
-# [ ] Gateway DNS points to GKE Gateway IP; TLS cert valid for APP_HOST
-# [ ] Janus public URL uses wss://APP_HOST/janus (port 443), not raw :8188
-# [ ] Redis, Janus admin :7088, control-plane :4000 are NOT reachable from internet
-#
-# =============================================================================
-# PORT COUNT SUMMARY (production internet-facing)
-# =============================================================================
-#
-# TCP 443, 80           → 2 ports   (Gateway)
-# UDP/TCP 3478          → 2 rules   (coturn signaling)
-# UDP 20000-29000       → 9001 ports (coturn relay pool)
-# UDP 10000-11000       → 1001 ports (Janus RTP)
-# UDP 15000-15200       → 201 ports  (optional streaming)
-#
-# Total distinct firewall allowances: NOT all 65535 — only the ranges above.
+# Checklist (production):
+# [ ] GCP firewall allows UDP 50000-50100 to LiveKit NLB
+# [ ] LiveKit public URL uses wss://APP_HOST/livekit (port 443)
+# [ ] Redis and control-plane :4000 are NOT reachable from internet

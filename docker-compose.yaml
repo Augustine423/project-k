@@ -14,39 +14,21 @@ services:
       timeout: 3s
       retries: 5
 
-  janus:
-    build:
-      context: ./media/janus
+  livekit:
+    image: livekit/livekit-server:v1.9.12
     restart: unless-stopped
-    environment:
-      JANUS_NODE_ID: janus-1
-      STUN_SERVER: ${STUN_SERVER}
-      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
-      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
-      JANUS_CORS_ORIGIN: "*"
-      JANUS_RTP_PORT_RANGE: "10000-10200"
-      JANUS_STREAMING_PORT_RANGE: "15000-15200"
+    command:
+      - --config
+      - /etc/livekit.yaml
+      - --node-ip
+      # "localhost" hostname breaks ICE; prefer loopback / reachable address.
+      - ${LIVEKIT_NODE_IP:-127.0.0.1}
+    volumes:
+      - ./media/livekit/livekit.yaml:/etc/livekit.yaml:ro
     ports:
-      - "${JANUS_HTTP_PORT}:8088"
-      - "${JANUS_ADMIN_PORT}:7088"
-      - "${JANUS_WS_PORT}:8188"
-      - "10000-10200:10000-10200/udp"
-      - "15000-15200:15000-15200/udp"
-
-  media-core:
-    build:
-      context: ./media-core
-    restart: unless-stopped
-    depends_on:
-      redis:
-        condition: service_healthy
-      janus:
-        condition: service_started
-    environment:
-      REDIS_URL: redis://redis:6379
-      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
-      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT}"
-      MEDIA_CORE_POLL_MS: "1000"
+      - "${LIVEKIT_PORT:-7880}:7880"
+      - "${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
+      - "50000-50100:50000-50100/udp"
 
   coturn:
     image: coturn/coturn:4.6.2
@@ -72,7 +54,7 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-      janus:
+      livekit:
         condition: service_started
     environment:
       PORT: 4000
@@ -83,17 +65,16 @@ services:
       TURN_PORT: ${TURN_PORT}
       TURN_TLS_PORT: ${TURN_TLS_PORT}
       TURN_USE_TLS: ${TURN_USE_TLS}
-      MAX_ROOM_PARTICIPANTS: "50"
-      WEBINAR_ENTER_LISTENERS: "12"
-      WEBINAR_ENTER_RATIO: "2.0"
-      WEBINAR_EXIT_LISTENERS: "8"
-      INTERACTIVE_MAX_PUBLISHERS: "50"
-      WEBINAR_MAX_PUBLISHERS: "8"
+      MAX_ROOM_PARTICIPANTS: "${MAX_ROOM_PARTICIPANTS:-500}"
+      WEBINAR_ENTER_LISTENERS: "${WEBINAR_ENTER_LISTENERS:-45}"
+      WEBINAR_EXIT_LISTENERS: "${WEBINAR_EXIT_LISTENERS:-20}"
+      INTERACTIVE_MAX_PUBLISHERS: "${INTERACTIVE_MAX_PUBLISHERS:-50}"
+      WEBINAR_MAX_PUBLISHERS: "${WEBINAR_MAX_PUBLISHERS:-16}"
       CORS_ORIGIN: "${CORS_ORIGIN}"
       SERVICE_NAME: kzys-control-plane
-      JANUS_NODES: "janus-1|http://janus:7088/admin|ws://janus:8188|ws://${PUBLIC_HOST}:${JANUS_WS_PORT}"
-      JANUS_ADMIN_SECRET: ${JANUS_ADMIN_SECRET}
-      JANUS_VIDEOROOM_ADMIN_KEY: ${JANUS_VIDEOROOM_ADMIN_KEY}
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+      LIVEKIT_PUBLIC_URL: "ws://${PUBLIC_HOST}:${LIVEKIT_PORT:-7880}"
     ports:
       - "${SERVER_PORT}:4000"
     healthcheck:
@@ -114,7 +95,7 @@ services:
     environment:
       VITE_API_URL: "${PUBLIC_API_URL}"
       VITE_PROXY_TARGET: "http://server:4000"
-      VITE_JANUS_PROXY_TARGET: "http://janus:8188"
+      VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
     ports:
       - "${WEB_PORT}:5173"
     volumes:

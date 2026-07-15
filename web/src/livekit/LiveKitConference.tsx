@@ -1,0 +1,538 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ConnectionState,
+  Room,
+  RoomEvent,
+  Track,
+  type RemoteParticipant,
+  type TrackPublication,
+} from "livekit-client";
+import type { TurnInfo } from "../api/types";
+import { reportMediaPresence } from "../api/client";
+import { ControlBar } from "../components/ControlBar";
+import { GalleryPagination } from "../components/GalleryPagination";
+import { StreamVideoTile } from "../components/StreamVideoTile";
+import { canAccessMediaDevices, mediaUnavailableReason } from "../media/secureContext";
+import {
+  galleryPageCount,
+  resolveGalleryTier,
+  sliceGalleryPage,
+} from "../media/galleryVideoPolicy";
+import {
+  applyRemoteSimulcastPreferences,
+  buildLocalParticipantStream,
+  cameraEnableCaptureOptions,
+  collectRemoteMediaTracks,
+  mediaToggleErrorMessage,
+  participantHasVideo,
+  remoteTrackSignature,
+  syncMediaStreamTracks,
+  waitForLocalTrack,
+} from "./livekitVideoSettings";
+import {
+  forceDisconnectLiveKitRoom,
+  getLiveKitRoom,
+  releaseLiveKitRoom,
+  retainLiveKitRoom,
+} from "./livekitRoomSession";
+
+interface LiveKitConferenceProps {
+  roomId: string;
+  participantToken: string;
+  liveKitUrl: string;
+  liveKitToken: string;
+  turn: TurnInfo;
+  displayName: string;
+  onConnected: () => void;
+  onDisconnected: () => void;
+  onError: (message: string) => void;
+  onStatus?: (message: string) => void;
+  onLeave: () => void;
+  participantCount?: number;
+  chatBadge?: number | string;
+  onFocusParticipants?: () => void;
+  onFocusChat?: () => void;
+}
+
+type RemoteFeed = {
+  displayName: string;
+  stream: MediaStream;
+  trackSignature: string;
+  hasVideo: boolean;
+};
+
+export function LiveKitConference({
+  roomId,
+  participantToken,
+  liveKitUrl,
+  liveKitToken,
+  turn,
+  displayName,
+  onConnected,
+  onDisconnected,
+  onError,
+  onStatus,
+  onLeave,
+  participantCount = 1,
+  chatBadge,
+  onFocusParticipants,
+  onFocusChat,
+}: LiveKitConferenceProps) {
+  const sessionKey = `${roomId}:${participantToken}`;
+  const roomRef = useRef<Room | null>(null);
+  const mediaBusyRef = useRef(false);
+  /** Stable MediaStreams per remote — recreating them restarts audio and sounds like echo. */
+  const remoteStreamsRef = useRef(new Map<string, MediaStream>());
+  const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [remoteFeeds, setRemoteFeeds] = useState<Map<string, RemoteFeed>>(new Map());
+  const [audioEnabled, setAudioEnabled] = useState(false);
+  const [videoEnabled, setVideoEnabled] = useState(false);
+  const [connected, setConnected] = useState(false);
+  const [mediaBusy, setMediaBusy] = useState(false);
+  const [galleryPage, setGalleryPage] = useState(1);
+  const mediaAvailable = canAccessMediaDevices();
+
+  const onConnectedRef = useRef(onConnected);
+  const onDisconnectedRef = useRef(onDisconnected);
+  const onErrorRef = useRef(onError);
+  const onStatusRef = useRef(onStatus);
+  const liveKitUrlRef = useRef(liveKitUrl);
+  const liveKitTokenRef = useRef(liveKitToken);
+  const turnRef = useRef(turn);
+  onConnectedRef.current = onConnected;
+  onDisconnectedRef.current = onDisconnected;
+  onErrorRef.current = onError;
+  onStatusRef.current = onStatus;
+  liveKitUrlRef.current = liveKitUrl;
+  liveKitTokenRef.current = liveKitToken;
+  turnRef.current = turn;
+
+  const syncRemoteFeed = useCallback((participant: RemoteParticipant): RemoteFeed => {
+    let stream = remoteStreamsRef.current.get(participant.identity);
+    if (!stream) {
+      stream = new MediaStream();
+      remoteStreamsRef.current.set(participant.identity, stream);
+    }
+    const tracks = collectRemoteMediaTracks(participant);
+    syncMediaStreamTracks(stream, tracks);
+    return {
+      displayName: participant.name || participant.identity,
+      stream,
+      trackSignature: remoteTrackSignature(tracks),
+      hasVideo: participantHasVideo(participant),
+    };
+  }, []);
+
+  const syncMediaPresence = useCallback(
+    (room: Room) => {
+      const lp = room.localParticipant;
+      void reportMediaPresence(roomId, participantToken, {
+        publishing: lp.isMicrophoneEnabled || lp.isCameraEnabled,
+        audio: lp.isMicrophoneEnabled,
+        video: lp.isCameraEnabled,
+      }).catch(() => undefined);
+    },
+    [roomId, participantToken],
+  );
+
+  const syncMediaPresenceRef = useRef(syncMediaPresence);
+  syncMediaPresenceRef.current = syncMediaPresence;
+
+  const applyLocalState = useCallback((room: Room) => {
+    const lp = room.localParticipant;
+    setAudioEnabled(lp.isMicrophoneEnabled);
+    setVideoEnabled(lp.isCameraEnabled);
+    setLocalStream(buildLocalParticipantStream(lp));
+    syncMediaPresenceRef.current(room);
+  }, []);
+
+  const applyLocalStateRef = useRef(applyLocalState);
+  applyLocalStateRef.current = applyLocalState;
+
+  const upsertRemote = useCallback(
+    (participant: RemoteParticipant) => {
+      if (participant.identity === roomRef.current?.localParticipant.identity) return;
+      setRemoteFeeds((prev) => {
+        const next = new Map(prev);
+        next.set(participant.identity, syncRemoteFeed(participant));
+        return next;
+      });
+    },
+    [syncRemoteFeed],
+  );
+
+  const removeRemote = useCallback((identity: string) => {
+    remoteStreamsRef.current.delete(identity);
+    setRemoteFeeds((prev) => {
+      if (!prev.has(identity)) return prev;
+      const next = new Map(prev);
+      next.delete(identity);
+      return next;
+    });
+  }, []);
+
+  const refreshRemotes = useCallback(
+    (room: Room) => {
+      for (const p of room.remoteParticipants.values()) upsertRemote(p);
+    },
+    [upsertRemote],
+  );
+
+  // One SFU session per room+token — never disconnect on React remount.
+  useEffect(() => {
+    if (!mediaAvailable) {
+      // #region agent log
+      fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'B',location:'LiveKitConference.tsx:mediaAvailable',message:'media devices unavailable',data:{reason:mediaUnavailableReason(),secure:typeof window!=='undefined'?window.isSecureContext:null,protocol:typeof window!=='undefined'?window.location.protocol:null,host:typeof window!=='undefined'?window.location.host:null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      onErrorRef.current(mediaUnavailableReason());
+      return;
+    }
+
+    let cancelled = false;
+    const room = retainLiveKitRoom(sessionKey);
+    roomRef.current = room;
+    // #region agent log
+    fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:connect-start',message:'LiveKit session retain',data:{roomState:room.state,liveKitUrl:liveKitUrlRef.current,hasToken:Boolean(liveKitTokenRef.current),tokenLen:liveKitTokenRef.current?.length??0,pageProtocol:typeof window!=='undefined'?window.location.protocol:null,pageHost:typeof window!=='undefined'?window.location.host:null,turnUrlCount:turnRef.current?.urls?.length??0},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+
+    const onLocalMediaChange = () => {
+      if (!cancelled) applyLocalStateRef.current(room);
+    };
+
+    const onRemoteMediaChange = () => {
+      if (!cancelled) refreshRemotes(room);
+    };
+
+    const onDisconnected = () => {
+      if (cancelled) return;
+      setConnected(false);
+      onDisconnectedRef.current();
+    };
+
+    const onTrackMuted = (pub: TrackPublication) => {
+      if (pub.isLocal) onLocalMediaChange();
+      else onRemoteMediaChange();
+    };
+
+    const onTrackUnmuted = (pub: TrackPublication) => {
+      if (pub.isLocal) onLocalMediaChange();
+      else onRemoteMediaChange();
+    };
+
+    const onParticipantConnected = (p: RemoteParticipant) => {
+      if (!cancelled) upsertRemote(p);
+    };
+
+    const onParticipantDisconnected = (p: RemoteParticipant) => {
+      if (!cancelled) removeRemote(p.identity);
+    };
+
+    const onReconnected = () => {
+      if (!cancelled) {
+        applyLocalStateRef.current(room);
+        refreshRemotes(room);
+        setConnected(true);
+        onStatusRef.current?.("Reconnected to media server");
+      }
+    };
+
+    const finishConnected = () => {
+      if (cancelled) return;
+      // #region agent log
+      fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:finishConnected',message:'LiveKit connected',data:{roomState:room.state,identity:room.localParticipant?.identity??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      setConnected(true);
+      applyLocalStateRef.current(room);
+      refreshRemotes(room);
+      onStatusRef.current?.("Connected — use the toolbar to turn on camera and mic");
+      onConnectedRef.current();
+    };
+
+    room.on(RoomEvent.Connected, finishConnected);
+    room.on(RoomEvent.LocalTrackPublished, onLocalMediaChange);
+    room.on(RoomEvent.LocalTrackUnpublished, onLocalMediaChange);
+    room.on(RoomEvent.TrackMuted, onTrackMuted);
+    room.on(RoomEvent.TrackUnmuted, onTrackUnmuted);
+    room.on(RoomEvent.TrackSubscribed, onRemoteMediaChange);
+    room.on(RoomEvent.TrackUnsubscribed, onRemoteMediaChange);
+    room.on(RoomEvent.ParticipantConnected, onParticipantConnected);
+    room.on(RoomEvent.ParticipantDisconnected, onParticipantDisconnected);
+    room.on(RoomEvent.Reconnected, onReconnected);
+    room.on(RoomEvent.Disconnected, onDisconnected);
+
+    if (room.state === ConnectionState.Connected) {
+      finishConnected();
+    } else if (room.state === ConnectionState.Connecting) {
+      onStatusRef.current?.("Connecting to LiveKit…");
+    } else {
+      void (async () => {
+        try {
+          onStatusRef.current?.("Connecting to LiveKit…");
+          const t = turnRef.current;
+          const iceServers: RTCIceServer[] = t.urls.length
+            ? t.urls.map((url) => ({
+                urls: url,
+                username: t.username,
+                credential: t.credential,
+              }))
+            : [{ urls: "stun:stun.l.google.com:19302" }];
+
+          await room.connect(liveKitUrlRef.current, liveKitTokenRef.current, {
+            rtcConfig: { iceServers },
+          });
+          if (!cancelled) finishConnected();
+        } catch (err) {
+          // #region agent log
+          fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'mobile-fix',hypothesisId:'M1',location:'LiveKitConference.tsx:connect-error',message:'LiveKit connect failed',data:{error:err instanceof Error?err.message:String(err),liveKitUrl:liveKitUrlRef.current,roomState:room.state,pageHost:typeof window!=='undefined'?window.location.host:null},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+          if (!cancelled) {
+            onErrorRef.current(err instanceof Error ? err.message : "Failed to join media room");
+          }
+        }
+      })();
+    }
+
+    return () => {
+      cancelled = true;
+      room.off(RoomEvent.Connected, finishConnected);
+      room.off(RoomEvent.LocalTrackPublished, onLocalMediaChange);
+      room.off(RoomEvent.LocalTrackUnpublished, onLocalMediaChange);
+      room.off(RoomEvent.TrackMuted, onTrackMuted);
+      room.off(RoomEvent.TrackUnmuted, onTrackUnmuted);
+      room.off(RoomEvent.TrackSubscribed, onRemoteMediaChange);
+      room.off(RoomEvent.TrackUnsubscribed, onRemoteMediaChange);
+      room.off(RoomEvent.ParticipantConnected, onParticipantConnected);
+      room.off(RoomEvent.ParticipantDisconnected, onParticipantDisconnected);
+      room.off(RoomEvent.Reconnected, onReconnected);
+      room.off(RoomEvent.Disconnected, onDisconnected);
+      releaseLiveKitRoom(sessionKey);
+      if (roomRef.current === room) roomRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- stable SFU session; props read via refs
+  }, [sessionKey, mediaAvailable]);
+
+  const runMediaToggle = useCallback(
+    async (kind: "audio" | "video") => {
+      const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+      // #region agent log
+      fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'C',location:'LiveKitConference.tsx:runMediaToggle:entry',message:'media toggle clicked',data:{kind,hasRoom:Boolean(room),roomState:room?.state??null,mediaBusy:mediaBusyRef.current,micOn:room?.localParticipant?.isMicrophoneEnabled??null,camOn:room?.localParticipant?.isCameraEnabled??null},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
+      if (!room || mediaBusyRef.current) return;
+      roomRef.current = room;
+      if (room.state === ConnectionState.Connecting || room.state === ConnectionState.Reconnecting) {
+        // #region agent log
+        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:runMediaToggle:still-connecting',message:'toggle blocked - still connecting',data:{kind,roomState:room.state},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        onErrorRef.current("Media server is still connecting — wait a moment and try again.");
+        return;
+      }
+      if (room.state !== ConnectionState.Connected) {
+        // #region agent log
+        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:runMediaToggle:not-connected',message:'toggle blocked - not connected',data:{kind,roomState:room.state},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        onErrorRef.current("Not connected to media server — open https://localhost:5173 and refresh.");
+        return;
+      }
+
+      mediaBusyRef.current = true;
+      setMediaBusy(true);
+      const lp = room.localParticipant;
+      const enabling = kind === "audio" ? !lp.isMicrophoneEnabled : !lp.isCameraEnabled;
+
+      try {
+        if (kind === "audio") {
+          await lp.setMicrophoneEnabled(enabling);
+          if (enabling) await waitForLocalTrack(lp, Track.Source.Microphone);
+        } else {
+          await lp.setCameraEnabled(enabling, cameraEnableCaptureOptions());
+          if (enabling) await waitForLocalTrack(lp, Track.Source.Camera);
+        }
+        const built = buildLocalParticipantStream(lp);
+        const source = kind === "audio" ? Track.Source.Microphone : Track.Source.Camera;
+        const pub = lp.getTrackPublication(source);
+        // #region agent log
+        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'D',location:'LiveKitConference.tsx:runMediaToggle:success',message:'media toggle completed',data:{kind,enabling,micOn:lp.isMicrophoneEnabled,camOn:lp.isCameraEnabled,builtTracks:built?.getTracks().map(t=>({kind:t.kind,readyState:t.readyState,enabled:t.enabled,muted:t.muted}))??[],pubMuted:pub?.isMuted??null,hasPubTrack:Boolean(pub?.track),trackReady:pub?.track?.mediaStreamTrack?.readyState??null},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        applyLocalState(room);
+      } catch (err) {
+        // #region agent log
+        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'C',location:'LiveKitConference.tsx:runMediaToggle:error',message:'media toggle threw',data:{kind,enabling,error:err instanceof Error?err.message:String(err),name:err instanceof Error?err.name:null,micOn:lp.isMicrophoneEnabled,camOn:lp.isCameraEnabled},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
+        applyLocalState(room);
+        onErrorRef.current(mediaToggleErrorMessage(kind, err));
+      } finally {
+        mediaBusyRef.current = false;
+        setMediaBusy(false);
+      }
+    },
+    [applyLocalState, sessionKey],
+  );
+
+  const shareScreen = useCallback(async () => {
+    const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+    if (!room || mediaBusyRef.current) return;
+    roomRef.current = room;
+    if (room.state !== ConnectionState.Connected) {
+      onError("Not connected to media server — open https://localhost:5173 and refresh.");
+      return;
+    }
+    mediaBusyRef.current = true;
+    setMediaBusy(true);
+    try {
+      await room.localParticipant.setScreenShareEnabled(true);
+      applyLocalState(room);
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Screen share failed");
+    } finally {
+      mediaBusyRef.current = false;
+      setMediaBusy(false);
+    }
+  }, [applyLocalState, onError, sessionKey]);
+
+  const handleLeave = useCallback(() => {
+    forceDisconnectLiveKitRoom(sessionKey);
+    roomRef.current = null;
+    onLeave();
+  }, [onLeave, sessionKey]);
+
+  const galleryTier = useMemo(() => resolveGalleryTier(participantCount), [participantCount]);
+
+  const sortedRemoteIds = useMemo(
+    () =>
+      [...remoteFeeds.entries()]
+        .sort(([, a], [, b]) => a.displayName.localeCompare(b.displayName))
+        .map(([id]) => id),
+    [remoteFeeds],
+  );
+
+  const totalGalleryPages = useMemo(
+    () => galleryPageCount(sortedRemoteIds.length, galleryTier),
+    [sortedRemoteIds.length, galleryTier],
+  );
+
+  const visibleRemoteIds = useMemo(
+    () => new Set(sliceGalleryPage(sortedRemoteIds, galleryPage, galleryTier)),
+    [sortedRemoteIds, galleryPage, galleryTier],
+  );
+
+  const visibleRemoteOrder = useMemo(
+    () => sliceGalleryPage(sortedRemoteIds, galleryPage, galleryTier),
+    [sortedRemoteIds, galleryPage, galleryTier],
+  );
+
+  // Request best simulcast layer per gallery slot; LiveKit still adapts down on weak links.
+  useEffect(() => {
+    const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+    if (!room || !connected) return;
+    applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier);
+  }, [connected, galleryTier, remoteFeeds, sessionKey, visibleRemoteOrder]);
+
+  useEffect(() => {
+    if (galleryPage > totalGalleryPages) setGalleryPage(totalGalleryPages);
+  }, [galleryPage, totalGalleryPages]);
+
+  const tiles = useMemo(() => {
+    const result: {
+      id: string;
+      label: string;
+      stream: MediaStream | null;
+      trackSignature?: string;
+      mirror?: boolean;
+      hasVideo?: boolean;
+    }[] = [
+      {
+        id: "local",
+        label: `${displayName} (you)`,
+        stream: localStream,
+        mirror: true,
+        hasVideo: videoEnabled,
+      },
+    ];
+
+    for (const id of sortedRemoteIds) {
+      if (!visibleRemoteIds.has(id)) continue;
+      const feed = remoteFeeds.get(id);
+      if (!feed) continue;
+      result.push({
+        id,
+        label: feed.displayName,
+        stream: feed.stream,
+        trackSignature: feed.trackSignature,
+        hasVideo: feed.hasVideo,
+      });
+    }
+
+    if (result.length === 1 && !localStream) {
+      result[0] = { id: "placeholder", label: displayName, stream: null, hasVideo: false };
+    }
+
+    return result;
+  }, [displayName, localStream, remoteFeeds, sortedRemoteIds, visibleRemoteIds, videoEnabled]);
+
+  const gridCount = Math.min(Math.max(tiles.length, 1), galleryTier.videosPerPage + 1);
+  const offPageCount = Math.max(0, sortedRemoteIds.length - visibleRemoteIds.size);
+
+  return (
+    <div className="conference-root">
+      {!mediaAvailable && (
+        <div className="join-banner warn">{mediaUnavailableReason()}</div>
+      )}
+      {!connected && (
+        <div className="join-banner info">Connecting to media server…</div>
+      )}
+      <GalleryPagination
+        page={galleryPage}
+        totalPages={totalGalleryPages}
+        onPageChange={setGalleryPage}
+        totalParticipants={participantCount}
+        offPageCount={offPageCount}
+      />
+      <div className="video-stage" data-count={String(gridCount)}>
+        {tiles.map((tile) => (
+          <StreamVideoTile
+            key={tile.id}
+            stream={tile.stream}
+            trackSignature={tile.trackSignature}
+            label={tile.label}
+            muted={Boolean(tile.mirror)}
+            mirror={tile.mirror}
+            hasVideo={tile.hasVideo}
+          />
+        ))}
+      </div>
+      <div className="hide" aria-hidden>
+        {sortedRemoteIds
+          .filter((id) => !visibleRemoteIds.has(id))
+          .map((id) => {
+            const feed = remoteFeeds.get(id);
+            if (!feed?.stream.getAudioTracks().length) return null;
+            return (
+              <StreamVideoTile
+                key={`audio-${id}`}
+                stream={feed.stream}
+                trackSignature={feed.trackSignature}
+                label={feed.displayName}
+                hasVideo={false}
+                showStats={false}
+              />
+            );
+          })}
+      </div>
+      <ControlBar
+        audioEnabled={audioEnabled}
+        videoEnabled={videoEnabled}
+        onToggleAudio={() => void runMediaToggle("audio")}
+        onToggleVideo={() => void runMediaToggle("video")}
+        onShareScreen={() => void shareScreen()}
+        onLeave={handleLeave}
+        showScreenShare
+        showMediaControls
+        participantCount={participantCount}
+        chatBadge={chatBadge}
+        mediaBusy={mediaBusy}
+        onFocusParticipants={onFocusParticipants}
+        onFocusChat={onFocusChat}
+      />
+    </div>
+  );
+}

@@ -20,6 +20,8 @@ interface ControlBarProps {
   showMediaControls?: boolean;
   participantCount?: number;
   chatBadge?: number | string;
+  /** Disable mic/camera/screen while a device toggle is in progress. */
+  mediaBusy?: boolean;
   onFocusParticipants?: () => void;
   onFocusChat?: () => void;
 }
@@ -39,6 +41,7 @@ export function ControlBar({
   showMediaControls = true,
   participantCount = 0,
   chatBadge,
+  mediaBusy = false,
   onFocusParticipants,
   onFocusChat,
 }: ControlBarProps) {
@@ -51,6 +54,7 @@ export function ControlBar({
               type="button"
               className={`dock-btn dock-btn-media ${audioEnabled ? "active" : "off"}`}
               onClick={onToggleAudio}
+              disabled={mediaBusy}
               aria-pressed={audioEnabled}
               aria-label={audioEnabled ? "Mute microphone" : "Unmute microphone"}
             >
@@ -61,6 +65,7 @@ export function ControlBar({
               type="button"
               className={`dock-btn dock-btn-media ${videoEnabled ? "active" : "off"}`}
               onClick={onToggleVideo}
+              disabled={mediaBusy}
               aria-pressed={videoEnabled}
               aria-label={videoEnabled ? "Turn camera off" : "Turn camera on"}
             >
@@ -72,6 +77,7 @@ export function ControlBar({
                 type="button"
                 className="dock-btn dock-btn-media active"
                 onClick={onShareScreen}
+                disabled={mediaBusy}
                 aria-label="Share screen"
               >
                 <ShareScreenIcon size={22} />

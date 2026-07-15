@@ -1,4 +1,4 @@
-# C# ASP.NET control plane — room registry, Janus provisioning, Redis-backed WebSocket hub.
+# C# ASP.NET control plane — room registry, LiveKit tokens, Redis-backed WebSocket hub.
 # Stateless: chat/events fan out via Redis pub/sub — no Gateway sticky sessions required.
 apiVersion: apps/v1
 kind: Deployment
@@ -40,16 +40,21 @@ spec:
                 secretKeyRef:
                   name: kzys-secrets
                   key: TURN_SHARED_SECRET
-            - name: JANUS_ADMIN_SECRET
+            - name: LIVEKIT_API_KEY
               valueFrom:
                 secretKeyRef:
                   name: kzys-secrets
-                  key: JANUS_ADMIN_SECRET
-            - name: JANUS_VIDEOROOM_ADMIN_KEY
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
               valueFrom:
                 secretKeyRef:
                   name: kzys-secrets
-                  key: JANUS_VIDEOROOM_ADMIN_KEY
+                  key: LIVEKIT_API_SECRET
+            - name: LIVEKIT_PUBLIC_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: LIVEKIT_PUBLIC_URL
             - name: CORS_ORIGIN
               valueFrom:
                 configMapKeyRef:
@@ -110,11 +115,6 @@ spec:
                 configMapKeyRef:
                   name: kzys-app-config
                   key: SERVICE_NAME
-            - name: JANUS_NODES
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: JANUS_NODES
           livenessProbe:
             httpGet:
               path: /health
@@ -152,7 +152,7 @@ spec:
       port: 4000
       targetPort: 4000
 ---
-# HPA: scale 1→10 replicas based on CPU.
+# HPA: scale 1→20 replicas based on CPU (align with KEDA control-plane max).
 # WebSocket chat is Redis-backed — any replica can serve any connection.
 apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
@@ -165,7 +165,7 @@ spec:
     kind: Deployment
     name: kzys-control-plane
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 20
   metrics:
     - type: Resource
       resource:

@@ -12,33 +12,93 @@ interface SharedSocket {
   ws: WebSocket;
   listeners: Set<Listener>;
   closeTimer: ReturnType<typeof setTimeout> | null;
+  reconnectTimer: ReturnType<typeof setTimeout> | null;
+  intentionalClose: boolean;
 }
 
-// One socket per room URL, shared across hook instances and StrictMode remounts.
 const shared = new Map<string, SharedSocket>();
+
+const CLOSE_DEBOUNCE_MS = 300;
+const RECONNECT_DELAY_MS = 1200;
+const MAX_RECONNECT_ATTEMPTS = 8;
+
+function emit(sock: SharedSocket, evt: RoomEvent) {
+  for (const listener of sock.listeners) listener(evt);
+}
+
+function wireSocket(url: string, sock: SharedSocket) {
+  const { ws } = sock;
+
+  ws.onmessage = (msg) => {
+    try {
+      const evt = JSON.parse(msg.data as string) as RoomEvent;
+      emit(sock, evt);
+    } catch {
+      // ignore malformed frames
+    }
+  };
+
+  ws.onopen = () => {
+    emit(sock, { type: "ws.open", data: null });
+  };
+
+  ws.onerror = () => {
+    emit(sock, { type: "ws.error", data: null });
+  };
+
+  ws.onclose = (ev) => {
+    if (shared.get(url)?.ws !== ws) return;
+    emit(sock, { type: "ws.close", data: { code: ev.code, reason: ev.reason } });
+
+    if (sock.intentionalClose || sock.listeners.size === 0) {
+      shared.delete(url);
+      return;
+    }
+
+    let attempt = 0;
+    const tryReconnect = () => {
+      if (sock.intentionalClose || sock.listeners.size === 0) return;
+      if (attempt >= MAX_RECONNECT_ATTEMPTS) return;
+      attempt += 1;
+
+      sock.reconnectTimer = setTimeout(() => {
+        if (sock.intentionalClose || sock.listeners.size === 0) return;
+        if (sock.ws.readyState === WebSocket.OPEN) return;
+
+        const next = new WebSocket(url);
+        sock.ws = next;
+        wireSocket(url, sock);
+      }, RECONNECT_DELAY_MS);
+    };
+    tryReconnect();
+  };
+}
 
 function scheduleClose(url: string, sock: SharedSocket) {
   if (sock.closeTimer) clearTimeout(sock.closeTimer);
-  // Defer so React StrictMode's mount→unmount→mount cycle can re-subscribe
-  // before we tear the socket down.
   sock.closeTimer = setTimeout(() => {
     sock.closeTimer = null;
     const current = shared.get(url);
     if (!current || current.listeners.size > 0) return;
+    current.intentionalClose = true;
+    if (current.reconnectTimer) {
+      clearTimeout(current.reconnectTimer);
+      current.reconnectTimer = null;
+    }
     if (current.ws.readyState === WebSocket.OPEN) {
-      current.ws.close();
+      current.ws.close(1000, "no listeners");
     } else if (current.ws.readyState === WebSocket.CONNECTING) {
       current.ws.addEventListener(
         "open",
         () => {
           const live = shared.get(url);
-          if (live && live.listeners.size === 0) live.ws.close();
+          if (live && live.listeners.size === 0) live.ws.close(1000, "no listeners");
         },
         { once: true },
       );
     }
     shared.delete(url);
-  }, 0);
+  }, CLOSE_DEBOUNCE_MS);
 }
 
 function acquire(url: string): SharedSocket {
@@ -48,31 +108,20 @@ function acquire(url: string): SharedSocket {
       clearTimeout(sock.closeTimer);
       sock.closeTimer = null;
     }
+    sock.intentionalClose = false;
     return sock;
   }
 
   const ws = new WebSocket(url);
-  sock = { ws, listeners: new Set(), closeTimer: null };
+  sock = {
+    ws,
+    listeners: new Set(),
+    closeTimer: null,
+    reconnectTimer: null,
+    intentionalClose: false,
+  };
   shared.set(url, sock);
-
-  ws.onmessage = (msg) => {
-    try {
-      const evt = JSON.parse(msg.data as string) as RoomEvent;
-      for (const listener of sock!.listeners) listener(evt);
-    } catch {
-      // ignore malformed frames
-    }
-  };
-
-  ws.onopen = () => {
-    for (const listener of sock!.listeners) listener({ type: "ws.open", data: null });
-  };
-
-  ws.onclose = () => {
-    if (shared.get(url)?.ws === ws) shared.delete(url);
-    for (const listener of sock!.listeners) listener({ type: "ws.close", data: null });
-  };
-
+  wireSocket(url, sock);
   return sock;
 }
 
@@ -94,7 +143,7 @@ export function useRoomEvents(roomId: string, token: string, onEvent: (evt: Room
 
     const listener: Listener = (evt) => {
       if (evt.type === "ws.open") setChatReady(true);
-      if (evt.type === "ws.close") setChatReady(false);
+      if (evt.type === "ws.close" || evt.type === "ws.error") setChatReady(false);
       onEventRef.current(evt);
     };
     sock.listeners.add(listener);
@@ -103,8 +152,10 @@ export function useRoomEvents(roomId: string, token: string, onEvent: (evt: Room
 
     return () => {
       sock.listeners.delete(listener);
-      setChatReady(false);
-      if (sock.listeners.size === 0) scheduleClose(url, sock);
+      if (sock.listeners.size === 0) {
+        setChatReady(false);
+        scheduleClose(url, sock);
+      }
     };
   }, [roomId, token]);
 

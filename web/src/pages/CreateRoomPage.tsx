@@ -4,13 +4,13 @@ import { ApiRequestError, createRoom } from "../api/client";
 import { saveTicket } from "../api/ticketStore";
 import { BrandLogo } from "../components/BrandLogo";
 
-const MAX_TEST_USERS = 10;
+const MAX_ROOM_USERS = 10000;
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
   const [displayName, setDisplayName] = useState("");
   const [pin, setPin] = useState("");
-  const [maxUsers, setMaxUsers] = useState(MAX_TEST_USERS);
+  const [maxUsers, setMaxUsers] = useState(50);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -42,7 +42,9 @@ export function CreateRoomPage() {
         <BrandLogo size={40} showText={false} />
         <h1>Create meeting</h1>
         <p className="form-hint">
-          Symmetrical multiparty video — direct WebRTC via Janus VideoRoom SFU.
+          Video uses LiveKit SFU. Chat uses the app WebSocket backend. Rooms support up to{" "}
+          {MAX_ROOM_USERS.toLocaleString()} participants (webinar-scale); interactive mode still
+          limits how many can publish camera/mic at once.
         </p>
         <label>
           Your name
@@ -55,11 +57,11 @@ export function CreateRoomPage() {
           />
         </label>
         <label>
-          Max participants (testing)
+          Max participants
           <input
             type="number"
             min={2}
-            max={MAX_TEST_USERS}
+            max={MAX_ROOM_USERS}
             value={maxUsers}
             onChange={(e) => setMaxUsers(Number(e.target.value))}
           />

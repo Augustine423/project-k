@@ -7,8 +7,6 @@ export type ParticipantRole = "host" | "cohost" | "participant";
 export interface Room {
   id: string;
   mode: RoomMode;
-  janusNodeId: string;
-  janusRoomId: string;
   maxParticipants: number;
   maxPublishers: number;
   locked: boolean;
@@ -34,9 +32,9 @@ export interface TurnInfo {
 export interface JoinTicket {
   room: Room;
   participant: Participant;
-  janusWsUrl: string;
+  liveKitUrl: string;
+  liveKitToken: string;
   participantToken: string;
-  janusJoinPin?: string;
   turn: TurnInfo;
 }
 

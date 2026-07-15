@@ -1,9 +1,7 @@
-# KEDA autoscalers for the Janus + C# backend stack.
+# KEDA autoscalers for the LiveKit + C# backend stack.
 # Prereq: KEDA installed in the cluster (helm install keda kedacore/keda).
 
 # ── C# control plane ─────────────────────────────────────────────────────────
-# Scale on active rooms stored in Redis. WebSocket chat uses Redis pub/sub so
-# control-plane pods are stateless — no sticky sessions on the Gateway.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -16,54 +14,44 @@ spec:
     apiVersion: apps/v1
     kind: Deployment
     name: kzys-control-plane
-  minReplicaCount: 1        # keep 1 alive — cold starts hurt join latency
-  maxReplicaCount: 10
-  cooldownPeriod: 120       # 2 min before scaling down
+  minReplicaCount: 1
+  maxReplicaCount: 20
+  cooldownPeriod: 120
   triggers:
     - type: redis
       metadata:
         address: redis.kzys.svc.cluster.local:6379
-        # Each active room is a key: room:<id>. Scale when rooms exist.
         keyName: kzys:room_count
         activationValue: "1"
-        targetValue: "20"   # 1 replica per 20 active rooms
+        # Scale earlier under multi-room + mega-room fanout.
+        targetValue: "10"
 ---
-# ── Janus media StatefulSet ──────────────────────────────────────────────────
-# Scale on total node load stored in Redis by the control plane's
-# IncrNodeLoad / DecrNodeLoad calls. One Janus pod per ~30 active rooms.
+# ── LiveKit SFU ──────────────────────────────────────────────────────────────
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: janus-scaler
+  name: livekit-scaler
   namespace: kzys
   labels:
     app.kubernetes.io/part-of: project-k
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
-    kind: StatefulSet
-    name: janus
-  minReplicaCount: 1        # always keep one Janus node ready
-  maxReplicaCount: 20       # 20 nodes × ~400 viewers = 8,000 concurrent viewers
-  cooldownPeriod: 120       # 2 min before scale-down (faster burst recovery)
-  pollingInterval: 15       # check Redis every 15s during spikes
+    kind: Deployment
+    name: livekit
+  minReplicaCount: 1
+  maxReplicaCount: 30
+  cooldownPeriod: 120
+  pollingInterval: 15
   triggers:
     - type: redis
       metadata:
         address: redis.kzys.svc.cluster.local:6379
         keyName: kzys:total_node_load
-        activationValue: "5"
-        targetValue: "25"   # add a pod every 25 load units (aggressive for spikes)
-    - type: redis
-      metadata:
-        address: redis.kzys.svc.cluster.local:6379
-        # Webinar mode rooms weight 2× in media-core — scale Janus early.
-        keyName: kzys:webinar_rooms
-        activationValue: "1"
-        targetValue: "2"    # 1 extra Janus pod per 2 webinar rooms
+        activationValue: "3"
+        targetValue: "15"
 ---
 # ── Web frontend ─────────────────────────────────────────────────────────────
-# Scale on HTTP request rate — web is stateless so any replica count works.
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
@@ -77,7 +65,7 @@ spec:
     kind: Deployment
     name: kzys-web
   minReplicaCount: 1
-  maxReplicaCount: 5
+  maxReplicaCount: 10
   cooldownPeriod: 60
   triggers:
     - type: redis
@@ -85,4 +73,4 @@ spec:
         address: redis.kzys.svc.cluster.local:6379
         keyName: kzys:room_count
         activationValue: "1"
-        targetValue: "50"   # 1 web replica per 50 active rooms
+        targetValue: "30"

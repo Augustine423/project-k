@@ -19,8 +19,6 @@ public sealed class RoomRecord
 {
     public required string Id { get; set; }
     public string Mode { get; set; } = RoomModes.Interactive;
-    public required string JanusNodeId { get; set; }
-    public required string JanusRoomId { get; set; }
     public int MaxParticipants { get; set; }
     public int MaxPublishers { get; set; }
     public int ActivePublishers { get; set; }
@@ -53,9 +51,9 @@ public sealed class JoinTicketDto
 {
     public required RoomRecord Room { get; set; }
     public required ParticipantRecord Participant { get; set; }
-    public required string JanusWsUrl { get; set; }
+    public required string LiveKitUrl { get; set; }
+    public required string LiveKitToken { get; set; }
     public required string ParticipantToken { get; set; }
-    public string? JanusJoinPin { get; set; }
     public required TurnInfoDto Turn { get; set; }
 }
 

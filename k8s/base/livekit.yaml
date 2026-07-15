@@ -1,0 +1,72 @@
+# LiveKit SFU — video/audio for Project-K rooms.
+# Browser WS signaling goes through Gateway /livekit (see httproutes.yaml).
+# UDP media uses the livekit-media-nlb overlay in production.
+# KEDA scales this Deployment 1→30 under kzys:total_node_load (see keda/scaledobjects.yaml).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  namespace: kzys
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:v1.9.12
+          args: ["--config", "/etc/livekit/livekit.yaml"]
+          ports:
+            - name: signal
+              containerPort: 7880
+            - name: rtc-tcp
+              containerPort: 7881
+            - containerPort: 50000
+              protocol: UDP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit
+              readOnly: true
+          resources:
+            requests:
+              cpu: "1"
+              memory: 1Gi
+            limits:
+              cpu: "4"
+              memory: 4Gi
+          readinessProbe:
+            tcpSocket:
+              port: 7880
+            initialDelaySeconds: 5
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: kzys-livekit-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+  namespace: kzys
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+spec:
+  selector:
+    app: livekit
+  ports:
+    - name: signal
+      port: 7880
+      targetPort: 7880
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881

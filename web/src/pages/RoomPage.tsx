@@ -3,13 +3,14 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { endRoom, kickParticipant, leaveRoom as leaveRoomApi, listParticipants, setRoomLocked } from "../api/client";
 import { sendRoomChat, useRoomEvents } from "../api/useRoomEvents";
 import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
-import type { JoinTicket, Participant, RoomMode } from "../api/types";
+import type { JoinTicket, Participant } from "../api/types";
 import { ChatPanel, type ChatMessage } from "../components/ChatPanel";
 import { MeetingHeader } from "../components/MeetingChrome";
 import { InviteLinkBar } from "../components/InviteLinkBar";
 import { ParticipantsPanel } from "../components/ParticipantsPanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
-import { JanusConference } from "../janus/JanusConference";
+import { LiveKitConference } from "../livekit/LiveKitConference";
+import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
 import { mediaUnavailableReason } from "../media/secureContext";
 
 function isHostRole(role: string): boolean {
@@ -30,20 +31,13 @@ export function RoomPage() {
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
   const [participantsCollapsed, setParticipantsCollapsed] = useState(false);
   const [chatCollapsed, setChatCollapsed] = useState(false);
-  const [inviteCollapsed, setInviteCollapsed] = useState(false);
+  const [inviteCollapsed, setInviteCollapsed] = useState(true);
   const [chatReadCount, setChatReadCount] = useState(0);
-  const [listenerOnly, setListenerOnly] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   const token = ticket?.participantToken ?? "";
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
-  const isSpeakerRole = isHost;
   const unreadChat = Math.max(0, chatMessages.length - chatReadCount);
-
-  useEffect(() => {
-    if (!ticket) return;
-    setListenerOnly(ticket.room.mode === "webinar" && !isSpeakerRole);
-  }, [ticket, isSpeakerRole]);
 
   const refreshParticipants = useCallback(async () => {
     if (!roomId) return;
@@ -79,7 +73,11 @@ export function RoomPage() {
 
   const onRoomEvent = useCallback(
     (evt: { type: string; data: unknown }) => {
-      if (evt.type === "ws.open" || evt.type === "ws.close") return;
+      if (evt.type === "ws.open") {
+        void refreshParticipants();
+        return;
+      }
+      if (evt.type === "ws.close") return;
 
       if (evt.type === "chat.message") {
         const data = evt.data as {
@@ -89,21 +87,21 @@ export function RoomPage() {
           participantId?: string;
         };
         if (!data.message) return;
-        const text = data.message;
-        setChatMessages((prev) => [
-          ...prev,
-          {
-            id: `${data.participantId ?? "unknown"}-${data.at ?? Date.now()}`,
-            displayName: data.displayName ?? "Guest",
-            message: text,
-            at: data.at ?? new Date().toISOString(),
-          },
-        ]);
+        const id = `${data.participantId ?? "unknown"}-${data.at ?? Date.now()}`;
+        setChatMessages((prev) => {
+          if (prev.some((m) => m.id === id)) return prev;
+          return [
+            ...prev,
+            {
+              id,
+              displayName: data.displayName ?? "Guest",
+              message: data.message!,
+              at: data.at ?? new Date().toISOString(),
+            },
+          ];
+        });
       }
-      if (evt.type === "participant.joined") {
-        void refreshParticipants();
-      }
-      if (evt.type === "participant.left") {
+      if (evt.type === "participant.joined" || evt.type === "participant.left") {
         void refreshParticipants();
       }
       if (evt.type === "participant.kicked") {
@@ -124,31 +122,8 @@ export function RoomPage() {
           prev ? { ...prev, room: { ...prev.room, locked: Boolean(evt.data) } } : prev,
         );
       }
-      if (evt.type === "room.mode_changed") {
-        const data = evt.data as { mode?: RoomMode; maxPublishers?: number };
-        if (!data.mode) return;
-        setTicket((prev) => {
-          if (!prev) return prev;
-          const updated = {
-            ...prev,
-            room: {
-              ...prev.room,
-              mode: data.mode!,
-              maxPublishers: data.maxPublishers ?? prev.room.maxPublishers,
-            },
-          };
-          saveTicket(updated);
-          return updated;
-        });
-        setListenerOnly(data.mode === "webinar" && !isSpeakerRole);
-        setStatusMessage(
-          data.mode === "webinar"
-            ? "Switched to webinar mode — audience listens, speakers publish"
-            : "Switched to interactive mode",
-        );
-      }
     },
-    [roomId, navigate, ticket?.participant.id, refreshParticipants, isSpeakerRole],
+    [roomId, navigate, ticket?.participant.id, refreshParticipants],
   );
 
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);
@@ -159,9 +134,16 @@ export function RoomPage() {
     }
   }, [chatCollapsed, mobileSidebarOpen, chatMessages.length]);
 
+  useEffect(() => {
+    if (!chatCollapsed) {
+      setChatReadCount(chatMessages.length);
+    }
+  }, [chatCollapsed, chatMessages.length]);
+
   function leaveRoom() {
     const t = ticket?.participantToken;
     const id = roomId;
+    if (t && id) forceDisconnectLiveKitRoom(`${id}:${t}`);
     void (async () => {
       if (t && id) {
         try {
@@ -221,27 +203,42 @@ export function RoomPage() {
     }
   }
 
-  if (!ticket) {
-    return (
-      <div className="page meeting-shell">
-        <p className="muted">Loading session…</p>
-      </div>
-    );
-  }
-
   const mediaConfig = useMemo(
-    () => resolveJoinTicketMedia(ticket),
+    () => (ticket ? resolveJoinTicketMedia(ticket) : null),
     [
-      ticket.janusWsUrl,
-      ticket.janusJoinPin,
-      ticket.turn.credential,
-      ticket.turn.username,
-      ticket.turn.urls.join("|"),
+      ticket?.liveKitUrl,
+      ticket?.liveKitToken,
+      ticket?.turn.credential,
+      ticket?.turn.username,
+      ticket?.turn?.urls.join("|"),
     ],
   );
-  const { janusWsUrl, turn } = mediaConfig;
-  const janusRoomId = ticket.room.janusRoomId;
-  const sessionKey = `${ticket.participant.id}-${ticket.room.mode}-${listenerOnly ? "listen" : "pub"}`;
+
+  // #region agent log
+  useEffect(() => {
+    fetch("/__agent_debug", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5d65c5" },
+      body: JSON.stringify({
+        sessionId: "5d65c5",
+        runId: "pre-fix",
+        hypothesisId: "A",
+        location: "RoomPage.tsx:mount",
+        message: "RoomPage mounted",
+        data: {
+          roomId,
+          hasTicket: Boolean(ticket),
+          hasMediaConfig: Boolean(mediaConfig),
+          liveKitUrl: mediaConfig?.liveKitUrl ?? null,
+          hasLiveKitToken: Boolean(ticket?.liveKitToken),
+          secure: typeof window !== "undefined" ? window.isSecureContext : null,
+          href: typeof window !== "undefined" ? window.location.href : null,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => undefined);
+  }, [roomId, ticket, mediaConfig]);
+  // #endregion
 
   const handleConnected = useCallback(() => {
     setStatus("connected");
@@ -258,6 +255,17 @@ export function RoomPage() {
     setMediaWarning(message);
   }, []);
 
+  if (!ticket || !mediaConfig) {
+    return (
+      <div className="page meeting-shell">
+        <p className="muted">Loading session…</p>
+      </div>
+    );
+  }
+
+  const { liveKitUrl, turn } = mediaConfig;
+  const liveKitToken = ticket.liveKitToken;
+
   const participantList =
     participants.length > 0
       ? participants
@@ -271,11 +279,7 @@ export function RoomPage() {
 
   return (
     <div className="page meeting-shell">
-      <MeetingHeader
-        statusMessage={statusMessage}
-        connected={status === "connected"}
-      />
-
+      <MeetingHeader statusMessage={statusMessage} connected={status === "connected"} />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
       {mediaWarning && <div className="banner warn">{mediaWarning}</div>}
@@ -288,15 +292,11 @@ export function RoomPage() {
       <div className="meeting-body">
         <main className="meeting-stage">
           {status !== "ended" && (
-            <JanusConference
-              key={sessionKey}
+            <LiveKitConference
               roomId={roomId}
               participantToken={token}
-              roomMode={ticket.room.mode}
-              listenerOnly={listenerOnly}
-              janusWsUrl={janusWsUrl}
-              janusRoomId={janusRoomId}
-              janusJoinPin={ticket.janusJoinPin}
+              liveKitUrl={liveKitUrl}
+              liveKitToken={liveKitToken}
               turn={turn}
               displayName={ticket.participant.displayName}
               onConnected={handleConnected}
@@ -322,9 +322,8 @@ export function RoomPage() {
             onToggleLock={toggleLock}
             onKick={kick}
             hostBusy={hostBusy}
-            webinarMode={ticket.room.mode === "webinar"}
           />
-          <div ref={chatPanelRef}>
+          <div ref={chatPanelRef} className="chat-panel-wrap">
             <ChatPanel
               messages={chatMessages}
               onSend={sendChat}
