@@ -93,7 +93,8 @@ services:
       server:
         condition: service_healthy
     environment:
-      VITE_API_URL: "${PUBLIC_API_URL}"
+      # Empty PUBLIC_API_URL → same-origin /api + /ws via Vite proxy (needed for HTTPS).
+      VITE_API_URL: "${PUBLIC_API_URL:-}"
       VITE_PROXY_TARGET: "http://server:4000"
       VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
     ports:

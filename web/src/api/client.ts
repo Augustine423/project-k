@@ -5,7 +5,12 @@ function apiBase(): string {
   const configured = import.meta.env.VITE_API_URL as string | undefined;
   if (!configured) return "";
   if (/localhost|127\.0\.0\.1/i.test(configured)) return "";
-  return configured.replace(/\/$/, "");
+  const base = configured.replace(/\/$/, "");
+  // HTTPS UI (Vite basicSsl) cannot call plain http:// API — browser blocks mixed content.
+  if (typeof window !== "undefined" && window.location.protocol === "https:" && base.startsWith("http:")) {
+    return "";
+  }
+  return base;
 }
 
 const API_URL = apiBase();
