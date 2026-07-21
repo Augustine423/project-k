@@ -6,33 +6,34 @@ export function HomePage() {
     <div className="page landing">
       <header className="landing-hero">
         <BrandLogo size={48} />
-        <h1>Video meetings that just work</h1>
+        <h1>Go live. Stay connected.</h1>
         <p className="subtitle">
-          Project-K multiparty SFU on LiveKit — WebRTC video with adaptive streaming. Deployed on
-          Kubernetes for webinar-scale rooms (up to 10,000 joins). Chat and room control use the
-          project backend (not the SFU).
+          Project-K multiparty video on LiveKit — adaptive streams, real-time chat, and host
+          controls built for webinar-scale rooms.
         </p>
         <div className="landing-actions">
           <Link className="btn btn-primary" to="/create">
-            Create meeting
+            Start a meeting
           </Link>
           <Link className="btn btn-secondary" to="/join">
-            Join meeting
+            Join with code
           </Link>
         </div>
       </header>
       <section className="card-grid">
         <article className="card">
-          <h2>Multiparty SFU</h2>
+          <h2>Live presence</h2>
           <p>
-            LiveKit publishes ~720p with adaptive layers so viewers get the best
-            quality their connection can handle. Chat and participants
-            use the project WebSocket backend.
+            A red LIVE badge and viewer count sit in the header — see who is in the room at a
+            glance, YouTube-live style.
           </p>
         </article>
         <article className="card">
-          <h2>Host controls</h2>
-          <p>Lock the room, remove participants, end the meeting, and chat in real time.</p>
+          <h2>Chat &amp; people together</h2>
+          <p>
+            One sidebar for messages and the participant list. Hosts can lock the room or remove
+            people without leaving the conversation.
+          </p>
         </article>
       </section>
     </div>

@@ -4,10 +4,10 @@ import { endRoom, kickParticipant, leaveRoom as leaveRoomApi, listParticipants, 
 import { sendRoomChat, useRoomEvents } from "../api/useRoomEvents";
 import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant } from "../api/types";
-import { ChatPanel, type ChatMessage } from "../components/ChatPanel";
+import type { ChatMessage } from "../components/ChatPanel";
 import { MeetingHeader } from "../components/MeetingChrome";
 import { InviteLinkBar } from "../components/InviteLinkBar";
-import { ParticipantsPanel } from "../components/ParticipantsPanel";
+import { RoomSidePanel, type SidePanelTab } from "../components/RoomSidePanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { LiveKitConference } from "../livekit/LiveKitConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
@@ -20,7 +20,7 @@ function isHostRole(role: string): boolean {
 export function RoomPage() {
   const { roomId = "" } = useParams();
   const navigate = useNavigate();
-  const chatPanelRef = useRef<HTMLDivElement>(null);
+  const sidePanelRef = useRef<HTMLDivElement>(null);
 
   const [ticket, setTicket] = useState<JoinTicket | null>(() => getTicket(roomId));
   const [status, setStatus] = useState<"loading" | "connected" | "error" | "ended">("loading");
@@ -29,11 +29,10 @@ export function RoomPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [hostBusy, setHostBusy] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
-  const [participantsCollapsed, setParticipantsCollapsed] = useState(false);
-  const [chatCollapsed, setChatCollapsed] = useState(false);
   const [inviteCollapsed, setInviteCollapsed] = useState(true);
   const [chatReadCount, setChatReadCount] = useState(0);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
 
   const token = ticket?.participantToken ?? "";
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
@@ -59,17 +58,15 @@ export function RoomPage() {
     setTicket((prev) => (prev?.participant.id === stored.participant.id ? prev : stored));
   }, [roomId, navigate]);
 
-  const focusChat = useCallback(() => {
-    setChatCollapsed(false);
-    setMobileSidebarOpen(true);
-    setChatReadCount(chatMessages.length);
-    window.setTimeout(() => chatPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
-  }, [chatMessages.length]);
-
-  const focusParticipants = useCallback(() => {
-    setParticipantsCollapsed(false);
-    setMobileSidebarOpen(true);
-  }, []);
+  const focusSidePanel = useCallback(
+    (tab: SidePanelTab = "chat") => {
+      setSideTab(tab);
+      setMobileSidebarOpen(true);
+      if (tab === "chat") setChatReadCount(chatMessages.length);
+      window.setTimeout(() => sidePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
+    },
+    [chatMessages.length],
+  );
 
   const onRoomEvent = useCallback(
     (evt: { type: string; data: unknown }) => {
@@ -129,16 +126,16 @@ export function RoomPage() {
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);
 
   useEffect(() => {
-    if (!chatCollapsed && mobileSidebarOpen) {
+    if (sideTab === "chat" && mobileSidebarOpen) {
       setChatReadCount(chatMessages.length);
     }
-  }, [chatCollapsed, mobileSidebarOpen, chatMessages.length]);
+  }, [sideTab, mobileSidebarOpen, chatMessages.length]);
 
   useEffect(() => {
-    if (!chatCollapsed) {
+    if (sideTab === "chat") {
       setChatReadCount(chatMessages.length);
     }
-  }, [chatCollapsed, chatMessages.length]);
+  }, [sideTab, chatMessages.length]);
 
   function leaveRoom() {
     const t = ticket?.participantToken;
@@ -214,32 +211,6 @@ export function RoomPage() {
     ],
   );
 
-  // #region agent log
-  useEffect(() => {
-    fetch("/__agent_debug", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5d65c5" },
-      body: JSON.stringify({
-        sessionId: "5d65c5",
-        runId: "pre-fix",
-        hypothesisId: "A",
-        location: "RoomPage.tsx:mount",
-        message: "RoomPage mounted",
-        data: {
-          roomId,
-          hasTicket: Boolean(ticket),
-          hasMediaConfig: Boolean(mediaConfig),
-          liveKitUrl: mediaConfig?.liveKitUrl ?? null,
-          hasLiveKitToken: Boolean(ticket?.liveKitToken),
-          secure: typeof window !== "undefined" ? window.isSecureContext : null,
-          href: typeof window !== "undefined" ? window.location.href : null,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => undefined);
-  }, [roomId, ticket, mediaConfig]);
-  // #endregion
-
   const handleConnected = useCallback(() => {
     setStatus("connected");
     setStatusMessage("Connected");
@@ -277,9 +248,16 @@ export function RoomPage() {
           } as Participant,
         ];
 
+  const isLive = status === "connected";
+
   return (
     <div className="page meeting-shell">
-      <MeetingHeader statusMessage={statusMessage} connected={status === "connected"} />
+      <MeetingHeader
+        statusMessage={statusMessage}
+        connected={isLive}
+        live={isLive}
+        viewerCount={participantList.length}
+      />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
       {mediaWarning && <div className="banner warn">{mediaWarning}</div>}
@@ -306,32 +284,27 @@ export function RoomPage() {
               onLeave={leaveRoom}
               participantCount={participantList.length}
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
-              onFocusParticipants={focusParticipants}
-              onFocusChat={focusChat}
+              onFocusChat={() => focusSidePanel("chat")}
             />
           )}
         </main>
 
         <aside className={`meeting-sidebar ${mobileSidebarOpen ? "open" : ""}`}>
-          <ParticipantsPanel
-            participants={participantList}
-            collapsed={participantsCollapsed}
-            onToggleCollapse={() => setParticipantsCollapsed((v) => !v)}
-            isHost={isHost}
-            locked={ticket.room.locked}
-            onToggleLock={toggleLock}
-            onKick={kick}
-            hostBusy={hostBusy}
-          />
-          <div ref={chatPanelRef} className="chat-panel-wrap">
-            <ChatPanel
+          <div ref={sidePanelRef} className="room-side-panel-wrap">
+            <RoomSidePanel
               messages={chatMessages}
               onSend={sendChat}
-              disabled={!chatReady}
-              disabledHint={chatReady ? undefined : "Connecting chat…"}
-              collapsed={chatCollapsed}
-              onToggleCollapse={() => setChatCollapsed((v) => !v)}
+              chatDisabled={!chatReady}
+              chatDisabledHint={chatReady ? undefined : "Connecting chat…"}
               selfName={ticket.participant.displayName}
+              participants={participantList}
+              isHost={isHost}
+              locked={ticket.room.locked}
+              onToggleLock={toggleLock}
+              onKick={kick}
+              hostBusy={hostBusy}
+              activeTab={sideTab}
+              onTabChange={setSideTab}
             />
           </div>
           <InviteLinkBar
@@ -353,7 +326,7 @@ export function RoomPage() {
         type="button"
         className="mobile-sidebar-toggle"
         onClick={() => setMobileSidebarOpen((v) => !v)}
-        aria-label="Toggle participants and chat"
+        aria-label="Toggle chat and people"
       >
         ☰
       </button>

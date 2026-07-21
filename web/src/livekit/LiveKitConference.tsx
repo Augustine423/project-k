@@ -50,7 +50,6 @@ interface LiveKitConferenceProps {
   onLeave: () => void;
   participantCount?: number;
   chatBadge?: number | string;
-  onFocusParticipants?: () => void;
   onFocusChat?: () => void;
 }
 
@@ -75,7 +74,6 @@ export function LiveKitConference({
   onLeave,
   participantCount = 1,
   chatBadge,
-  onFocusParticipants,
   onFocusChat,
 }: LiveKitConferenceProps) {
   const sessionKey = `${roomId}:${participantToken}`;
@@ -527,10 +525,8 @@ export function LiveKitConference({
         onLeave={handleLeave}
         showScreenShare
         showMediaControls
-        participantCount={participantCount}
         chatBadge={chatBadge}
         mediaBusy={mediaBusy}
-        onFocusParticipants={onFocusParticipants}
         onFocusChat={onFocusChat}
       />
     </div>

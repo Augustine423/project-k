@@ -3,7 +3,6 @@ import {
   ChatIcon,
   EndCallIcon,
   MicIcon,
-  ParticipantsIcon,
   ReactionsIcon,
   ShareScreenIcon,
 } from "./MediaIcons";
@@ -18,11 +17,9 @@ interface ControlBarProps {
   showScreenShare?: boolean;
   /** Hide mic/camera when joined as webinar listener */
   showMediaControls?: boolean;
-  participantCount?: number;
   chatBadge?: number | string;
   /** Disable mic/camera/screen while a device toggle is in progress. */
   mediaBusy?: boolean;
-  onFocusParticipants?: () => void;
   onFocusChat?: () => void;
 }
 
@@ -39,10 +36,8 @@ export function ControlBar({
   onLeave,
   showScreenShare = true,
   showMediaControls = true,
-  participantCount = 0,
   chatBadge,
   mediaBusy = false,
-  onFocusParticipants,
   onFocusChat,
 }: ControlBarProps) {
   return (
@@ -97,18 +92,8 @@ export function ControlBar({
         <button
           type="button"
           className="dock-btn dock-btn-secondary"
-          onClick={onFocusParticipants}
-          aria-label={`Participants, ${participantCount} in meeting`}
-        >
-          <ParticipantsIcon size={22} />
-          {participantCount > 0 && <Badge value={participantCount} />}
-        </button>
-
-        <button
-          type="button"
-          className="dock-btn dock-btn-secondary"
           onClick={onFocusChat}
-          aria-label="Open chat"
+          aria-label="Open chat and people"
         >
           <ChatIcon size={22} />
           {chatBadge !== undefined && chatBadge !== 0 && (
