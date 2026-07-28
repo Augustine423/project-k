@@ -112,7 +112,8 @@ public sealed class RoomsApiController : ControllerBase
             var participant = (await _rooms.ListParticipantsAsync(roomId, ct))
                 .FirstOrDefault(p => p.Id == claims.ParticipantId);
 
-            var listenerOnly = participant is not null && _modes.ShouldJoinAsListener(room, participant);
+            var listenerOnly = participant is not null
+                && _modes.IsListenerOnly(room, participant, room.ActivePublishers, body.Publishing);
 
             return Ok(new
             {

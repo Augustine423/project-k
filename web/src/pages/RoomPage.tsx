@@ -313,6 +313,7 @@ export function RoomPage() {
               participantCount={participantList.length}
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
               onFocusChat={() => focusSidePanel("chat")}
+              roomMode={ticket.room.mode}
             />
           )}
         </main>

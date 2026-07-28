@@ -18,6 +18,7 @@ data:
       port_range_end: 50100
       use_external_ip: true
       enable_loopback_candidate: false
+    # Key name must match LIVEKIT_API_KEY in kzys-secrets; value must match LIVEKIT_API_SECRET.
     keys:
       devkey: CHANGE_ME_LIVEKIT_SECRET
     redis:

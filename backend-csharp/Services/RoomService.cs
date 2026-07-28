@@ -51,7 +51,7 @@ public sealed class RoomService
             Secret = "",
             Pin = pin ?? "",
             MaxParticipants = max,
-            MaxPublishers = max,
+            MaxPublishers = Math.Min(max, _config.InteractiveMaxPublishers),
             CreatedAt = DateTime.UtcNow,
             HostParticipantId = hostId,
         };
@@ -69,7 +69,7 @@ public sealed class RoomService
             JoinedAt = DateTime.UtcNow,
         };
         await _store.AddParticipantAsync(host, ct);
-        return BuildTicket(room, host, mediaHost);
+        return BuildTicket(room, host, mediaHost, activePublishers: 0);
     }
 
     public async Task<JoinTicketDto> JoinRoomAsync(
@@ -99,8 +99,12 @@ public sealed class RoomService
         if (!added)
             throw new RoomServiceException(RoomError.Full, "room is full");
 
-        return BuildTicket(room, participant, mediaHost);
+        var stats = await _store.GetMediaStatsAsync(roomId, ct);
+        return BuildTicket(room, participant, mediaHost, stats.Publishers);
     }
+
+    public async Task<int> GetActivePublisherCountAsync(string roomId, CancellationToken ct = default)
+        => (await _store.GetMediaStatsAsync(roomId, ct)).Publishers;
 
     public Task<RoomRecord?> GetRoomAsync(string roomId, CancellationToken ct = default)
         => _store.GetRoomAsync(roomId, ct);
@@ -135,13 +139,17 @@ public sealed class RoomService
         await _store.DeleteRoomAsync(roomId, ct);
     }
 
-    private JoinTicketDto BuildTicket(RoomRecord room, ParticipantRecord participant, string mediaHost)
+    private JoinTicketDto BuildTicket(
+        RoomRecord room,
+        ParticipantRecord participant,
+        string mediaHost,
+        int activePublishers = 0)
     {
         var token = _jwt.Issue(room.Id, participant.Id, participant.Role);
         var turn = _turn.BuildTurnInfo(participant.Id, mediaHost)
             ?? new TurnInfoDto { Urls = [], Username = "", Credential = "" };
 
-        var canPublish = !_modes.ShouldJoinAsListener(room, participant);
+        var canPublish = !_modes.IsListenerOnly(room, participant, activePublishers, isCurrentlyPublishing: false);
 
         return new JoinTicketDto
         {

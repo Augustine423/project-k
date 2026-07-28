@@ -14,6 +14,7 @@ interface SharedSocket {
   closeTimer: ReturnType<typeof setTimeout> | null;
   reconnectTimer: ReturnType<typeof setTimeout> | null;
   intentionalClose: boolean;
+  reconnectAttempt: number;
 }
 
 const shared = new Map<string, SharedSocket>();
@@ -21,7 +22,7 @@ const shared = new Map<string, SharedSocket>();
 const CLOSE_DEBOUNCE_MS = 300;
 const RECONNECT_BASE_MS = 800;
 const RECONNECT_MAX_MS = 15000;
-const MAX_RECONNECT_ATTEMPTS = 10;
+const MAX_RECONNECT_ATTEMPTS = 50;
 
 function reconnectDelayMs(attempt: number): number {
   const exp = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** (attempt - 1));
@@ -46,6 +47,7 @@ function wireSocket(url: string, sock: SharedSocket) {
   };
 
   ws.onopen = () => {
+    sock.reconnectAttempt = 0;
     emit(sock, { type: "ws.open", data: null });
   };
 
@@ -62,11 +64,10 @@ function wireSocket(url: string, sock: SharedSocket) {
       return;
     }
 
-    let attempt = 0;
     const tryReconnect = () => {
       if (sock.intentionalClose || sock.listeners.size === 0) return;
-      if (attempt >= MAX_RECONNECT_ATTEMPTS) return;
-      attempt += 1;
+      if (sock.reconnectAttempt >= MAX_RECONNECT_ATTEMPTS) return;
+      sock.reconnectAttempt += 1;
 
       sock.reconnectTimer = setTimeout(() => {
         if (sock.intentionalClose || sock.listeners.size === 0) return;
@@ -75,7 +76,7 @@ function wireSocket(url: string, sock: SharedSocket) {
         const next = new WebSocket(url);
         sock.ws = next;
         wireSocket(url, sock);
-      }, reconnectDelayMs(attempt));
+      }, reconnectDelayMs(sock.reconnectAttempt));
     };
     tryReconnect();
   };
@@ -126,6 +127,7 @@ function acquire(url: string): SharedSocket {
     closeTimer: null,
     reconnectTimer: null,
     intentionalClose: false,
+    reconnectAttempt: 0,
   };
   shared.set(url, sock);
   wireSocket(url, sock);

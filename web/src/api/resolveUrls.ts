@@ -46,14 +46,16 @@ function rewriteTurn(ticket: JoinTicket, turnHost: string): JoinTicket["turn"] {
 
 /**
  * Rewrite LiveKit / TURN so this browser can reach them.
- * Dev: signal via Vite same-origin `/livekit` proxy (works on phone LAN + HTTPS).
+ * Same-origin stacks (Vite dev, nginx compose prod, K8s Gateway) proxy /livekit.
  */
 export function resolveJoinTicketMedia(
   ticket: JoinTicket,
 ): Pick<JoinTicket, "liveKitUrl" | "turn"> {
   const host = clientReachableHost();
+  const useSameOriginProxy =
+    typeof window !== "undefined" && !import.meta.env.VITE_API_URL;
 
-  if (import.meta.env.DEV && typeof window !== "undefined") {
+  if (useSameOriginProxy) {
     const secure = window.location.protocol === "https:";
     const liveKitUrl = `${secure ? "wss" : "ws"}://${window.location.host}/livekit`;
     const turnHost = isLoopbackHost(host) ? LOCAL_DEV_HOST : host;

@@ -102,6 +102,9 @@ public sealed class RoomEventHub : IHostedService
 
     public void Broadcast(string roomId, RoomEvent evt)
     {
+        var payloadJson = JsonSerializer.Serialize(evt, EventJson);
+        DeliverToLocalClients(roomId, payloadJson);
+
         var envelope = JsonSerializer.Serialize(new
         {
             roomId,

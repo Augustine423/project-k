@@ -51,6 +51,7 @@ interface LiveKitConferenceProps {
   participantCount?: number;
   chatBadge?: number | string;
   onFocusChat?: () => void;
+  roomMode?: string;
 }
 
 type RemoteFeed = {
@@ -75,6 +76,7 @@ export function LiveKitConference({
   participantCount = 1,
   chatBadge,
   onFocusChat,
+  roomMode,
 }: LiveKitConferenceProps) {
   const sessionKey = `${roomId}:${participantToken}`;
   const roomRef = useRef<Room | null>(null);
@@ -325,6 +327,17 @@ export function LiveKitConference({
     }, intervalMs);
     return () => window.clearInterval(timer);
   }, [connected, participantToken, roomId]);
+
+  // When the control plane switches to webinar, stop publishing for non-hosts.
+  useEffect(() => {
+    const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+    if (!room || room.state !== ConnectionState.Connected) return;
+    if (roomMode === "webinar") {
+      void applyListenerOnly(room, true);
+    } else {
+      syncMediaPresenceRef.current(room);
+    }
+  }, [applyListenerOnly, roomMode, sessionKey]);
 
   const runMediaToggle = useCallback(
     async (kind: "audio" | "video") => {

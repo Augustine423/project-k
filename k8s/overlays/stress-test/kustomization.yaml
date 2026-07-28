@@ -27,3 +27,4 @@ patches:
   - path: patches/control-plane-env.yaml
   - path: patches/redis-memory.yaml
   - path: patches/livekit-resources.yaml
+  - path: patches/livekit-hostnetwork.yaml

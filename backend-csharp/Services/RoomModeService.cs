@@ -142,13 +142,23 @@ public sealed class RoomModeService
         return currentMode;
     }
 
-    public bool ShouldJoinAsListener(RoomRecord room, ParticipantRecord participant)
+    public bool IsListenerOnly(
+        RoomRecord room,
+        ParticipantRecord participant,
+        int activePublishers,
+        bool isCurrentlyPublishing = false)
     {
         if (participant.Role is ParticipantRoles.Host or ParticipantRoles.CoHost)
             return false;
 
-        return string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal);
+        if (string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal))
+            return true;
+
+        return activePublishers >= room.MaxPublishers && !isCurrentlyPublishing;
     }
+
+    public bool ShouldJoinAsListener(RoomRecord room, ParticipantRecord participant)
+        => IsListenerOnly(room, participant, room.ActivePublishers, isCurrentlyPublishing: false);
 }
 
 public sealed record MediaStats(int TotalParticipants, int Publishers, int Listeners);
