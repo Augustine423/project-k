@@ -44,7 +44,8 @@ export function createLiveKitRoomOptions(): RoomOptions {
     videoCaptureDefaults: cameraEnableCaptureOptions(),
     publishDefaults: {
       simulcast: true,
-      videoCodec: "vp8",
+      videoCodec: "vp9",
+      backupCodec: { codec: "vp8", encoding: VideoPresets.h720.encoding },
       stopMicTrackOnMute: false,
       // High layer = 720p; lower layers for weak viewers.
       videoEncoding: VideoPresets.h720.encoding,

@@ -5,7 +5,7 @@ using Kzys.Backend.Realtime;
 namespace Kzys.Backend.Services;
 
 /// <summary>
-/// Tracks publisher vs listener counts for room mode metrics (always interactive today).
+/// Tracks publisher vs listener counts and switches rooms between interactive and webinar modes.
 /// </summary>
 public sealed class RoomModeService
 {
@@ -121,18 +121,33 @@ public sealed class RoomModeService
 
     public string EvaluateMode(string currentMode, int totalParticipants, int publishers, int listeners)
     {
-        _ = currentMode;
-        _ = totalParticipants;
-        _ = publishers;
-        _ = listeners;
-        return RoomModes.Interactive;
+        if (string.Equals(currentMode, RoomModes.Interactive, StringComparison.Ordinal))
+        {
+            if (totalParticipants >= _config.WebinarEnterListeners)
+                return RoomModes.Webinar;
+
+            if (publishers > 0
+                && listeners / (double)Math.Max(1, publishers) >= _config.WebinarEnterRatio)
+            {
+                return RoomModes.Webinar;
+            }
+        }
+
+        if (string.Equals(currentMode, RoomModes.Webinar, StringComparison.Ordinal)
+            && totalParticipants <= _config.WebinarExitListeners)
+        {
+            return RoomModes.Interactive;
+        }
+
+        return currentMode;
     }
 
     public bool ShouldJoinAsListener(RoomRecord room, ParticipantRecord participant)
     {
-        _ = room;
-        _ = participant;
-        return false;
+        if (participant.Role is ParticipantRoles.Host or ParticipantRoles.CoHost)
+            return false;
+
+        return string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal);
     }
 }
 

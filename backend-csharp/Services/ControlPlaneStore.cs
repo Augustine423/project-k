@@ -26,6 +26,7 @@ public sealed class ControlPlaneStore
     private static string ParticipantsKey(string id) => "room:" + id + ":participants";
     private static string MediaKey(string id) => "room:" + id + ":media";
     private static string RoomSecretKey(string id) => "room:" + id + ":secret";
+    private static string RoomPinKey(string id) => "room:" + id + ":pin";
     private static string ActiveRoomsKey => "kzys:active_rooms";
     private const string ModeQueueKey = "kzys:mode:apply_queue";
     public const string RoomCreatedCounterKey = "kzys:scaling:room-created-total";
@@ -36,6 +37,10 @@ public sealed class ControlPlaneStore
         await _db.StringSetAsync(RoomKey(room.Id), json, RoomTtl);
         if (!string.IsNullOrEmpty(room.Secret))
             await _db.StringSetAsync(RoomSecretKey(room.Id), room.Secret, RoomTtl);
+        if (!string.IsNullOrEmpty(room.Pin))
+            await _db.StringSetAsync(RoomPinKey(room.Id), room.Pin, RoomTtl);
+        else
+            await _db.KeyDeleteAsync(RoomPinKey(room.Id));
         await _db.SetAddAsync(ActiveRoomsKey, room.Id);
         await _db.KeyExpireAsync(ActiveRoomsKey, RoomTtl);
     }
@@ -44,12 +49,22 @@ public sealed class ControlPlaneStore
     {
         var value = await _db.StringGetAsync(RoomKey(id));
         if (value.IsNullOrEmpty) return null;
-        return JsonSerializer.Deserialize<RoomRecord>((string)value!);
+        var room = JsonSerializer.Deserialize<RoomRecord>((string)value!);
+        if (room is null) return null;
+
+        var pin = await _db.StringGetAsync(RoomPinKey(id));
+        if (!pin.IsNullOrEmpty)
+            room.Pin = (string)pin!;
+
+        return room;
     }
 
     public async Task DeleteRoomAsync(string roomId, CancellationToken ct = default)
     {
-        await _db.KeyDeleteAsync([RoomKey(roomId), ParticipantsKey(roomId), MediaKey(roomId), RoomSecretKey(roomId)]);
+        await _db.KeyDeleteAsync([
+            RoomKey(roomId), ParticipantsKey(roomId), MediaKey(roomId),
+            RoomSecretKey(roomId), RoomPinKey(roomId),
+        ]);
         await _db.SetRemoveAsync(ActiveRoomsKey, roomId);
         await RefreshScalingMetricsAsync(ct);
     }

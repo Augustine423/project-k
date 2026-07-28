@@ -1,11 +1,49 @@
 name: project-k
 
+# Profiles:
+#   dev (default)  — Vite HMR + hot reload
+#   prod           — nginx static build (production-like local testing)
+#
+# Usage:
+#   docker compose up --build                          # dev
+#   docker compose --profile prod up --build           # prod-like
+#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml --profile prod up --build
+
+x-server-env: &server-env
+  PORT: 4000
+  REDIS_URL: redis://redis:6379
+  JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
+  TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
+  TURN_HOST: ${PUBLIC_HOST}
+  TURN_PORT: ${TURN_PORT}
+  TURN_TLS_PORT: ${TURN_TLS_PORT}
+  TURN_USE_TLS: ${TURN_USE_TLS}
+  MAX_ROOM_PARTICIPANTS: "${MAX_ROOM_PARTICIPANTS:-500}"
+  WEBINAR_ENTER_LISTENERS: "${WEBINAR_ENTER_LISTENERS:-45}"
+  WEBINAR_ENTER_RATIO: "${WEBINAR_ENTER_RATIO:-2.0}"
+  WEBINAR_EXIT_LISTENERS: "${WEBINAR_EXIT_LISTENERS:-20}"
+  INTERACTIVE_MAX_PUBLISHERS: "${INTERACTIVE_MAX_PUBLISHERS:-50}"
+  WEBINAR_MAX_PUBLISHERS: "${WEBINAR_MAX_PUBLISHERS:-16}"
+  CORS_ORIGIN: "${CORS_ORIGIN}"
+  SERVICE_NAME: kzys-control-plane
+  LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+  LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+  LIVEKIT_PUBLIC_URL: "ws://${PUBLIC_HOST}:${LIVEKIT_PORT:-7880}"
+
 services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    command:
+      - redis-server
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-256mb}"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis-data:/data
     healthcheck:
@@ -21,7 +59,6 @@ services:
       - --config
       - /etc/livekit.yaml
       - --node-ip
-      # "localhost" hostname breaks ICE; prefer loopback / reachable address.
       - ${LIVEKIT_NODE_IP:-127.0.0.1}
     volumes:
       - ./media/livekit/livekit.yaml:/etc/livekit.yaml:ro
@@ -29,6 +66,12 @@ services:
       - "${LIVEKIT_PORT:-7880}:7880"
       - "${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
       - "50000-50100:50000-50100/udp"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7880/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   coturn:
     image: coturn/coturn:4.6.2
@@ -55,26 +98,9 @@ services:
       redis:
         condition: service_healthy
       livekit:
-        condition: service_started
+        condition: service_healthy
     environment:
-      PORT: 4000
-      REDIS_URL: redis://redis:6379
-      JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
-      TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
-      TURN_HOST: ${PUBLIC_HOST}
-      TURN_PORT: ${TURN_PORT}
-      TURN_TLS_PORT: ${TURN_TLS_PORT}
-      TURN_USE_TLS: ${TURN_USE_TLS}
-      MAX_ROOM_PARTICIPANTS: "${MAX_ROOM_PARTICIPANTS:-500}"
-      WEBINAR_ENTER_LISTENERS: "${WEBINAR_ENTER_LISTENERS:-45}"
-      WEBINAR_EXIT_LISTENERS: "${WEBINAR_EXIT_LISTENERS:-20}"
-      INTERACTIVE_MAX_PUBLISHERS: "${INTERACTIVE_MAX_PUBLISHERS:-50}"
-      WEBINAR_MAX_PUBLISHERS: "${WEBINAR_MAX_PUBLISHERS:-16}"
-      CORS_ORIGIN: "${CORS_ORIGIN}"
-      SERVICE_NAME: kzys-control-plane
-      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
-      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-      LIVEKIT_PUBLIC_URL: "ws://${PUBLIC_HOST}:${LIVEKIT_PORT:-7880}"
+      <<: *server-env
     ports:
       - "${SERVER_PORT}:4000"
     healthcheck:
@@ -82,9 +108,16 @@ services:
       interval: 10s
       timeout: 3s
       retries: 3
-      start_period: 10s
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVER_CPU_LIMIT:-2}"
+          memory: "${SERVER_MEM_LIMIT:-512m}"
 
+  # Dev UI — Vite HMR (default profile)
   web:
+    profiles: ["dev"]
     build:
       context: ./web
       target: dev
@@ -93,7 +126,6 @@ services:
       server:
         condition: service_healthy
     environment:
-      # Empty PUBLIC_API_URL → same-origin /api + /ws via Vite proxy (needed for HTTPS).
       VITE_API_URL: "${PUBLIC_API_URL:-}"
       VITE_PROXY_TARGET: "http://server:4000"
       VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
@@ -103,6 +135,29 @@ services:
       - ./web/src:/app/src
       - ./web/index.html:/app/index.html
       - ./web/vite.config.ts:/app/vite.config.ts
+
+  # Production-like UI — nginx serving /dist with same-origin proxy
+  web-prod:
+    profiles: ["prod"]
+    build:
+      context: ./web
+      target: production
+      args:
+        VITE_API_URL: ""
+        NGINX_CONF: nginx.compose.conf
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   redis-data:

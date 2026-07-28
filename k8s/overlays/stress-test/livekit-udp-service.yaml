@@ -1,0 +1,20 @@
+# NodePort UDP range for LiveKit RTC during stress tests (lab/single-node clusters).
+# Production GKE: prefer hostNetwork + NLB or dedicated UDP LoadBalancer per node.
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-udp
+  namespace: kzys
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+spec:
+  type: NodePort
+  selector:
+    app: livekit
+  ports:
+    - name: rtc-udp-start
+      port: 50000
+      targetPort: 50000
+      protocol: UDP
+      nodePort: 30000

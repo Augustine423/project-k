@@ -19,8 +19,15 @@ interface SharedSocket {
 const shared = new Map<string, SharedSocket>();
 
 const CLOSE_DEBOUNCE_MS = 300;
-const RECONNECT_DELAY_MS = 1200;
-const MAX_RECONNECT_ATTEMPTS = 8;
+const RECONNECT_BASE_MS = 800;
+const RECONNECT_MAX_MS = 15000;
+const MAX_RECONNECT_ATTEMPTS = 10;
+
+function reconnectDelayMs(attempt: number): number {
+  const exp = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** (attempt - 1));
+  const jitter = Math.floor(Math.random() * 400);
+  return exp + jitter;
+}
 
 function emit(sock: SharedSocket, evt: RoomEvent) {
   for (const listener of sock.listeners) listener(evt);
@@ -68,7 +75,7 @@ function wireSocket(url: string, sock: SharedSocket) {
         const next = new WebSocket(url);
         sock.ws = next;
         wireSocket(url, sock);
-      }, RECONNECT_DELAY_MS);
+      }, reconnectDelayMs(attempt));
     };
     tryReconnect();
   };

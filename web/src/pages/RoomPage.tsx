@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { endRoom, kickParticipant, leaveRoom as leaveRoomApi, listParticipants, setRoomLocked } from "../api/client";
 import { sendRoomChat, useRoomEvents } from "../api/useRoomEvents";
 import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
-import type { JoinTicket, Participant } from "../api/types";
+import type { JoinTicket, Participant, Room } from "../api/types";
 import type { ChatMessage } from "../components/ChatPanel";
 import { MeetingHeader } from "../components/MeetingChrome";
 import { InviteLinkBar } from "../components/InviteLinkBar";
@@ -50,6 +50,11 @@ export function RoomPage() {
 
   useEffect(() => {
     if (!roomId) return;
+    void refreshParticipants();
+  }, [roomId, refreshParticipants]);
+
+  useEffect(() => {
+    if (!roomId) return;
     const stored = getTicket(roomId);
     if (!stored) {
       navigate(`/join/${roomId}`, { replace: true });
@@ -70,11 +75,7 @@ export function RoomPage() {
 
   const onRoomEvent = useCallback(
     (evt: { type: string; data: unknown }) => {
-      if (evt.type === "ws.open") {
-        void refreshParticipants();
-        return;
-      }
-      if (evt.type === "ws.close") return;
+      if (evt.type === "ws.open" || evt.type === "ws.close") return;
 
       if (evt.type === "chat.message") {
         const data = evt.data as {
@@ -98,8 +99,19 @@ export function RoomPage() {
           ];
         });
       }
-      if (evt.type === "participant.joined" || evt.type === "participant.left") {
-        void refreshParticipants();
+      if (evt.type === "participant.joined") {
+        const joined = evt.data as Participant;
+        if (joined?.id) {
+          setParticipants((prev) => (prev.some((p) => p.id === joined.id) ? prev : [...prev, joined]));
+        }
+        return;
+      }
+      if (evt.type === "participant.left") {
+        const data = evt.data as { participantId?: string };
+        if (data.participantId) {
+          setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
+        }
+        return;
       }
       if (evt.type === "participant.kicked") {
         const data = evt.data as { participantId?: string };
@@ -113,6 +125,22 @@ export function RoomPage() {
       if (evt.type === "room.ended") {
         setStatus("ended");
         clearTicket(roomId);
+      }
+      if (evt.type === "room.mode_changed") {
+        const data = evt.data as { mode?: string; maxPublishers?: number };
+        setTicket((prev) =>
+          prev
+            ? {
+                ...prev,
+                room: {
+                  ...prev.room,
+                  mode: (data.mode as Room["mode"]) ?? prev.room.mode,
+                  maxPublishers: data.maxPublishers ?? prev.room.maxPublishers,
+                },
+              }
+            : prev,
+        );
+        return;
       }
       if (evt.type === "room.locked") {
         setTicket((prev) =>

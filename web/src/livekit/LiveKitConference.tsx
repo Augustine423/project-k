@@ -8,7 +8,7 @@ import {
   type TrackPublication,
 } from "livekit-client";
 import type { TurnInfo } from "../api/types";
-import { reportMediaPresence } from "../api/client";
+import { reportMediaPresence, refreshTurnCredentials } from "../api/client";
 import { ControlBar } from "../components/ControlBar";
 import { GalleryPagination } from "../components/GalleryPagination";
 import { StreamVideoTile } from "../components/StreamVideoTile";
@@ -88,6 +88,7 @@ export function LiveKitConference({
   const [connected, setConnected] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [galleryPage, setGalleryPage] = useState(1);
+  const [listenerOnly, setListenerOnly] = useState(false);
   const mediaAvailable = canAccessMediaDevices();
 
   const onConnectedRef = useRef(onConnected);
@@ -121,6 +122,15 @@ export function LiveKitConference({
     };
   }, []);
 
+  const applyListenerOnly = useCallback(async (room: Room, nextListenerOnly: boolean) => {
+    setListenerOnly(nextListenerOnly);
+    if (!nextListenerOnly) return;
+    const lp = room.localParticipant;
+    if (lp.isMicrophoneEnabled) await lp.setMicrophoneEnabled(false);
+    if (lp.isCameraEnabled) await lp.setCameraEnabled(false);
+    applyLocalStateRef.current(room);
+  }, []);
+
   const syncMediaPresence = useCallback(
     (room: Room) => {
       const lp = room.localParticipant;
@@ -128,9 +138,14 @@ export function LiveKitConference({
         publishing: lp.isMicrophoneEnabled || lp.isCameraEnabled,
         audio: lp.isMicrophoneEnabled,
         video: lp.isCameraEnabled,
-      }).catch(() => undefined);
+      })
+        .then((res) => {
+          if (res.listenerOnly) void applyListenerOnly(room, true);
+          else setListenerOnly(false);
+        })
+        .catch(() => undefined);
     },
-    [roomId, participantToken],
+    [applyListenerOnly, roomId, participantToken],
   );
 
   const syncMediaPresenceRef = useRef(syncMediaPresence);
@@ -179,9 +194,6 @@ export function LiveKitConference({
   // One SFU session per room+token — never disconnect on React remount.
   useEffect(() => {
     if (!mediaAvailable) {
-      // #region agent log
-      fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'B',location:'LiveKitConference.tsx:mediaAvailable',message:'media devices unavailable',data:{reason:mediaUnavailableReason(),secure:typeof window!=='undefined'?window.isSecureContext:null,protocol:typeof window!=='undefined'?window.location.protocol:null,host:typeof window!=='undefined'?window.location.host:null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       onErrorRef.current(mediaUnavailableReason());
       return;
     }
@@ -189,9 +201,6 @@ export function LiveKitConference({
     let cancelled = false;
     const room = retainLiveKitRoom(sessionKey);
     roomRef.current = room;
-    // #region agent log
-    fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:connect-start',message:'LiveKit session retain',data:{roomState:room.state,liveKitUrl:liveKitUrlRef.current,hasToken:Boolean(liveKitTokenRef.current),tokenLen:liveKitTokenRef.current?.length??0,pageProtocol:typeof window!=='undefined'?window.location.protocol:null,pageHost:typeof window!=='undefined'?window.location.host:null,turnUrlCount:turnRef.current?.urls?.length??0},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
 
     const onLocalMediaChange = () => {
       if (!cancelled) applyLocalStateRef.current(room);
@@ -236,9 +245,6 @@ export function LiveKitConference({
 
     const finishConnected = () => {
       if (cancelled) return;
-      // #region agent log
-      fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:finishConnected',message:'LiveKit connected',data:{roomState:room.state,identity:room.localParticipant?.identity??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setConnected(true);
       applyLocalStateRef.current(room);
       refreshRemotes(room);
@@ -280,9 +286,6 @@ export function LiveKitConference({
           });
           if (!cancelled) finishConnected();
         } catch (err) {
-          // #region agent log
-          fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'mobile-fix',hypothesisId:'M1',location:'LiveKitConference.tsx:connect-error',message:'LiveKit connect failed',data:{error:err instanceof Error?err.message:String(err),liveKitUrl:liveKitUrlRef.current,roomState:room.state,pageHost:typeof window!=='undefined'?window.location.host:null},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           if (!cancelled) {
             onErrorRef.current(err instanceof Error ? err.message : "Failed to join media room");
           }
@@ -309,26 +312,31 @@ export function LiveKitConference({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- stable SFU session; props read via refs
   }, [sessionKey, mediaAvailable]);
 
+  // Refresh TURN credentials before the 24h coturn TTL expires (long webinars).
+  useEffect(() => {
+    if (!connected) return;
+    const intervalMs = 12 * 60 * 60 * 1000;
+    const timer = window.setInterval(() => {
+      void refreshTurnCredentials(roomId, participantToken)
+        .then((next) => {
+          turnRef.current = next;
+        })
+        .catch(() => undefined);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [connected, participantToken, roomId]);
+
   const runMediaToggle = useCallback(
     async (kind: "audio" | "video") => {
       const room = roomRef.current ?? getLiveKitRoom(sessionKey);
-      // #region agent log
-      fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'C',location:'LiveKitConference.tsx:runMediaToggle:entry',message:'media toggle clicked',data:{kind,hasRoom:Boolean(room),roomState:room?.state??null,mediaBusy:mediaBusyRef.current,micOn:room?.localParticipant?.isMicrophoneEnabled??null,camOn:room?.localParticipant?.isCameraEnabled??null},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
-      if (!room || mediaBusyRef.current) return;
+      if (!room || mediaBusyRef.current || listenerOnly) return;
       roomRef.current = room;
       if (room.state === ConnectionState.Connecting || room.state === ConnectionState.Reconnecting) {
-        // #region agent log
-        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:runMediaToggle:still-connecting',message:'toggle blocked - still connecting',data:{kind,roomState:room.state},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         onErrorRef.current("Media server is still connecting — wait a moment and try again.");
         return;
       }
       if (room.state !== ConnectionState.Connected) {
-        // #region agent log
-        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:runMediaToggle:not-connected',message:'toggle blocked - not connected',data:{kind,roomState:room.state},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
-        onErrorRef.current("Not connected to media server — open https://localhost:5173 and refresh.");
+        onErrorRef.current("Not connected to media server — refresh and try again.");
         return;
       }
 
@@ -345,17 +353,8 @@ export function LiveKitConference({
           await lp.setCameraEnabled(enabling, cameraEnableCaptureOptions());
           if (enabling) await waitForLocalTrack(lp, Track.Source.Camera);
         }
-        const built = buildLocalParticipantStream(lp);
-        const source = kind === "audio" ? Track.Source.Microphone : Track.Source.Camera;
-        const pub = lp.getTrackPublication(source);
-        // #region agent log
-        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'D',location:'LiveKitConference.tsx:runMediaToggle:success',message:'media toggle completed',data:{kind,enabling,micOn:lp.isMicrophoneEnabled,camOn:lp.isCameraEnabled,builtTracks:built?.getTracks().map(t=>({kind:t.kind,readyState:t.readyState,enabled:t.enabled,muted:t.muted}))??[],pubMuted:pub?.isMuted??null,hasPubTrack:Boolean(pub?.track),trackReady:pub?.track?.mediaStreamTrack?.readyState??null},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         applyLocalState(room);
       } catch (err) {
-        // #region agent log
-        fetch('/__agent_debug',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'5d65c5'},body:JSON.stringify({sessionId:'5d65c5',runId:'pre-fix',hypothesisId:'C',location:'LiveKitConference.tsx:runMediaToggle:error',message:'media toggle threw',data:{kind,enabling,error:err instanceof Error?err.message:String(err),name:err instanceof Error?err.name:null,micOn:lp.isMicrophoneEnabled,camOn:lp.isCameraEnabled},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         applyLocalState(room);
         onErrorRef.current(mediaToggleErrorMessage(kind, err));
       } finally {
@@ -363,12 +362,12 @@ export function LiveKitConference({
         setMediaBusy(false);
       }
     },
-    [applyLocalState, sessionKey],
+    [applyLocalState, listenerOnly, sessionKey],
   );
 
   const shareScreen = useCallback(async () => {
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
-    if (!room || mediaBusyRef.current) return;
+    if (!room || mediaBusyRef.current || listenerOnly) return;
     roomRef.current = room;
     if (room.state !== ConnectionState.Connected) {
       onError("Not connected to media server — open https://localhost:5173 and refresh.");
@@ -385,7 +384,7 @@ export function LiveKitConference({
       mediaBusyRef.current = false;
       setMediaBusy(false);
     }
-  }, [applyLocalState, onError, sessionKey]);
+  }, [applyLocalState, listenerOnly, onError, sessionKey]);
 
   const handleLeave = useCallback(() => {
     forceDisconnectLiveKitRoom(sessionKey);
@@ -478,6 +477,9 @@ export function LiveKitConference({
       {!connected && (
         <div className="join-banner info">Connecting to media server…</div>
       )}
+      {listenerOnly && connected && (
+        <div className="join-banner info">Webinar mode — you are viewing as a listener.</div>
+      )}
       <GalleryPagination
         page={galleryPage}
         totalPages={totalGalleryPages}
@@ -523,8 +525,8 @@ export function LiveKitConference({
         onToggleVideo={() => void runMediaToggle("video")}
         onShareScreen={() => void shareScreen()}
         onLeave={handleLeave}
-        showScreenShare
-        showMediaControls
+        showScreenShare={!listenerOnly}
+        showMediaControls={!listenerOnly}
         chatBadge={chatBadge}
         mediaBusy={mediaBusy}
         onFocusChat={onFocusChat}

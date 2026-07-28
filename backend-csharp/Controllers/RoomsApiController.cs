@@ -15,6 +15,7 @@ public sealed class RoomsApiController : ControllerBase
     private readonly RoomEventHub _hub;
     private readonly RoomPresenceService _presence;
     private readonly RoomModeService _modes;
+    private readonly TurnCredentialService _turn;
     private readonly AppConfig _config;
 
     public RoomsApiController(
@@ -22,12 +23,14 @@ public sealed class RoomsApiController : ControllerBase
         RoomEventHub hub,
         RoomPresenceService presence,
         RoomModeService modes,
+        TurnCredentialService turn,
         AppConfig config)
     {
         _rooms = rooms;
         _hub = hub;
         _presence = presence;
         _modes = modes;
+        _turn = turn;
         _config = config;
     }
 
@@ -126,6 +129,27 @@ public sealed class RoomsApiController : ControllerBase
         }
     }
 
+    [HttpGet("{roomId}/turn")]
+    public async Task<ActionResult<TurnInfoDto>> RefreshTurn(string roomId, CancellationToken ct)
+    {
+        var claims = RequireParticipant(roomId);
+        if (claims is null) return Unauthorized(new { error = "invalid token" });
+
+        var room = await _rooms.GetRoomAsync(roomId, ct);
+        if (room is null) return NotFound(new { error = "room not found" });
+
+        var mediaHost = MediaHostHelper.FromRequest(Request, _config.TurnHost);
+        var turn = _turn.BuildTurnInfo(claims.ParticipantId, mediaHost)
+            ?? new TurnInfoDto { Urls = [], Username = "", Credential = "" };
+
+        return Ok(new TurnInfoDto
+        {
+            Urls = turn.Urls.Select(u => MediaHostHelper.RewriteUrlHost(u, mediaHost)).ToArray(),
+            Username = turn.Username,
+            Credential = turn.Credential,
+        });
+    }
+
     [HttpPost("{roomId}/leave")]
     public async Task<IActionResult> Leave(string roomId, CancellationToken ct)
     {
@@ -164,6 +188,7 @@ public sealed class RoomsApiController : ControllerBase
         var claims = RequireHost(roomId);
         if (claims is null) return Forbid();
         await _rooms.KickParticipantAsync(roomId, participantId, ct);
+        await _modes.ReconcileRoomAsync(roomId, ct);
         _hub.Broadcast(roomId, new RoomEvent { Type = "participant.kicked", Data = new { participantId } });
         return Ok(new { ok = true });
     }

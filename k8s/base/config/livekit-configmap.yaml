@@ -1,0 +1,26 @@
+# LiveKit SFU configuration for GKE.
+# Replace LIVEKIT_NODE_IP in the overlay or patch node_ip before production deploy.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-livekit-config
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  livekit.yaml: |
+    port: 7880
+    bind_addresses:
+      - ""
+    rtc:
+      tcp_port: 7881
+      port_range_start: 50000
+      port_range_end: 50100
+      use_external_ip: true
+      enable_loopback_candidate: false
+    keys:
+      devkey: CHANGE_ME_LIVEKIT_SECRET
+    redis:
+      address: redis.kzys.svc.cluster.local:6379
+    logging:
+      level: info

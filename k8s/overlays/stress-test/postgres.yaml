@@ -1,0 +1,71 @@
+# PostgreSQL for multi-replica control plane during stress tests.
+# Do not use SQLite when running >1 control-plane pod.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: kzys
+  labels:
+    app: postgres
+    app.kubernetes.io/part-of: project-k
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              value: kzys
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: POSTGRES_PASSWORD
+            - name: POSTGRES_DB
+              value: kzys
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", "kzys", "-d", "kzys"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["pg_isready", "-U", "kzys", "-d", "kzys"]
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: kzys
+  labels:
+    app: postgres
+spec:
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: 5432

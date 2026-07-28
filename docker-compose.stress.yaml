@@ -1,0 +1,60 @@
+# Stress / multi-replica testing overlay for Docker Compose.
+#
+# Requires PostgreSQL (SQLite breaks with multiple server replicas).
+#
+# Usage:
+#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml --profile prod up --build --scale server=3
+#   - Lower WEBINAR_ENTER_LISTENERS in .env to trigger webinar mode with fewer clients
+#   - Watch Redis keys: kzys:room_count, kzys:total_node_load
+#   - API scaling metrics: GET /api/rooms/scaling/metrics
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kzys
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-kzys-stress-test}
+      POSTGRES_DB: kzys
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U kzys -d kzys"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    command:
+      - redis-server
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-512mb}"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+
+  server:
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://kzys:${POSTGRES_PASSWORD:-kzys-stress-test}@postgres:5432/kzys
+      MAX_ROOM_PARTICIPANTS: "${MAX_ROOM_PARTICIPANTS:-10000}"
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVER_CPU_LIMIT:-2}"
+          memory: "${SERVER_MEM_LIMIT:-768m}"
+
+  livekit:
+    deploy:
+      resources:
+        limits:
+          cpus: "${LIVEKIT_CPU_LIMIT:-4}"
+          memory: "${LIVEKIT_MEM_LIMIT:-2g}"
+
+volumes:
+  postgres-data:

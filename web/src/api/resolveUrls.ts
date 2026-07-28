@@ -56,30 +56,7 @@ export function resolveJoinTicketMedia(
   if (import.meta.env.DEV && typeof window !== "undefined") {
     const secure = window.location.protocol === "https:";
     const liveKitUrl = `${secure ? "wss" : "ws"}://${window.location.host}/livekit`;
-    // Phones must use the LAN host for TURN/STUN, not localhost.
     const turnHost = isLoopbackHost(host) ? LOCAL_DEV_HOST : host;
-    // #region agent log
-    fetch("/__agent_debug", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "5d65c5" },
-      body: JSON.stringify({
-        sessionId: "5d65c5",
-        runId: "mobile-fix",
-        hypothesisId: "M1",
-        location: "resolveUrls.ts:resolveJoinTicketMedia",
-        message: "resolved LiveKit URL for client",
-        data: {
-          ticketUrl: ticket.liveKitUrl,
-          resolvedUrl: liveKitUrl,
-          turnHost,
-          pageHost: window.location.host,
-          pageProtocol: window.location.protocol,
-          turnUrls: rewriteTurn(ticket, turnHost).urls,
-        },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => undefined);
-    // #endregion
     return { liveKitUrl, turn: rewriteTurn(ticket, turnHost) };
   }
 

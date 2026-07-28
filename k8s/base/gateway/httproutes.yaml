@@ -32,11 +32,10 @@ spec:
       backendRefs:
         - name: kzys-control-plane
           port: 4000
-    # SignalR hub (C# realtime events — used by RoomEventHub)
     - matches:
         - path:
             type: PathPrefix
-            value: /meetinghub
+            value: /api/rooms/scaling
       backendRefs:
         - name: kzys-control-plane
           port: 4000

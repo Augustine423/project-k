@@ -9,6 +9,7 @@ public sealed class RoomService
     private readonly JwtTokenService _jwt;
     private readonly TurnCredentialService _turn;
     private readonly LiveKitTokenService _liveKit;
+    private readonly RoomModeService _modes;
     private readonly AppConfig _config;
     private readonly ILogger<RoomService> _log;
 
@@ -17,6 +18,7 @@ public sealed class RoomService
         JwtTokenService jwt,
         TurnCredentialService turn,
         LiveKitTokenService liveKit,
+        RoomModeService modes,
         AppConfig config,
         ILogger<RoomService> log)
     {
@@ -24,6 +26,7 @@ public sealed class RoomService
         _jwt = jwt;
         _turn = turn;
         _liveKit = liveKit;
+        _modes = modes;
         _config = config;
         _log = log;
     }
@@ -115,6 +118,7 @@ public sealed class RoomService
     public async Task KickParticipantAsync(string roomId, string participantId, CancellationToken ct = default)
     {
         await MustRoomAsync(roomId, ct);
+        await _store.RemoveMediaPresenceAsync(roomId, participantId, ct);
         await _store.RemoveParticipantAsync(roomId, participantId, ct);
     }
 
@@ -137,8 +141,7 @@ public sealed class RoomService
         var turn = _turn.BuildTurnInfo(participant.Id, mediaHost)
             ?? new TurnInfoDto { Urls = [], Username = "", Credential = "" };
 
-        var canPublish = participant.Role is ParticipantRoles.Host or ParticipantRoles.CoHost
-            or ParticipantRoles.Participant;
+        var canPublish = !_modes.ShouldJoinAsListener(room, participant);
 
         return new JoinTicketDto
         {

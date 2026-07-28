@@ -10,6 +10,7 @@ namespace Kzys.Backend.Realtime;
 public sealed class RoomEventHub : IHostedService
 {
     private const string BroadcastChannel = "kzys:room:events";
+    private const int MaxMessageBytes = 65536;
 
     private static readonly JsonSerializerOptions EventJson = new()
     {
@@ -142,13 +143,27 @@ public sealed class RoomEventHub : IHostedService
     private async Task PumpReceiveAsync(RoomSocket client, CancellationToken ct)
     {
         var buffer = new byte[8192];
+        using var ms = new System.IO.MemoryStream();
         while (client.Socket.State == WebSocketState.Open && !ct.IsCancellationRequested)
         {
             var result = await client.Socket.ReceiveAsync(buffer, ct);
             if (result.MessageType == WebSocketMessageType.Close) break;
-            if (result.MessageType != WebSocketMessageType.Text) continue;
-            var payload = buffer.AsMemory(0, result.Count).ToArray();
-            ClientMessage?.Invoke(client.RoomId, client.ParticipantId, payload);
+
+            ms.Write(buffer, 0, result.Count);
+            if (ms.Length > MaxMessageBytes)
+            {
+                _log.LogWarning("dropping oversized ws message room={Room} participant={Participant}", client.RoomId, client.ParticipantId);
+                ms.SetLength(0);
+                continue;
+            }
+            if (!result.EndOfMessage) continue;
+
+            if (result.MessageType == WebSocketMessageType.Text)
+            {
+                var payload = ms.ToArray();
+                ClientMessage?.Invoke(client.RoomId, client.ParticipantId, payload);
+            }
+            ms.SetLength(0);
         }
         if (client.Socket.State is WebSocketState.Open or WebSocketState.CloseReceived)
         {

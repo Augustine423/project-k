@@ -22,7 +22,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var redisUrl = config.RedisUrl.Replace("redis://", "", StringComparison.OrdinalIgnoreCase);
-builder.Services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(redisUrl));
+builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
+{
+    var options = ConfigurationOptions.Parse(redisUrl);
+    options.AbortOnConnectFail = false;
+    options.ConnectRetry = 5;
+    options.ReconnectRetryPolicy = new ExponentialRetry(5000);
+    return ConnectionMultiplexer.Connect(options);
+});
 builder.Services.AddSingleton<ControlPlaneStore>();
 builder.Services.AddSingleton<RoomWsPresenceStore>();
 builder.Services.AddSingleton<JwtTokenService>(_ => new JwtTokenService(config.JwtSigningSecret));
@@ -42,9 +49,17 @@ builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
 
 var dbPath = Environment.GetEnvironmentVariable("KZYS_DB_PATH")
     ?? Path.Combine(AppContext.BaseDirectory, "data", "kzys.db");
-Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite($"Data Source={dbPath}"));
+{
+    if (!string.IsNullOrWhiteSpace(databaseUrl))
+        options.UseNpgsql(databaseUrl);
+    else
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
+        options.UseSqlite($"Data Source={dbPath}");
+    }
+});
 
 builder.Services.AddCors(options =>
 {

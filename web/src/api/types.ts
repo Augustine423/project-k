@@ -1,5 +1,4 @@
-// Mirrors the JSON shapes returned by the C# control plane
-// (server/internal/rooms/types.go and related handlers).
+// Mirrors the JSON shapes returned by the C# control plane API.
 
 export type RoomMode = "interactive" | "webinar";
 export type ParticipantRole = "host" | "cohost" | "participant";

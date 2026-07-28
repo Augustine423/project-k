@@ -57,24 +57,5 @@ spec:
       port: 80
       targetPort: 80
 ---
-# HPA: scale 1→5 replicas on CPU. Web is pure static files served by nginx
-# so each replica is very lightweight (~25m CPU idle).
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: kzys-web-hpa
-  namespace: kzys
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: kzys-web
-  minReplicas: 1
-  maxReplicas: 10
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 70
+# Scaling: KEDA web-scaler (keda/scaledobjects.yaml) handles replica count.
+# Do not add an HPA on the same Deployment — KEDA and HPA conflict.

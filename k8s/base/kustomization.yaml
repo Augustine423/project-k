@@ -5,6 +5,7 @@ resources:
   - namespace.yaml
   - config/app-configmap.yaml
   - config/coturn-configmap.yaml
+  - config/livekit-configmap.yaml
   - redis.yaml
   - coturn.yaml
   - livekit.yaml

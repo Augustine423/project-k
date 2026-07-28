@@ -1,4 +1,4 @@
-import type { ApiError, JoinTicket, Participant, Room } from "./types";
+import type { ApiError, JoinTicket, Participant, Room, TurnInfo } from "./types";
 
 /** Same-origin in dev (Vite proxy) so phones on the LAN hit the PC, not phone-localhost. */
 function apiBase(): string {
@@ -114,6 +114,10 @@ export function reportMediaPresence(
     headers: authHeader(token),
     body: JSON.stringify(state),
   });
+}
+
+export function refreshTurnCredentials(roomId: string, token: string): Promise<TurnInfo> {
+  return request(`/api/rooms/${roomId}/turn`, { headers: authHeader(token) });
 }
 
 export function wsUrlFor(roomId: string, token: string): string {
