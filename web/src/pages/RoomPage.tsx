@@ -1,6 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { endRoom, kickParticipant, leaveRoom as leaveRoomApi, listParticipants, setRoomLocked } from "../api/client";
+import {
+  endRoom,
+  getParticipantCount,
+  kickParticipant,
+  leaveRoom as leaveRoomApi,
+  listParticipantsPage,
+  MAX_CHAT_MESSAGES,
+  setRoomLocked,
+} from "../api/client";
 import { sendRoomChat, useRoomEvents } from "../api/useRoomEvents";
 import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant, Room } from "../api/types";
@@ -13,8 +21,16 @@ import { LiveKitConference } from "../livekit/LiveKitConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
 import { mediaUnavailableReason } from "../media/secureContext";
 
+const SMALL_ROOM_LIVE_LIST = 200;
+
 function isHostRole(role: string): boolean {
   return role === "host" || role === "cohost";
+}
+
+function appendChatMessage(prev: ChatMessage[], next: ChatMessage): ChatMessage[] {
+  if (prev.some((m) => m.id === next.id)) return prev;
+  const merged = [...prev, next];
+  return merged.length > MAX_CHAT_MESSAGES ? merged.slice(-MAX_CHAT_MESSAGES) : merged;
 }
 
 export function RoomPage() {
@@ -25,6 +41,7 @@ export function RoomPage() {
   const [ticket, setTicket] = useState<JoinTicket | null>(() => getTicket(roomId));
   const [status, setStatus] = useState<"loading" | "connected" | "error" | "ended">("loading");
   const [statusMessage, setStatusMessage] = useState("Connecting…");
+  const [participantCount, setParticipantCount] = useState(1);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [hostBusy, setHostBusy] = useState(false);
@@ -38,11 +55,22 @@ export function RoomPage() {
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
   const unreadChat = Math.max(0, chatMessages.length - chatReadCount);
 
-  const refreshParticipants = useCallback(async () => {
+  const refreshCount = useCallback(async () => {
     if (!roomId) return;
     try {
-      const list = await listParticipants(roomId);
-      setParticipants(list);
+      const { count } = await getParticipantCount(roomId);
+      setParticipantCount(Math.max(1, count));
+    } catch {
+      // non-fatal
+    }
+  }, [roomId]);
+
+  const refreshLiveParticipants = useCallback(async () => {
+    if (!roomId) return;
+    try {
+      const page = await listParticipantsPage(roomId, { offset: 0, limit: SMALL_ROOM_LIVE_LIST });
+      setParticipants(page.items);
+      setParticipantCount(Math.max(1, page.total));
     } catch {
       // non-fatal
     }
@@ -50,8 +78,9 @@ export function RoomPage() {
 
   useEffect(() => {
     if (!roomId) return;
-    void refreshParticipants();
-  }, [roomId, refreshParticipants]);
+    void refreshCount();
+    void refreshLiveParticipants();
+  }, [roomId, refreshCount, refreshLiveParticipants]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -86,23 +115,25 @@ export function RoomPage() {
         };
         if (!data.message) return;
         const id = `${data.participantId ?? "unknown"}-${data.at ?? Date.now()}`;
-        setChatMessages((prev) => {
-          if (prev.some((m) => m.id === id)) return prev;
-          return [
-            ...prev,
-            {
-              id,
-              displayName: data.displayName ?? "Guest",
-              message: data.message!,
-              at: data.at ?? new Date().toISOString(),
-            },
-          ];
-        });
+        setChatMessages((prev) =>
+          appendChatMessage(prev, {
+            id,
+            displayName: data.displayName ?? "Guest",
+            message: data.message!,
+            at: data.at ?? new Date().toISOString(),
+          }),
+        );
+      }
+      if (evt.type === "room.participant_count") {
+        const data = evt.data as { count?: number };
+        if (typeof data.count === "number") setParticipantCount(Math.max(0, data.count));
+        return;
       }
       if (evt.type === "participant.joined") {
         const joined = evt.data as Participant;
         if (joined?.id) {
           setParticipants((prev) => (prev.some((p) => p.id === joined.id) ? prev : [...prev, joined]));
+          setParticipantCount((c) => c + 1);
         }
         return;
       }
@@ -110,6 +141,7 @@ export function RoomPage() {
         const data = evt.data as { participantId?: string };
         if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
+          setParticipantCount((c) => Math.max(0, c - 1));
         }
         return;
       }
@@ -118,8 +150,9 @@ export function RoomPage() {
         if (data.participantId === ticket?.participant.id) {
           clearTicket(roomId);
           navigate("/", { replace: true });
-        } else {
-          void refreshParticipants();
+        } else if (data.participantId) {
+          setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
+          setParticipantCount((c) => Math.max(0, c - 1));
         }
       }
       if (evt.type === "room.ended") {
@@ -148,7 +181,7 @@ export function RoomPage() {
         );
       }
     },
-    [roomId, navigate, ticket?.participant.id, refreshParticipants],
+    [roomId, navigate, ticket?.participant.id],
   );
 
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);
@@ -222,7 +255,8 @@ export function RoomPage() {
     setHostBusy(true);
     try {
       await kickParticipant(roomId, ticket.participantToken, participantId);
-      void refreshParticipants();
+      setParticipants((prev) => prev.filter((p) => p.id !== participantId));
+      setParticipantCount((c) => Math.max(0, c - 1));
     } finally {
       setHostBusy(false);
     }
@@ -242,8 +276,8 @@ export function RoomPage() {
   const handleConnected = useCallback(() => {
     setStatus("connected");
     setStatusMessage("Connected");
-    void refreshParticipants();
-  }, [refreshParticipants]);
+    void refreshCount();
+  }, [refreshCount]);
 
   const handleDisconnected = useCallback(() => {
     setStatus("error");
@@ -265,14 +299,17 @@ export function RoomPage() {
   const { liveKitUrl, turn } = mediaConfig;
   const liveKitToken = ticket.liveKitToken;
 
-  const participantList =
+  const liveParticipantList =
     participants.length > 0
       ? participants
       : [
           {
             id: ticket.participant.id,
+            roomId,
             displayName: ticket.participant.displayName,
             role: ticket.participant.role,
+            approved: true,
+            joinedAt: ticket.participant.joinedAt,
           } as Participant,
         ];
 
@@ -284,7 +321,7 @@ export function RoomPage() {
         statusMessage={statusMessage}
         connected={isLive}
         live={isLive}
-        viewerCount={participantList.length}
+        viewerCount={participantCount}
       />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
@@ -310,7 +347,7 @@ export function RoomPage() {
               onDisconnected={handleDisconnected}
               onError={handleMediaError}
               onLeave={leaveRoom}
-              participantCount={participantList.length}
+              participantCount={participantCount}
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
               onFocusChat={() => focusSidePanel("chat")}
               roomMode={ticket.room.mode}
@@ -321,12 +358,14 @@ export function RoomPage() {
         <aside className={`meeting-sidebar ${mobileSidebarOpen ? "open" : ""}`}>
           <div ref={sidePanelRef} className="room-side-panel-wrap">
             <RoomSidePanel
+              roomId={roomId}
+              participantCount={participantCount}
               messages={chatMessages}
               onSend={sendChat}
               chatDisabled={!chatReady}
               chatDisabledHint={chatReady ? undefined : "Connecting chat…"}
               selfName={ticket.participant.displayName}
-              participants={participantList}
+              liveParticipants={liveParticipantList}
               isHost={isHost}
               locked={ticket.room.locked}
               onToggleLock={toggleLock}

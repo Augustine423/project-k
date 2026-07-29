@@ -15,6 +15,9 @@ function apiBase(): string {
 
 const API_URL = apiBase();
 
+/** Max chat rows kept in meeting UI memory (large webinar safety). */
+export const MAX_CHAT_MESSAGES = 500;
+
 export class ApiRequestError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -68,8 +71,34 @@ export function getRoom(roomId: string): Promise<Room> {
   return request(`/api/rooms/${roomId}`);
 }
 
-export function listParticipants(roomId: string): Promise<Participant[]> {
-  return request(`/api/rooms/${roomId}/participants`);
+export interface ParticipantsPage {
+  items: Participant[];
+  total: number;
+  offset: number;
+  limit: number;
+  hasMore: boolean;
+}
+
+export function listParticipantsPage(
+  roomId: string,
+  params?: { offset?: number; limit?: number; q?: string },
+): Promise<ParticipantsPage> {
+  const search = new URLSearchParams();
+  if (params?.offset != null) search.set("offset", String(params.offset));
+  if (params?.limit != null) search.set("limit", String(params.limit));
+  if (params?.q) search.set("q", params.q);
+  const qs = search.toString();
+  return request(`/api/rooms/${roomId}/participants${qs ? `?${qs}` : ""}`);
+}
+
+/** @deprecated Prefer listParticipantsPage for large rooms. */
+export async function listParticipants(roomId: string): Promise<Participant[]> {
+  const page = await listParticipantsPage(roomId, { offset: 0, limit: 200 });
+  return page.items;
+}
+
+export function getParticipantCount(roomId: string): Promise<{ count: number }> {
+  return request(`/api/rooms/${roomId}/participants/count`);
 }
 
 export function endRoom(roomId: string, token: string): Promise<void> {

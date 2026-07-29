@@ -189,7 +189,10 @@ public sealed class RoomEventHub : IHostedService
         public string RoomId { get; }
         public string ParticipantId { get; }
         public System.Threading.Channels.Channel<byte[]> Outgoing { get; } =
-            System.Threading.Channels.Channel.CreateBounded<byte[]>(16);
+            System.Threading.Channels.Channel.CreateBounded<byte[]>(new System.Threading.Channels.BoundedChannelOptions(64)
+            {
+                FullMode = System.Threading.Channels.BoundedChannelFullMode.DropOldest,
+            });
     }
 }
 
@@ -197,6 +200,7 @@ public sealed class RoomPresenceService
 {
     private readonly ConcurrentDictionary<string, CancellationTokenSource> _pending = new();
     private readonly RoomEventHub _hub;
+    private readonly RoomPresenceBroadcaster _presenceBroadcast;
     private readonly RoomWsPresenceStore _wsPresence;
     private readonly RoomService _rooms;
     private readonly RoomModeService _modes;
@@ -204,12 +208,14 @@ public sealed class RoomPresenceService
 
     public RoomPresenceService(
         RoomEventHub hub,
+        RoomPresenceBroadcaster presenceBroadcast,
         RoomWsPresenceStore wsPresence,
         RoomService rooms,
         RoomModeService modes,
         ILogger<RoomPresenceService> log)
     {
         _hub = hub;
+        _presenceBroadcast = presenceBroadcast;
         _wsPresence = wsPresence;
         _rooms = rooms;
         _modes = modes;
@@ -255,11 +261,7 @@ public sealed class RoomPresenceService
         {
             await _rooms.LeaveRoomAsync(roomId, participantId);
             await _modes.ReconcileRoomAsync(roomId);
-            _hub.Broadcast(roomId, new RoomEvent
-            {
-                Type = "participant.left",
-                Data = new { participantId },
-            });
+            await _presenceBroadcast.BroadcastLeftAsync(roomId, participantId, ct);
         }
         catch (Exception ex)
         {

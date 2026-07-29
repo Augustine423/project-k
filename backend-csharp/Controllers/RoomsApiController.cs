@@ -1,7 +1,5 @@
-using System.Text.Json;
 using Kzys.Backend.Configuration;
 using Kzys.Backend.Models;
-using Kzys.Backend.Services;
 using Kzys.Backend.Realtime;
 using Microsoft.AspNetCore.Mvc;
 
@@ -12,24 +10,30 @@ namespace Kzys.Backend.Controllers;
 public sealed class RoomsApiController : ControllerBase
 {
     private readonly RoomService _rooms;
+    private readonly ControlPlaneStore _store;
     private readonly RoomEventHub _hub;
     private readonly RoomPresenceService _presence;
     private readonly RoomModeService _modes;
+    private readonly RoomPresenceBroadcaster _presenceBroadcast;
     private readonly TurnCredentialService _turn;
     private readonly AppConfig _config;
 
     public RoomsApiController(
         RoomService rooms,
+        ControlPlaneStore store,
         RoomEventHub hub,
         RoomPresenceService presence,
         RoomModeService modes,
+        RoomPresenceBroadcaster presenceBroadcast,
         TurnCredentialService turn,
         AppConfig config)
     {
         _rooms = rooms;
+        _store = store;
         _hub = hub;
         _presence = presence;
         _modes = modes;
+        _presenceBroadcast = presenceBroadcast;
         _turn = turn;
         _config = config;
     }
@@ -60,7 +64,7 @@ public sealed class RoomsApiController : ControllerBase
         {
             var mediaHost = MediaHostHelper.FromRequest(Request, _config.TurnHost);
             var ticket = await _rooms.JoinRoomAsync(roomId, body.DisplayName.Trim(), body.Pin ?? "", mediaHost, ct);
-            _hub.Broadcast(roomId, new RoomEvent { Type = "participant.joined", Data = ticket.Participant });
+            await _presenceBroadcast.BroadcastJoinedAsync(roomId, ticket.Participant, ct);
             return Ok(ticket);
         }
         catch (RoomServiceException ex) when (ex.Error == RoomError.NotFound)
@@ -89,9 +93,40 @@ public sealed class RoomsApiController : ControllerBase
         return Ok(room);
     }
 
+    [HttpGet("{roomId}/participants/count")]
+    public async Task<ActionResult<object>> ParticipantCount(string roomId, CancellationToken ct)
+    {
+        var room = await _rooms.GetRoomAsync(roomId, ct);
+        if (room is null) return NotFound(new { error = "room not found" });
+        var count = await _store.GetParticipantCountAsync(roomId, ct);
+        return Ok(new { count });
+    }
+
     [HttpGet("{roomId}/participants")]
-    public async Task<ActionResult<List<ParticipantRecord>>> ListParticipants(string roomId, CancellationToken ct)
-        => Ok(await _rooms.ListParticipantsAsync(roomId, ct));
+    public async Task<ActionResult<ParticipantsPageDto>> ListParticipants(
+        string roomId,
+        [FromQuery] int offset = 0,
+        [FromQuery] int limit = 0,
+        [FromQuery] string? q = null,
+        CancellationToken ct = default)
+    {
+        var room = await _rooms.GetRoomAsync(roomId, ct);
+        if (room is null) return NotFound(new { error = "room not found" });
+
+        var pageSize = limit <= 0 ? _config.ParticipantsPageSizeDefault : Math.Min(limit, 200);
+
+        if (!string.IsNullOrWhiteSpace(q))
+        {
+            return Ok(await _store.SearchParticipantsAsync(
+                roomId,
+                q,
+                pageSize,
+                _config.ParticipantsSearchScanCap,
+                ct));
+        }
+
+        return Ok(await _store.ListParticipantsPageAsync(roomId, offset, pageSize, ct));
+    }
 
     [HttpPost("{roomId}/media")]
     public async Task<IActionResult> ReportMedia(string roomId, [FromBody] MediaPresenceBody body, CancellationToken ct)
@@ -109,8 +144,7 @@ public sealed class RoomsApiController : ControllerBase
                 body.Video,
                 ct);
 
-            var participant = (await _rooms.ListParticipantsAsync(roomId, ct))
-                .FirstOrDefault(p => p.Id == claims.ParticipantId);
+            var participant = await _store.GetParticipantAsync(roomId, claims.ParticipantId, ct);
 
             var listenerOnly = participant is not null
                 && _modes.IsListenerOnly(room, participant, room.ActivePublishers, body.Publishing);
@@ -159,7 +193,7 @@ public sealed class RoomsApiController : ControllerBase
         _presence.CancelPendingLeave(roomId, claims.ParticipantId);
         await _rooms.LeaveRoomAsync(roomId, claims.ParticipantId, ct);
         await _modes.ReconcileRoomAsync(roomId, ct);
-        _hub.Broadcast(roomId, new RoomEvent { Type = "participant.left", Data = new { participantId = claims.ParticipantId } });
+        await _presenceBroadcast.BroadcastLeftAsync(roomId, claims.ParticipantId, ct);
         return Ok(new { ok = true });
     }
 
@@ -190,6 +224,7 @@ public sealed class RoomsApiController : ControllerBase
         if (claims is null) return Forbid();
         await _rooms.KickParticipantAsync(roomId, participantId, ct);
         await _modes.ReconcileRoomAsync(roomId, ct);
+        await _presenceBroadcast.BroadcastLeftAsync(roomId, participantId, ct);
         _hub.Broadcast(roomId, new RoomEvent { Type = "participant.kicked", Data = new { participantId } });
         return Ok(new { ok = true });
     }

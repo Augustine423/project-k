@@ -1,17 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Participant } from "../api/types";
+import { listParticipantsPage } from "../api/client";
 import type { ChatMessage } from "./ChatPanel";
 import { ChatIcon, MicMutedSmall, ParticipantsIcon } from "./MediaIcons";
 
 export type SidePanelTab = "chat" | "people";
 
+const PEOPLE_PAGE_SIZE = 50;
+
 interface RoomSidePanelProps {
+  roomId: string;
+  participantCount: number;
   messages: ChatMessage[];
   onSend: (message: string) => void;
   chatDisabled?: boolean;
   chatDisabledHint?: string;
   selfName?: string;
-  participants: Participant[];
+  /** Small rooms: incremental join/leave updates without refetch. */
+  liveParticipants?: Participant[];
   isHost?: boolean;
   locked?: boolean;
   onToggleLock?: () => void;
@@ -35,12 +41,6 @@ function avatarInitials(name: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
-function roleRank(role: string): number {
-  if (role === "host") return 0;
-  if (role === "cohost") return 1;
-  return 2;
-}
-
 function roleLabel(role: string): string | null {
   if (role === "host") return "Host";
   if (role === "cohost") return "Co-host";
@@ -48,12 +48,14 @@ function roleLabel(role: string): string | null {
 }
 
 export function RoomSidePanel({
+  roomId,
+  participantCount,
   messages,
   onSend,
   chatDisabled,
   chatDisabledHint,
   selfName,
-  participants,
+  liveParticipants,
   isHost,
   locked,
   onToggleLock,
@@ -64,7 +66,46 @@ export function RoomSidePanel({
 }: RoomSidePanelProps) {
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [pageItems, setPageItems] = useState<Participant[]>([]);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [peopleLoading, setPeopleLoading] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const useLiveList = Boolean(liveParticipants && participantCount <= 200 && !debouncedQuery);
+
+  const loadPeople = useCallback(
+    async (offset: number, append: boolean) => {
+      if (!roomId) return;
+      setPeopleLoading(true);
+      try {
+        const page = await listParticipantsPage(roomId, {
+          offset,
+          limit: PEOPLE_PAGE_SIZE,
+          q: debouncedQuery || undefined,
+        });
+        setPageOffset(offset);
+        setHasMore(page.hasMore);
+        setPageItems((prev) => (append ? [...prev, ...page.items] : page.items));
+      } catch {
+        if (!append) setPageItems([]);
+      } finally {
+        setPeopleLoading(false);
+      }
+    },
+    [roomId, debouncedQuery],
+  );
+
+  useEffect(() => {
+    if (activeTab !== "people" || useLiveList) return;
+    void loadPeople(0, false);
+  }, [activeTab, useLiveList, loadPeople]);
 
   useEffect(() => {
     if (activeTab !== "chat") return;
@@ -75,19 +116,16 @@ export function RoomSidePanel({
     });
   }, [messages, activeTab]);
 
-  const sorted = useMemo(() => {
-    return [...participants].sort((a, b) => {
-      const rd = roleRank(a.role) - roleRank(b.role);
-      if (rd !== 0) return rd;
-      return a.displayName.localeCompare(b.displayName);
-    });
-  }, [participants]);
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return sorted;
-    return sorted.filter((p) => p.displayName.toLowerCase().includes(q));
-  }, [sorted, query]);
+  const displayedPeople = useMemo(() => {
+    if (useLiveList && liveParticipants) {
+      const q = debouncedQuery.toLowerCase();
+      const list = q
+        ? liveParticipants.filter((p) => p.displayName.toLowerCase().includes(q))
+        : liveParticipants;
+      return list;
+    }
+    return pageItems;
+  }, [useLiveList, liveParticipants, debouncedQuery, pageItems]);
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -123,7 +161,7 @@ export function RoomSidePanel({
         >
           <ParticipantsIcon size={16} />
           People
-          <span className="room-side-tab-count">{participants.length}</span>
+          <span className="room-side-tab-count">{participantCount}</span>
         </button>
       </div>
 
@@ -204,14 +242,17 @@ export function RoomSidePanel({
           </div>
           <p className="participants-count-line muted">
             {query.trim()
-              ? `${filtered.length} of ${participants.length}`
-              : `${participants.length} in meeting`}
+              ? `${displayedPeople.length} shown · ${participantCount} in meeting`
+              : `${participantCount} in meeting`}
           </p>
           <ul className="participants-list" role="list">
-            {filtered.length === 0 && (
+            {peopleLoading && displayedPeople.length === 0 && (
+              <li className="participants-empty muted">Loading participants…</li>
+            )}
+            {!peopleLoading && displayedPeople.length === 0 && (
               <li className="participants-empty muted">No matching participants.</li>
             )}
-            {filtered.map((p) => (
+            {displayedPeople.map((p) => (
               <li key={p.id} className="participant-row">
                 <span className="participant-avatar" aria-hidden="true">
                   {avatarInitials(p.displayName)}
@@ -236,6 +277,16 @@ export function RoomSidePanel({
               </li>
             ))}
           </ul>
+          {!useLiveList && hasMore && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm participants-load-more"
+              disabled={peopleLoading}
+              onClick={() => void loadPeople(pageOffset + PEOPLE_PAGE_SIZE, true)}
+            >
+              {peopleLoading ? "Loading…" : "Load more"}
+            </button>
+          )}
         </div>
       )}
     </section>

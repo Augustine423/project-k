@@ -103,9 +103,6 @@ public sealed class RoomService
         return BuildTicket(room, participant, mediaHost, stats.Publishers);
     }
 
-    public async Task<int> GetActivePublisherCountAsync(string roomId, CancellationToken ct = default)
-        => (await _store.GetMediaStatsAsync(roomId, ct)).Publishers;
-
     public Task<RoomRecord?> GetRoomAsync(string roomId, CancellationToken ct = default)
         => _store.GetRoomAsync(roomId, ct);
 

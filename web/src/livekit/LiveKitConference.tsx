@@ -108,6 +108,16 @@ export function LiveKitConference({
   liveKitTokenRef.current = liveKitToken;
   turnRef.current = turn;
 
+  const isLargeRoom = participantCount > 200;
+
+  const shouldTrackRemote = useCallback(
+    (participant: RemoteParticipant): boolean => {
+      if (!isLargeRoom) return true;
+      return participant.trackPublications.size > 0;
+    },
+    [isLargeRoom],
+  );
+
   const syncRemoteFeed = useCallback((participant: RemoteParticipant): RemoteFeed => {
     let stream = remoteStreamsRef.current.get(participant.identity);
     if (!stream) {
@@ -167,13 +177,14 @@ export function LiveKitConference({
   const upsertRemote = useCallback(
     (participant: RemoteParticipant) => {
       if (participant.identity === roomRef.current?.localParticipant.identity) return;
+      if (!shouldTrackRemote(participant)) return;
       setRemoteFeeds((prev) => {
         const next = new Map(prev);
         next.set(participant.identity, syncRemoteFeed(participant));
         return next;
       });
     },
-    [syncRemoteFeed],
+    [shouldTrackRemote, syncRemoteFeed],
   );
 
   const removeRemote = useCallback((identity: string) => {
@@ -188,9 +199,11 @@ export function LiveKitConference({
 
   const refreshRemotes = useCallback(
     (room: Room) => {
-      for (const p of room.remoteParticipants.values()) upsertRemote(p);
+      for (const p of room.remoteParticipants.values()) {
+        if (shouldTrackRemote(p)) upsertRemote(p);
+      }
     },
-    [upsertRemote],
+    [shouldTrackRemote, upsertRemote],
   );
 
   // One SFU session per room+token — never disconnect on React remount.
@@ -229,7 +242,7 @@ export function LiveKitConference({
     };
 
     const onParticipantConnected = (p: RemoteParticipant) => {
-      if (!cancelled) upsertRemote(p);
+      if (!cancelled && shouldTrackRemote(p)) upsertRemote(p);
     };
 
     const onParticipantDisconnected = (p: RemoteParticipant) => {

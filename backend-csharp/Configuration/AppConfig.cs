@@ -12,6 +12,12 @@ public sealed class AppConfig
     public int WebinarExitListeners { get; init; } = 20;
     public int InteractiveMaxPublishers { get; init; } = 50;
     public int WebinarMaxPublishers { get; init; } = 16;
+    /// <summary>Above this count, WS uses count-only events instead of per-join fanout.</summary>
+    public int LargeRoomEventThreshold { get; init; } = 200;
+    /// <summary>Default page size for GET /participants.</summary>
+    public int ParticipantsPageSizeDefault { get; init; } = 50;
+    /// <summary>Max participants returned by search scan (large rooms).</summary>
+    public int ParticipantsSearchScanCap { get; init; } = 3000;
     public string TurnSharedSecret { get; init; } = "dev-turn-shared-secret";
     public string TurnHost { get; init; } = "localhost";
     public int TurnPort { get; init; } = 3478;
@@ -37,6 +43,9 @@ public sealed class AppConfig
             WebinarExitListeners = int.TryParse(Env("WEBINAR_EXIT_LISTENERS", "20"), out var wex) ? wex : 20,
             InteractiveMaxPublishers = int.TryParse(Env("INTERACTIVE_MAX_PUBLISHERS", "50"), out var imp) ? imp : 50,
             WebinarMaxPublishers = int.TryParse(Env("WEBINAR_MAX_PUBLISHERS", "16"), out var wmp) ? wmp : 16,
+            LargeRoomEventThreshold = int.TryParse(Env("LARGE_ROOM_EVENT_THRESHOLD", "200"), out var lrt) ? lrt : 200,
+            ParticipantsPageSizeDefault = int.TryParse(Env("PARTICIPANTS_PAGE_SIZE", "50"), out var pps) ? pps : 50,
+            ParticipantsSearchScanCap = int.TryParse(Env("PARTICIPANTS_SEARCH_SCAN_CAP", "3000"), out var psc) ? psc : 3000,
             TurnSharedSecret = Env("TURN_SHARED_SECRET", "dev-turn-shared-secret"),
             TurnHost = Env("TURN_HOST", "localhost"),
             TurnPort = int.TryParse(Env("TURN_PORT", "3478"), out var tp) ? tp : 3478,

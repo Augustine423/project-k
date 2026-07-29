@@ -1,5 +1,4 @@
-using System.Security.Cryptography;
-using System.Text;
+using System.Globalization;
 using System.Text.Json;
 using Kzys.Backend.Models;
 using StackExchange.Redis;
@@ -24,6 +23,7 @@ public sealed class ControlPlaneStore
 
     private static string RoomKey(string id) => "room:" + id;
     private static string ParticipantsKey(string id) => "room:" + id + ":participants";
+    private static string ParticipantIndexKey(string id) => "room:" + id + ":participant_index";
     private static string MediaKey(string id) => "room:" + id + ":media";
     private static string RoomSecretKey(string id) => "room:" + id + ":secret";
     private static string RoomPinKey(string id) => "room:" + id + ":pin";
@@ -62,7 +62,7 @@ public sealed class ControlPlaneStore
     public async Task DeleteRoomAsync(string roomId, CancellationToken ct = default)
     {
         await _db.KeyDeleteAsync([
-            RoomKey(roomId), ParticipantsKey(roomId), MediaKey(roomId),
+            RoomKey(roomId), ParticipantsKey(roomId), ParticipantIndexKey(roomId), MediaKey(roomId),
             RoomSecretKey(roomId), RoomPinKey(roomId),
         ]);
         await _db.SetRemoveAsync(ActiveRoomsKey, roomId);
@@ -73,8 +73,12 @@ public sealed class ControlPlaneStore
     {
         var json = JsonSerializer.Serialize(participant);
         var key = ParticipantsKey(participant.RoomId);
+        var indexKey = ParticipantIndexKey(participant.RoomId);
+        var score = JoinScore(participant.JoinedAt);
         await _db.HashSetAsync(key, participant.Id, json);
+        await _db.SortedSetAddAsync(indexKey, participant.Id, score);
         await _db.KeyExpireAsync(key, RoomTtl);
+        await _db.KeyExpireAsync(indexKey, RoomTtl);
     }
 
     public async Task<(bool Added, bool AlreadyPresent)> TryAddParticipantAsync(
@@ -84,18 +88,23 @@ public sealed class ControlPlaneStore
     {
         if (max <= 0) max = 10;
         var key = ParticipantsKey(participant.RoomId);
+        var indexKey = ParticipantIndexKey(participant.RoomId);
         var json = JsonSerializer.Serialize(participant);
         var ttlSeconds = (int)RoomTtl.TotalSeconds;
+        var score = JoinScore(participant.JoinedAt).ToString(CultureInfo.InvariantCulture);
 
         const string script = """
 local key = KEYS[1]
+local indexKey = KEYS[2]
 local id = ARGV[1]
 local payload = ARGV[2]
 local max = tonumber(ARGV[3])
 local ttl = tonumber(ARGV[4])
+local score = tonumber(ARGV[5])
 if redis.call('HEXISTS', key, id) == 1 then
   redis.call('HSET', key, id, payload)
   redis.call('EXPIRE', key, ttl)
+  redis.call('EXPIRE', indexKey, ttl)
   return 2
 end
 local n = redis.call('HLEN', key)
@@ -103,14 +112,16 @@ if n >= max then
   return 0
 end
 redis.call('HSET', key, id, payload)
+redis.call('ZADD', indexKey, score, id)
 redis.call('EXPIRE', key, ttl)
+redis.call('EXPIRE', indexKey, ttl)
 return 1
 """;
 
         var result = (int)await _db.ScriptEvaluateAsync(
             script,
-            [key],
-            [participant.Id, json, max.ToString(), ttlSeconds.ToString()]);
+            [key, indexKey],
+            [participant.Id, json, max.ToString(), ttlSeconds.ToString(), score]);
 
         return result switch
         {
@@ -123,19 +134,117 @@ return 1
     public async Task RemoveParticipantAsync(string roomId, string participantId, CancellationToken ct = default)
     {
         await _db.HashDeleteAsync(ParticipantsKey(roomId), participantId);
+        await _db.SortedSetRemoveAsync(ParticipantIndexKey(roomId), participantId);
+    }
+
+    public Task<long> GetParticipantCountAsync(string roomId, CancellationToken ct = default)
+        => _db.HashLengthAsync(ParticipantsKey(roomId));
+
+    public async Task<ParticipantRecord?> GetParticipantAsync(
+        string roomId,
+        string participantId,
+        CancellationToken ct = default)
+    {
+        var value = await _db.HashGetAsync(ParticipantsKey(roomId), participantId);
+        if (value.IsNullOrEmpty) return null;
+        return JsonSerializer.Deserialize<ParticipantRecord>((string)value!);
     }
 
     public async Task<List<ParticipantRecord>> ListParticipantsAsync(string roomId, CancellationToken ct = default)
     {
-        var entries = await _db.HashGetAllAsync(ParticipantsKey(roomId));
-        var list = new List<ParticipantRecord>(entries.Length);
-        foreach (var entry in entries)
+        var page = await ListParticipantsPageAsync(roomId, 0, int.MaxValue, ct);
+        return page.Items;
+    }
+
+    public async Task<ParticipantsPageDto> ListParticipantsPageAsync(
+        string roomId,
+        int offset,
+        int limit,
+        CancellationToken ct = default)
+    {
+        offset = Math.Max(0, offset);
+        limit = Math.Clamp(limit, 1, 200);
+
+        var indexKey = ParticipantIndexKey(roomId);
+        var hashKey = ParticipantsKey(roomId);
+        var total = (int)await _db.HashLengthAsync(hashKey);
+
+        if (total == 0)
+            return EmptyPage(offset, limit);
+
+        var ids = await _db.SortedSetRangeByRankAsync(indexKey, offset, offset + limit - 1);
+        if (ids.Length == 0)
+            return new ParticipantsPageDto
+            {
+                Items = [],
+                Total = total,
+                Offset = offset,
+                Limit = limit,
+                HasMore = offset + limit < total,
+            };
+
+        var fields = ids.Select(id => (RedisValue)id!).ToArray();
+        var values = await _db.HashGetAsync(hashKey, fields);
+        var items = new List<ParticipantRecord>(values.Length);
+        foreach (var value in values)
         {
+            if (value.IsNullOrEmpty) continue;
+            var participant = JsonSerializer.Deserialize<ParticipantRecord>((string)value!);
+            if (participant is not null) items.Add(participant);
+        }
+
+        items.Sort(CompareParticipants);
+
+        return new ParticipantsPageDto
+        {
+            Items = items,
+            Total = total,
+            Offset = offset,
+            Limit = limit,
+            HasMore = offset + limit < total,
+        };
+    }
+
+    public async Task<ParticipantsPageDto> SearchParticipantsAsync(
+        string roomId,
+        string query,
+        int limit,
+        int scanCap,
+        CancellationToken ct = default)
+    {
+        limit = Math.Clamp(limit, 1, 100);
+        scanCap = Math.Clamp(scanCap, 100, 10_000);
+        var q = query.Trim().ToLowerInvariant();
+        if (string.IsNullOrEmpty(q))
+            return await ListParticipantsPageAsync(roomId, 0, limit, ct);
+
+        var hashKey = ParticipantsKey(roomId);
+        var total = (int)await _db.HashLengthAsync(hashKey);
+        var matches = new List<ParticipantRecord>();
+        var scanned = 0;
+
+        foreach (var entry in _db.HashScan(hashKey, pageSize: 128))
+        {
+            ct.ThrowIfCancellationRequested();
+            scanned++;
             if (entry.Value.IsNullOrEmpty) continue;
             var participant = JsonSerializer.Deserialize<ParticipantRecord>((string)entry.Value!);
-            if (participant is not null) list.Add(participant);
+            if (participant is null) continue;
+            if (participant.DisplayName.Contains(q, StringComparison.OrdinalIgnoreCase))
+                matches.Add(participant);
+            if (matches.Count >= limit || scanned >= scanCap) break;
         }
-        return list;
+
+        matches.Sort(CompareParticipants);
+
+        return new ParticipantsPageDto
+        {
+            Items = matches,
+            Total = total,
+            Offset = 0,
+            Limit = limit,
+            HasMore = matches.Count >= limit && scanned >= scanCap,
+        };
     }
 
     public async Task<long> IncrNodeLoadAsync(string nodeId, long delta, CancellationToken ct = default)
@@ -163,26 +272,30 @@ return 1
 
     public async Task<MediaStats> GetMediaStatsAsync(string roomId, CancellationToken ct = default)
     {
-        var participants = await ListParticipantsAsync(roomId, ct);
+        var total = (int)await _db.HashLengthAsync(ParticipantsKey(roomId));
         var mediaEntries = await _db.HashGetAllAsync(MediaKey(roomId));
-        var publishing = new HashSet<string>(StringComparer.Ordinal);
+        var publishing = 0;
 
         foreach (var entry in mediaEntries)
         {
             if (entry.Value.IsNullOrEmpty) continue;
             var presence = JsonSerializer.Deserialize<MediaPresenceRecord>((string)entry.Value!);
-            if (presence?.Publishing == true) publishing.Add(presence.ParticipantId);
+            if (presence?.Publishing == true) publishing++;
         }
 
-        var total = participants.Count;
-        var pubCount = publishing.Count;
-        var listeners = Math.Max(0, total - pubCount);
-        return new MediaStats(total, pubCount, listeners);
+        var listeners = Math.Max(0, total - publishing);
+        return new MediaStats(total, publishing, listeners);
     }
 
     public async Task EnqueueModeApplyAsync(string roomId, CancellationToken ct = default)
     {
         await _db.ListLeftPushAsync(ModeQueueKey, roomId);
+    }
+
+    public async Task<string?> DequeueModeApplyAsync(CancellationToken ct = default)
+    {
+        var value = await _db.ListRightPopAsync(ModeQueueKey);
+        return value.IsNullOrEmpty ? null : (string)value!;
     }
 
     public async Task RefreshScalingMetricsAsync(CancellationToken ct = default)
@@ -229,4 +342,30 @@ return 1
         if (created < 0) created = 0;
         return new ScalingMetrics(active, desired, standby, created);
     }
+
+    private static double JoinScore(DateTime joinedAt)
+        => joinedAt.ToUniversalTime().Subtract(DateTime.UnixEpoch).TotalMilliseconds;
+
+    private static int CompareParticipants(ParticipantRecord a, ParticipantRecord b)
+    {
+        var role = RoleRank(a.Role) - RoleRank(b.Role);
+        if (role != 0) return role;
+        return string.Compare(a.DisplayName, b.DisplayName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static int RoleRank(string role) => role switch
+    {
+        ParticipantRoles.Host => 0,
+        ParticipantRoles.CoHost => 1,
+        _ => 2,
+    };
+
+    private static ParticipantsPageDto EmptyPage(int offset, int limit) => new()
+    {
+        Items = [],
+        Total = 0,
+        Offset = offset,
+        Limit = limit,
+        HasMore = false,
+    };
 }

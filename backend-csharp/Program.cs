@@ -40,8 +40,10 @@ builder.Services.AddSingleton<LiveKitTokenService>(_ =>
     new LiveKitTokenService(config.LiveKitApiKey, config.LiveKitApiSecret));
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<RoomModeService>();
+builder.Services.AddSingleton<RoomPresenceBroadcaster>();
 builder.Services.AddSingleton<RoomEventHub>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<RoomEventHub>());
+builder.Services.AddHostedService<RoomModeApplyWorker>();
 builder.Services.AddSingleton<RoomPresenceService>();
 
 builder.Services.AddSingleton<RoomPlanManager>();

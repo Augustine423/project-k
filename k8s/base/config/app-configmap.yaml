@@ -22,6 +22,9 @@ data:
   # Scaled GKE profile: up to 10k joins per room (webinar-style audiences).
   # Interactive still caps cam/mic publishers; large rooms auto-switch toward webinar.
   MAX_ROOM_PARTICIPANTS: "10000"
+  LARGE_ROOM_EVENT_THRESHOLD: "200"
+  PARTICIPANTS_PAGE_SIZE: "50"
+  PARTICIPANTS_SEARCH_SCAN_CAP: "3000"
 
   # ── Room mode auto-switch (interactive ↔ webinar) ─────────────────────────
   # Flip to webinar before publisher pressure grows in large rooms.

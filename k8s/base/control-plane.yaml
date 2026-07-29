@@ -110,6 +110,21 @@ spec:
                 configMapKeyRef:
                   name: kzys-app-config
                   key: WEBINAR_MAX_PUBLISHERS
+            - name: LARGE_ROOM_EVENT_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: LARGE_ROOM_EVENT_THRESHOLD
+            - name: PARTICIPANTS_PAGE_SIZE
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: PARTICIPANTS_PAGE_SIZE
+            - name: PARTICIPANTS_SEARCH_SCAN_CAP
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: PARTICIPANTS_SEARCH_SCAN_CAP
             - name: SERVICE_NAME
               valueFrom:
                 configMapKeyRef:
