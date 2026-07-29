@@ -1,6 +1,7 @@
 using Kzys.Backend.Configuration;
 using Kzys.Backend.Models;
 using Kzys.Backend.Realtime;
+using Kzys.Backend.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Kzys.Backend.Controllers;

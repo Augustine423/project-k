@@ -14,4 +14,4 @@ resources:
   - gateway/gateway.yaml
   - gateway/httproutes.yaml
   - gateway/healthchecks.yaml
-  - ../keda/scaledobjects.yaml
+  - keda/scaledobjects.yaml
