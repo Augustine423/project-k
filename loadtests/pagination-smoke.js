@@ -17,8 +17,8 @@ export default function () {
     JSON.stringify({ displayName: "Pagination Host", maxUsers: 500 }),
     { headers: { "Content-Type": "application/json" } },
   );
-  check(create, { "create": (r) => r.status === 201 });
-  const roomId = (JSON.parse(create.body as string) as { room: { id: string } }).room.id;
+  check(create, { create: (r) => r.status === 201 });
+  const roomId = JSON.parse(create.body).room.id;
 
   for (let i = 0; i < 120; i++) {
     const join = http.post(
@@ -31,11 +31,7 @@ export default function () {
 
   const page1 = http.get(`${BASE}/api/rooms/${roomId}/participants?offset=0&limit=50`);
   check(page1, { "page1 200": (r) => r.status === 200 });
-  const p1 = JSON.parse(page1.body as string) as {
-    items: unknown[];
-    total: number;
-    hasMore: boolean;
-  };
+  const p1 = JSON.parse(page1.body);
   check(null, {
     "page1 size 50": () => p1.items.length === 50,
     "total 121": () => p1.total === 121,
@@ -44,6 +40,6 @@ export default function () {
 
   const count = http.get(`${BASE}/api/rooms/${roomId}/participants/count`);
   check(count, { "count 200": (r) => r.status === 200 });
-  const c = JSON.parse(count.body as string) as { count: number };
+  const c = JSON.parse(count.body);
   check(null, { "count matches": () => c.count === 121 });
 }

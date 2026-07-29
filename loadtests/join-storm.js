@@ -31,11 +31,11 @@ export function setup() {
   if (res.status !== 201) {
     throw new Error(`setup failed: ${res.status} ${res.body}`);
   }
-  const body = JSON.parse(res.body as string);
-  return { roomId: body.room.id as string };
+  const body = JSON.parse(res.body);
+  return { roomId: body.room.id };
 }
 
-export default function (data: { roomId: string }) {
+export default function (data) {
   const label = `User-${__VU}`;
   const join = http.post(
     `${BASE}/api/rooms/${data.roomId}/join`,
@@ -56,9 +56,9 @@ export default function (data: { roomId: string }) {
       "count 200": (r) => r.status === 200,
       "count > 0": (r) => {
         try {
-          const parsed = JSON.parse(r.body as string) as { count?: number };
-          return (parsed.count ?? 0) > 0;
-        } catch {
+          const parsed = JSON.parse(r.body);
+          return (parsed.count || 0) > 0;
+        } catch (_e) {
           return false;
         }
       },
@@ -68,10 +68,10 @@ export default function (data: { roomId: string }) {
   sleep(0.01);
 }
 
-export function teardown(data: { roomId: string }) {
+export function teardown(data) {
   const countRes = http.get(`${BASE}/api/rooms/${data.roomId}/participants/count`);
   if (countRes.status === 200) {
-    const parsed = JSON.parse(countRes.body as string) as { count?: number };
-    console.log(`final participant count: ${parsed.count ?? 0}`);
+    const parsed = JSON.parse(countRes.body);
+    console.log(`final participant count: ${parsed.count || 0}`);
   }
 }

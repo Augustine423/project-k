@@ -91,12 +91,12 @@ jobs:
           cleanup() { kill "$API_PID" 2>/dev/null || true; }
           trap cleanup EXIT
 
-          for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:4000/ready >/dev/null; then
+          for i in $(seq 1 120); do
+            if curl -fsS http://127.0.0.1:4000/ready >/dev/null 2>&1; then
               echo "control plane ready"
               break
             fi
-            if [ "$i" -eq 60 ]; then
+            if [ "$i" -eq 120 ]; then
               echo "control plane failed to become ready"
               exit 1
             fi
