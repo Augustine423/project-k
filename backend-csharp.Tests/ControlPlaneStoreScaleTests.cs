@@ -61,7 +61,11 @@ public sealed class ControlPlaneStoreScaleTests : IAsyncLifetime
         const int pageSize = 50;
 
         for (var i = 0; i < total; i++)
-            await store.TryAddParticipantAsync(MakeParticipant(roomId, $"page-{i:D4}"), 10_000);
+        {
+            var p = MakeParticipant(roomId, $"page-{i:D4}");
+            p.JoinedAt = DateTime.UtcNow.AddMilliseconds(i);
+            await store.TryAddParticipantAsync(p, 10_000);
+        }
 
         var first = await store.ListParticipantsPageAsync(roomId, 0, pageSize);
         var second = await store.ListParticipantsPageAsync(roomId, pageSize, pageSize);

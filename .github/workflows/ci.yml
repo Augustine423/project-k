@@ -55,10 +55,13 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Restore
+        run: dotnet restore backend-csharp.Tests/backend-csharp.Tests.csproj
+
       - name: Test
         env:
           REDIS_URL: redis://localhost:6379
-        run: dotnet test backend-csharp.Tests/backend-csharp.Tests.csproj -c Release
+        run: dotnet test backend-csharp.Tests/backend-csharp.Tests.csproj -c Release --no-restore
 
   frontend:
     name: Build web frontend

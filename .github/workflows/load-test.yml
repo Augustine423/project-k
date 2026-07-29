@@ -62,10 +62,13 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
       - name: Publish control plane
         run: dotnet publish backend-csharp/backend-csharp.csproj -c Release -o /tmp/kzys-api
 
-      - name: Start control plane
+      - name: Run k6 load tests
         env:
           ASPNETCORE_URLS: http://127.0.0.1:4000
           REDIS_URL: redis://localhost:6379
@@ -78,38 +81,27 @@ jobs:
           LIVEKIT_API_KEY: devkey
           LIVEKIT_API_SECRET: dev-livekit-local-secret-32chars-min
           LIVEKIT_PUBLIC_URL: ws://127.0.0.1:7880
-        run: |
-          dotnet /tmp/kzys-api/Kzys.Backend.dll &
-          echo $! > /tmp/kzys-api.pid
-          for i in $(seq 1 60); do
-            if curl -fsS http://127.0.0.1:4000/ready >/dev/null; then
-              echo "control plane ready"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "control plane failed to become ready"
-          exit 1
-
-      - name: Run pagination smoke (k6)
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: loadtests/pagination-smoke.js
-        env:
-          BASE_URL: http://127.0.0.1:4000
-
-      - name: Run join storm (k6)
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: loadtests/join-storm.js
-        env:
           BASE_URL: http://127.0.0.1:4000
           MAX_USERS: "10000"
           TARGET_VUS: "400"
-
-      - name: Stop control plane
-        if: always()
         run: |
-          if [ -f /tmp/kzys-api.pid ]; then
-            kill "$(cat /tmp/kzys-api.pid)" || true
-          fi
+          set -euo pipefail
+          dotnet /tmp/kzys-api/Kzys.Backend.dll &
+          API_PID=$!
+          cleanup() { kill "$API_PID" 2>/dev/null || true; }
+          trap cleanup EXIT
+
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:4000/ready >/dev/null; then
+              echo "control plane ready"
+              break
+            fi
+            if [ "$i" -eq 60 ]; then
+              echo "control plane failed to become ready"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          k6 run loadtests/pagination-smoke.js
+          k6 run loadtests/join-storm.js
