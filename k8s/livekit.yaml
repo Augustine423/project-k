@@ -16,10 +16,27 @@ spec:
       labels:
         app: livekit
     spec:
+      initContainers:
+        - name: wait-redis
+          image: redis:7-alpine
+          command:
+            - sh
+            - -c
+            - until redis-cli -h redis ping | grep -q PONG; do echo waiting-for-redis; sleep 2; done
       containers:
         - name: livekit
           image: livekit/livekit-server:v1.9.12
-          args: ["--config", "/etc/livekit/livekit.yaml"]
+          args:
+            - --config
+            - /etc/livekit/livekit.yaml
+            - --node-ip
+            - $(NODE_IP)
+          env:
+            # Advertise the node IP so ICE works without STUN (use_external_ip: false).
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
           ports:
             - name: signal
               containerPort: 7880
@@ -43,6 +60,11 @@ spec:
               port: 7880
             initialDelaySeconds: 5
             periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7880
+            initialDelaySeconds: 15
+            periodSeconds: 20
       volumes:
         - name: config
           configMap:
