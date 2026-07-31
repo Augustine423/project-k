@@ -1,0 +1,20 @@
+$patch: delete
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: control-plane-scaler
+  namespace: kzys
+---
+$patch: delete
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: livekit-scaler
+  namespace: kzys
+---
+$patch: delete
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: web-scaler
+  namespace: kzys

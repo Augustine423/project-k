@@ -1,0 +1,13 @@
+$patch: delete
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: control-plane-hc
+  namespace: kzys
+---
+$patch: delete
+apiVersion: networking.gke.io/v1
+kind: HealthCheckPolicy
+metadata:
+  name: web-hc
+  namespace: kzys

@@ -1,0 +1,35 @@
+# Lab-test overlay — domain-free GCP lab deploy.
+#
+# Prerequisites (cluster-side):
+#   - Working GKE cluster + kubectl context
+#   - Nodes can pull public images
+#   - External LoadBalancer support
+#
+# Not required: domain, TLS cert, GKE Gateway controller, KEDA
+#
+# Apply (from repo root):
+#   kubectl apply -k k8s
+#
+# After Coturn LB gets an EXTERNAL-IP:
+#   kubectl patch configmap kzys-app-config -n kzys --type merge \
+#     -p "{\"data\":{\"TURN_HOST\":\"COTURN_EXTERNAL_IP\"}}"
+#   kubectl rollout restart deploy/coturn deploy/kzys-control-plane -n kzys
+#
+# Open: http://EDGE_PROXY_EXTERNAL_IP
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
+  - secrets-lab.yaml
+  - edge-proxy.yaml
+  - media-services.yaml
+
+patches:
+  - path: patches/delete-gateway.yaml
+  - path: patches/delete-httproutes.yaml
+  - path: patches/delete-healthchecks.yaml
+  - path: patches/delete-keda.yaml
+  - path: patches/app-config.yaml
+  - path: patches/livekit-config.yaml
+  - path: patches/resources.yaml

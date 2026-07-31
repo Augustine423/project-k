@@ -1,0 +1,137 @@
+# HTTP edge proxy LoadBalancer — replaces GKE Gateway for lab (no domain / TLS).
+# Browser opens http://EXTERNAL-IP ; nginx same-origin proxies /api /ws /livekit.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-edge-proxy-config
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/component: lab-test
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+
+        location /api/ {
+            proxy_pass http://kzys-control-plane.kzys.svc.cluster.local:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /ws {
+            proxy_pass http://kzys-control-plane.kzys.svc.cluster.local:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+        }
+
+        location = /health {
+            proxy_pass http://kzys-control-plane.kzys.svc.cluster.local:4000/health;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location = /ready {
+            proxy_pass http://kzys-control-plane.kzys.svc.cluster.local:4000/ready;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location /livekit/ {
+            proxy_pass http://livekit.kzys.svc.cluster.local:7880/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+        }
+
+        location / {
+            proxy_pass http://kzys-web.kzys.svc.cluster.local:80;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kzys-edge-proxy
+  namespace: kzys
+  labels:
+    app: kzys-edge-proxy
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/component: lab-test
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kzys-edge-proxy
+  template:
+    metadata:
+      labels:
+        app: kzys-edge-proxy
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          ports:
+            - name: http
+              containerPort: 80
+          volumeMounts:
+            - name: config
+              mountPath: /etc/nginx/conf.d
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+      volumes:
+        - name: config
+          configMap:
+            name: kzys-edge-proxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-edge-proxy
+  namespace: kzys
+  labels:
+    app: kzys-edge-proxy
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/component: lab-test
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  selector:
+    app: kzys-edge-proxy
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
+      protocol: TCP

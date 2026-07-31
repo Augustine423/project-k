@@ -142,6 +142,9 @@ jobs:
       - name: Validate base kustomization
         run: kubectl kustomize k8s/base > /dev/null
 
+      - name: Validate root lab-test kustomization
+        run: kubectl kustomize k8s > /dev/null
+
       - name: Validate GKE overlay
         run: kubectl kustomize k8s/overlays/gke > /dev/null
 

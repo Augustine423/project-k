@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-app-config
+  namespace: kzys
+data:
+  APP_HOST: ""
+  CORS_ORIGIN: "*"
+  TURN_HOST: "127.0.0.1"
+  LIVEKIT_PUBLIC_URL: "ws://localhost/livekit"

@@ -1,0 +1,54 @@
+# Lab media LoadBalancers — Coturn TURN + LiveKit signaling/RTC TCP (no 9k UDP port dump).
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn-lab
+  namespace: kzys
+  labels:
+    app: coturn
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/component: lab-test
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: coturn
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      protocol: UDP
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit-lab
+  namespace: kzys
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/component: lab-test
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: livekit
+  ports:
+    - name: signal
+      port: 7880
+      targetPort: 7880
+      protocol: TCP
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881
+      protocol: TCP
