@@ -130,7 +130,7 @@ jobs:
             VITE_API_URL=
             NGINX_CONF=nginx.compose.conf
 
-  kustomize-validate:
+  k8s-validate:
     name: Validate Kubernetes manifests
     runs-on: ubuntu-latest
     steps:
@@ -139,14 +139,13 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
 
-      - name: Validate base kustomization
-        run: kubectl kustomize k8s/base > /dev/null
-
-      - name: Validate GKE overlay
-        run: kubectl kustomize k8s/overlays/gke > /dev/null
-
-      - name: Validate stress-test overlay
-        run: kubectl kustomize k8s/overlays/stress-test > /dev/null
-
-      - name: Validate single-node overlay
-        run: kubectl kustomize k8s/overlays/single-node > /dev/null
+      - name: Validate GKE test manifests
+        run: |
+          kubectl apply --dry-run=client -f k8s/namespace.yaml
+          kubectl apply --dry-run=client -f k8s/configmap.yaml
+          kubectl apply --dry-run=client -f k8s/secrets.example.yaml
+          kubectl apply --dry-run=client -f k8s/redis.yaml
+          kubectl apply --dry-run=client -f k8s/livekit.yaml
+          kubectl apply --dry-run=client -f k8s/coturn.yaml
+          kubectl apply --dry-run=client -f k8s/control-plane.yaml
+          kubectl apply --dry-run=client -f k8s/web.yaml

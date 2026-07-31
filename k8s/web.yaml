@@ -1,5 +1,4 @@
-# Static React frontend — built with Vite, served by nginx.
-# Stateless: any replica can serve any request, HPA scales freely.
+# Frontend + path proxy. Single HTTP LoadBalancer (no domain / TLS / KEDA).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -24,6 +23,11 @@ spec:
           imagePullPolicy: Always
           ports:
             - containerPort: 80
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/conf.d/default.conf
+              subPath: default.conf
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /
@@ -41,6 +45,10 @@ spec:
             limits:
               cpu: 200m
               memory: 128Mi
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: kzys-web-nginx
 ---
 apiVersion: v1
 kind: Service
@@ -49,13 +57,14 @@ metadata:
   namespace: kzys
   labels:
     app: kzys-web
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
 spec:
+  type: LoadBalancer
   selector:
     app: kzys-web
   ports:
     - name: http
       port: 80
       targetPort: 80
----
-# Scaling: KEDA web-scaler (keda/scaledobjects.yaml) handles replica count.
-# Do not add an HPA on the same Deployment — KEDA and HPA conflict.

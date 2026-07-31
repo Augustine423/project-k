@@ -1,5 +1,3 @@
-# C# ASP.NET control plane — room registry, LiveKit tokens, Redis-backed WebSocket hub.
-# Stateless: chat/events fan out via Redis pub/sub — no Gateway sticky sessions required.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -20,7 +18,6 @@ spec:
     spec:
       containers:
         - name: api
-          # C# backend image — built from backend-csharp/Dockerfile
           image: kyawzayarsoe/project-k-csharp:latest
           imagePullPolicy: Always
           ports:
@@ -136,14 +133,12 @@ spec:
               port: 4000
             initialDelaySeconds: 15
             periodSeconds: 15
-            timeoutSeconds: 5
           readinessProbe:
             httpGet:
               path: /ready
               port: 4000
             initialDelaySeconds: 10
             periodSeconds: 5
-            timeoutSeconds: 3
           resources:
             requests:
               cpu: 100m
@@ -166,6 +161,3 @@ spec:
     - name: http
       port: 4000
       targetPort: 4000
----
-# Scaling: KEDA control-plane-scaler (keda/scaledobjects.yaml) handles replica count.
-# Do not add an HPA on the same Deployment — KEDA and HPA conflict.

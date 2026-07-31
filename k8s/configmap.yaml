@@ -1,0 +1,137 @@
+# Test config — no domain. After deploy, set LIVEKIT_PUBLIC_URL / TURN_HOST /
+# CORS_ORIGIN to the web LoadBalancer external IP, then re-apply this file.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-app-config
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  SERVICE_NAME: "kzys-control-plane"
+  # Use "*" for IP-only test access (no domain / TLS).
+  CORS_ORIGIN: "*"
+  MAX_ROOM_PARTICIPANTS: "500"
+  LARGE_ROOM_EVENT_THRESHOLD: "200"
+  PARTICIPANTS_PAGE_SIZE: "50"
+  PARTICIPANTS_SEARCH_SCAN_CAP: "3000"
+  WEBINAR_ENTER_LISTENERS: "45"
+  WEBINAR_ENTER_RATIO: "2.0"
+  WEBINAR_EXIT_LISTENERS: "20"
+  INTERACTIVE_MAX_PUBLISHERS: "50"
+  WEBINAR_MAX_PUBLISHERS: "16"
+  # Replace CHANGE_ME_LB_IP with: kubectl get svc kzys-web -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  TURN_HOST: "CHANGE_ME_LB_IP"
+  TURN_PORT: "3478"
+  TURN_TLS_PORT: "5349"
+  TURN_USE_TLS: "false"
+  TURN_REALM: "kzys"
+  LIVEKIT_PUBLIC_URL: "ws://CHANGE_ME_LB_IP/livekit"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-livekit-config
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  livekit.yaml: |
+    port: 7880
+    bind_addresses:
+      - ""
+    rtc:
+      tcp_port: 7881
+      port_range_start: 50000
+      port_range_end: 50100
+      use_external_ip: true
+      enable_loopback_candidate: false
+    keys:
+      devkey: CHANGE_ME_LIVEKIT_SECRET
+    redis:
+      address: redis.kzys.svc.cluster.local:6379
+    logging:
+      level: info
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coturn-config
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  turnserver.conf: |
+    listening-port=3478
+    tls-listening-port=5349
+    use-auth-secret
+    min-port=20000
+    max-port=20100
+    no-tls
+    no-dtls
+    fingerprint
+    lt-cred-mech
+    no-multicast-peers
+    no-cli
+    log-file=stdout
+    verbose
+---
+# Nginx in front of static UI — same-origin /api /ws /livekit (IP LoadBalancer, no domain).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-web-nginx
+  namespace: kzys
+  labels:
+    app.kubernetes.io/part-of: project-k
+data:
+  default.conf: |
+    server {
+        listen 80;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /api/ {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+
+        location /ws/ {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+        }
+
+        location /health {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location /ready {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location /livekit/ {
+            proxy_pass http://livekit:7880/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection "upgrade";
+            proxy_set_header Host $host;
+            proxy_read_timeout 86400;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }

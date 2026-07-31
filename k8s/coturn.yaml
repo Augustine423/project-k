@@ -1,0 +1,94 @@
+# Coturn for WebRTC TURN. Exposed via its own UDP/TCP LoadBalancer (media needs L4).
+# HTTP UI/API goes through kzys-web LoadBalancer only.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  namespace: kzys
+  labels:
+    app: coturn
+    app.kubernetes.io/part-of: project-k
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      containers:
+        - name: coturn
+          image: coturn/coturn:4.6.2
+          args:
+            - "-c"
+            - "/etc/coturn/turnserver.conf"
+            - "--realm=$(TURN_REALM)"
+            - "--static-auth-secret=$(TURN_SHARED_SECRET)"
+            - "--external-ip=$(TURN_HOST)"
+          env:
+            - name: TURN_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: TURN_REALM
+            - name: TURN_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: TURN_HOST
+            - name: TURN_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: TURN_SHARED_SECRET
+          ports:
+            - name: turn-udp
+              containerPort: 3478
+              protocol: UDP
+            - name: turn-tcp
+              containerPort: 3478
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coturn
+              readOnly: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: config
+          configMap:
+            name: coturn-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn
+  namespace: kzys
+  labels:
+    app: coturn
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: coturn
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      protocol: UDP
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP

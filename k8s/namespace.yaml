@@ -1,4 +1,3 @@
-# KZYS Phase A — GKE microservices (Gateway ALB + NLB UDP)
 apiVersion: v1
 kind: Namespace
 metadata:

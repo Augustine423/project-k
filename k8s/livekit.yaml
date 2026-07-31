@@ -1,7 +1,3 @@
-# LiveKit SFU — video/audio for Project-K rooms.
-# Browser WS signaling goes through Gateway /livekit (see httproutes.yaml).
-# UDP media uses the livekit-media-nlb overlay in production.
-# KEDA scales this Deployment 1→30 under kzys:total_node_load (see keda/scaledobjects.yaml).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -37,11 +33,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              cpu: "1"
-              memory: 1Gi
+              cpu: 250m
+              memory: 256Mi
             limits:
-              cpu: "4"
-              memory: 4Gi
+              cpu: "2"
+              memory: 2Gi
           readinessProbe:
             tcpSocket:
               port: 7880
@@ -59,7 +55,6 @@ metadata:
   namespace: kzys
   labels:
     app: livekit
-    app.kubernetes.io/part-of: project-k
 spec:
   selector:
     app: livekit
