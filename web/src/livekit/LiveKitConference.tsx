@@ -52,7 +52,16 @@ interface LiveKitConferenceProps {
   chatBadge?: number | string;
   onFocusChat?: () => void;
   roomMode?: string;
+  /** host | cohost | participant — drives webinar camera rights while media API syncs. */
+  participantRole?: string;
+  showRaiseHand?: boolean;
+  handRaised?: boolean;
+  onToggleRaiseHand?: () => void;
 }
+
+/** Auto-mute webinar mics left open without speech (accidental unmute mitigation). */
+const WEBINAR_SILENCE_AUTOMUTE_MS = 30_000;
+const SPEECH_LEVEL_THRESHOLD = 0.025;
 
 type RemoteFeed = {
   displayName: string;
@@ -77,6 +86,10 @@ export function LiveKitConference({
   chatBadge,
   onFocusChat,
   roomMode,
+  participantRole = "participant",
+  showRaiseHand = false,
+  handRaised = false,
+  onToggleRaiseHand,
 }: LiveKitConferenceProps) {
   const sessionKey = `${roomId}:${participantToken}`;
   const roomRef = useRef<Room | null>(null);
@@ -90,7 +103,11 @@ export function LiveKitConference({
   const [connected, setConnected] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [galleryPage, setGalleryPage] = useState(1);
-  const [listenerOnly, setListenerOnly] = useState(false);
+  const isHostRole = participantRole === "host" || participantRole === "cohost";
+  const isWebinar = roomMode === "webinar";
+  const [canPublishAudio, setCanPublishAudio] = useState(true);
+  const [canPublishVideo, setCanPublishVideo] = useState(() => isHostRole || roomMode !== "webinar");
+  const [silenceNotice, setSilenceNotice] = useState<string | null>(null);
   const mediaAvailable = canAccessMediaDevices();
 
   const onConnectedRef = useRef(onConnected);
@@ -134,14 +151,33 @@ export function LiveKitConference({
     };
   }, []);
 
-  const applyListenerOnly = useCallback(async (room: Room, nextListenerOnly: boolean) => {
-    setListenerOnly(nextListenerOnly);
-    if (!nextListenerOnly) return;
+  const refreshLocalUi = useCallback((room: Room) => {
     const lp = room.localParticipant;
-    if (lp.isMicrophoneEnabled) await lp.setMicrophoneEnabled(false);
-    if (lp.isCameraEnabled) await lp.setCameraEnabled(false);
-    applyLocalStateRef.current(room);
+    setAudioEnabled(lp.isMicrophoneEnabled);
+    setVideoEnabled(lp.isCameraEnabled);
+    setLocalStream(buildLocalParticipantStream(lp));
   }, []);
+
+  const applyPublishCaps = useCallback(
+    async (
+      room: Room,
+      caps: { canPublishAudio: boolean; canPublishVideo: boolean },
+    ) => {
+      setCanPublishAudio(caps.canPublishAudio);
+      setCanPublishVideo(caps.canPublishVideo);
+      const lp = room.localParticipant;
+      if (!caps.canPublishAudio && lp.isMicrophoneEnabled) {
+        await lp.setMicrophoneEnabled(false);
+      }
+      if (!caps.canPublishVideo) {
+        if (lp.isCameraEnabled) await lp.setCameraEnabled(false);
+        if (lp.isScreenShareEnabled) await lp.setScreenShareEnabled(false);
+      }
+      // UI only — do not re-report media presence (avoids sync loops).
+      refreshLocalUi(room);
+    },
+    [refreshLocalUi],
+  );
 
   const syncMediaPresence = useCallback(
     (room: Room) => {
@@ -152,27 +188,39 @@ export function LiveKitConference({
         video: lp.isCameraEnabled,
       })
         .then((res) => {
-          if (res.listenerOnly) void applyListenerOnly(room, true);
-          else setListenerOnly(false);
+          const audio = res.canPublishAudio ?? !res.listenerOnly;
+          const video = res.canPublishVideo ?? !res.listenerOnly;
+          void applyPublishCaps(room, { canPublishAudio: audio, canPublishVideo: video });
         })
         .catch(() => undefined);
     },
-    [applyListenerOnly, roomId, participantToken],
+    [applyPublishCaps, roomId, participantToken],
   );
 
   const syncMediaPresenceRef = useRef(syncMediaPresence);
   syncMediaPresenceRef.current = syncMediaPresence;
 
-  const applyLocalState = useCallback((room: Room) => {
-    const lp = room.localParticipant;
-    setAudioEnabled(lp.isMicrophoneEnabled);
-    setVideoEnabled(lp.isCameraEnabled);
-    setLocalStream(buildLocalParticipantStream(lp));
-    syncMediaPresenceRef.current(room);
-  }, []);
+  const applyLocalState = useCallback(
+    (room: Room) => {
+      refreshLocalUi(room);
+      syncMediaPresenceRef.current(room);
+    },
+    [refreshLocalUi],
+  );
 
   const applyLocalStateRef = useRef(applyLocalState);
   applyLocalStateRef.current = applyLocalState;
+
+  const applyVideoRestricted = useCallback(
+    async (room: Room) => {
+      const lp = room.localParticipant;
+      if (lp.isCameraEnabled) await lp.setCameraEnabled(false);
+      if (lp.isScreenShareEnabled) await lp.setScreenShareEnabled(false);
+      refreshLocalUi(room);
+      syncMediaPresenceRef.current(room);
+    },
+    [refreshLocalUi],
+  );
 
   const upsertRemote = useCallback(
     (participant: RemoteParticipant) => {
@@ -341,21 +389,73 @@ export function LiveKitConference({
     return () => window.clearInterval(timer);
   }, [connected, participantToken, roomId]);
 
-  // When the control plane switches to webinar, stop publishing for non-hosts.
+  // When the control plane switches to webinar, keep mic but stop camera/screen for non-hosts.
   useEffect(() => {
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
     if (!room || room.state !== ConnectionState.Connected) return;
-    if (roomMode === "webinar") {
-      void applyListenerOnly(room, true);
+    if (isWebinar && !isHostRole) {
+      setCanPublishVideo(false);
+      setCanPublishAudio(true);
+      void applyVideoRestricted(room);
     } else {
       syncMediaPresenceRef.current(room);
     }
-  }, [applyListenerOnly, roomMode, sessionKey]);
+  }, [applyVideoRestricted, isHostRole, isWebinar, sessionKey]);
+
+  // Accidental unmute: auto-mute local mic after sustained silence in webinar.
+  useEffect(() => {
+    if (!connected || !isWebinar || !audioEnabled) {
+      setSilenceNotice(null);
+      return;
+    }
+
+    let lastSpeechAt = Date.now();
+    const timer = window.setInterval(() => {
+      const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+      if (!room || room.state !== ConnectionState.Connected) return;
+      const lp = room.localParticipant;
+      if (!lp.isMicrophoneEnabled) return;
+
+      const speaking = lp.isSpeaking || lp.audioLevel >= SPEECH_LEVEL_THRESHOLD;
+      if (speaking) {
+        lastSpeechAt = Date.now();
+        return;
+      }
+
+      if (Date.now() - lastSpeechAt < WEBINAR_SILENCE_AUTOMUTE_MS) return;
+      if (mediaBusyRef.current) return;
+
+      mediaBusyRef.current = true;
+      setMediaBusy(true);
+      void lp
+        .setMicrophoneEnabled(false)
+        .then(() => {
+          applyLocalStateRef.current(room);
+          setSilenceNotice("Mic muted — no speech detected");
+          onStatusRef.current?.("Mic muted — no speech detected");
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          mediaBusyRef.current = false;
+          setMediaBusy(false);
+        });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [audioEnabled, connected, isWebinar, sessionKey]);
+
+  useEffect(() => {
+    if (!silenceNotice) return;
+    const t = window.setTimeout(() => setSilenceNotice(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [silenceNotice]);
 
   const runMediaToggle = useCallback(
     async (kind: "audio" | "video") => {
       const room = roomRef.current ?? getLiveKitRoom(sessionKey);
-      if (!room || mediaBusyRef.current || listenerOnly) return;
+      if (!room || mediaBusyRef.current) return;
+      if (kind === "audio" && !canPublishAudio) return;
+      if (kind === "video" && !canPublishVideo) return;
       roomRef.current = room;
       if (room.state === ConnectionState.Connecting || room.state === ConnectionState.Reconnecting) {
         onErrorRef.current("Media server is still connecting — wait a moment and try again.");
@@ -388,12 +488,12 @@ export function LiveKitConference({
         setMediaBusy(false);
       }
     },
-    [applyLocalState, listenerOnly, sessionKey],
+    [applyLocalState, canPublishAudio, canPublishVideo, sessionKey],
   );
 
   const shareScreen = useCallback(async () => {
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
-    if (!room || mediaBusyRef.current || listenerOnly) return;
+    if (!room || mediaBusyRef.current || !canPublishVideo) return;
     roomRef.current = room;
     if (room.state !== ConnectionState.Connected) {
       onError("Not connected to media server — open https://localhost:5173 and refresh.");
@@ -410,7 +510,7 @@ export function LiveKitConference({
       mediaBusyRef.current = false;
       setMediaBusy(false);
     }
-  }, [applyLocalState, listenerOnly, onError, sessionKey]);
+  }, [applyLocalState, canPublishVideo, onError, sessionKey]);
 
   const handleLeave = useCallback(() => {
     forceDisconnectLiveKitRoom(sessionKey);
@@ -503,8 +603,11 @@ export function LiveKitConference({
       {!connected && (
         <div className="join-banner info">Connecting to media server…</div>
       )}
-      {listenerOnly && connected && (
-        <div className="join-banner info">Webinar mode — you are viewing as a listener.</div>
+      {isWebinar && !isHostRole && connected && (
+        <div className="join-banner info">Webinar — raise hand to get the host’s attention.</div>
+      )}
+      {silenceNotice && connected && (
+        <div className="join-banner info">{silenceNotice}</div>
       )}
       <GalleryPagination
         page={galleryPage}
@@ -551,8 +654,12 @@ export function LiveKitConference({
         onToggleVideo={() => void runMediaToggle("video")}
         onShareScreen={() => void shareScreen()}
         onLeave={handleLeave}
-        showScreenShare={!listenerOnly}
-        showMediaControls={!listenerOnly}
+        showScreenShare={canPublishVideo}
+        showAudioControl={canPublishAudio}
+        showVideoControl={canPublishVideo}
+        showRaiseHand={showRaiseHand}
+        handRaised={handRaised}
+        onToggleRaiseHand={onToggleRaiseHand}
         chatBadge={chatBadge}
         mediaBusy={mediaBusy}
         onFocusChat={onFocusChat}

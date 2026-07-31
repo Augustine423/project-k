@@ -25,6 +25,7 @@ public sealed class ControlPlaneStore
     private static string ParticipantsKey(string id) => "room:" + id + ":participants";
     private static string ParticipantIndexKey(string id) => "room:" + id + ":participant_index";
     private static string MediaKey(string id) => "room:" + id + ":media";
+    private static string RaisedHandsKey(string id) => "room:" + id + ":raised_hands";
     private static string RoomSecretKey(string id) => "room:" + id + ":secret";
     private static string RoomPinKey(string id) => "room:" + id + ":pin";
     private static string ActiveRoomsKey => "kzys:active_rooms";
@@ -63,7 +64,7 @@ public sealed class ControlPlaneStore
     {
         await _db.KeyDeleteAsync([
             RoomKey(roomId), ParticipantsKey(roomId), ParticipantIndexKey(roomId), MediaKey(roomId),
-            RoomSecretKey(roomId), RoomPinKey(roomId),
+            RaisedHandsKey(roomId), RoomSecretKey(roomId), RoomPinKey(roomId),
         ]);
         await _db.SetRemoveAsync(ActiveRoomsKey, roomId);
         await RefreshScalingMetricsAsync(ct);
@@ -135,6 +136,46 @@ return 1
     {
         await _db.HashDeleteAsync(ParticipantsKey(roomId), participantId);
         await _db.SortedSetRemoveAsync(ParticipantIndexKey(roomId), participantId);
+        await _db.SortedSetRemoveAsync(RaisedHandsKey(roomId), participantId);
+    }
+
+    public async Task RaiseHandAsync(string roomId, string participantId, CancellationToken ct = default)
+    {
+        var score = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        await _db.SortedSetAddAsync(RaisedHandsKey(roomId), participantId, score);
+        await _db.KeyExpireAsync(RaisedHandsKey(roomId), RoomTtl);
+    }
+
+    public Task LowerHandAsync(string roomId, string participantId, CancellationToken ct = default)
+        => _db.SortedSetRemoveAsync(RaisedHandsKey(roomId), participantId);
+
+    public Task ClearRaisedHandsAsync(string roomId, CancellationToken ct = default)
+        => _db.KeyDeleteAsync(RaisedHandsKey(roomId));
+
+    public async Task<IReadOnlyList<RaisedHandRecord>> ListRaisedHandsAsync(
+        string roomId,
+        CancellationToken ct = default)
+    {
+        var entries = await _db.SortedSetRangeByRankWithScoresAsync(RaisedHandsKey(roomId));
+        if (entries.Length == 0) return [];
+
+        var result = new List<RaisedHandRecord>(entries.Length);
+        foreach (var entry in entries)
+        {
+            var participantId = (string)entry.Element!;
+            if (string.IsNullOrEmpty(participantId)) continue;
+            var participant = await GetParticipantAsync(roomId, participantId, ct);
+            if (participant is null)
+            {
+                await _db.SortedSetRemoveAsync(RaisedHandsKey(roomId), participantId);
+                continue;
+            }
+
+            var raisedAt = DateTime.UnixEpoch.AddMilliseconds(entry.Score);
+            result.Add(new RaisedHandRecord(participant.Id, participant.DisplayName, raisedAt));
+        }
+
+        return result;
     }
 
     public Task<long> GetParticipantCountAsync(string roomId, CancellationToken ct = default)

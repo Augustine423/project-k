@@ -48,7 +48,21 @@ public sealed class RoomEventHub : IHostedService
                 var roomId = doc.RootElement.GetProperty("roomId").GetString();
                 if (string.IsNullOrEmpty(roomId)) return;
                 var payload = doc.RootElement.GetProperty("payload").GetRawText();
-                DeliverToLocalClients(roomId, payload);
+
+                HashSet<string>? targets = null;
+                if (doc.RootElement.TryGetProperty("targetParticipantIds", out var targetsEl)
+                    && targetsEl.ValueKind == JsonValueKind.Array
+                    && targetsEl.GetArrayLength() > 0)
+                {
+                    targets = new HashSet<string>(StringComparer.Ordinal);
+                    foreach (var item in targetsEl.EnumerateArray())
+                    {
+                        var id = item.GetString();
+                        if (!string.IsNullOrEmpty(id)) targets.Add(id);
+                    }
+                }
+
+                DeliverToLocalClients(roomId, payload, targets);
             }
             catch (Exception ex)
             {
@@ -103,23 +117,51 @@ public sealed class RoomEventHub : IHostedService
     public void Broadcast(string roomId, RoomEvent evt)
     {
         var payloadJson = JsonSerializer.Serialize(evt, EventJson);
-        DeliverToLocalClients(roomId, payloadJson);
+        DeliverToLocalClients(roomId, payloadJson, targetParticipantIds: null);
 
         var envelope = JsonSerializer.Serialize(new
         {
             roomId,
             payload = evt,
+            targetParticipantIds = (string[]?)null,
         }, EventJson);
 
         _ = _redis.GetSubscriber().PublishAsync(RedisChannel.Literal(BroadcastChannel), envelope);
     }
 
-    private void DeliverToLocalClients(string roomId, string payloadJson)
+    /// <summary>Deliver an event only to the listed participants (local + cross-node via Redis).</summary>
+    public void SendToParticipants(string roomId, IReadOnlyCollection<string> participantIds, RoomEvent evt)
+    {
+        if (participantIds.Count == 0) return;
+        var targets = participantIds.Distinct(StringComparer.Ordinal).ToArray();
+        var payloadJson = JsonSerializer.Serialize(evt, EventJson);
+        DeliverToLocalClients(roomId, payloadJson, targets);
+
+        var envelope = JsonSerializer.Serialize(new
+        {
+            roomId,
+            payload = evt,
+            targetParticipantIds = targets,
+        }, EventJson);
+
+        _ = _redis.GetSubscriber().PublishAsync(RedisChannel.Literal(BroadcastChannel), envelope);
+    }
+
+    private void DeliverToLocalClients(
+        string roomId,
+        string payloadJson,
+        IReadOnlyCollection<string>? targetParticipantIds)
     {
         if (!_rooms.TryGetValue(roomId, out var room)) return;
         var payload = System.Text.Encoding.UTF8.GetBytes(payloadJson);
+        var filter = targetParticipantIds is { Count: > 0 }
+            ? new HashSet<string>(targetParticipantIds, StringComparer.Ordinal)
+            : null;
+
         foreach (var client in room.Values)
         {
+            if (filter is not null && !filter.Contains(client.ParticipantId))
+                continue;
             if (!client.Outgoing.Writer.TryWrite(payload))
                 _log.LogWarning("dropping slow ws client room={Room} participant={Participant}", roomId, client.ParticipantId);
         }
@@ -276,6 +318,18 @@ public static class RoomWebSocketHandler
 {
     public static void HandleClientMessage(
         RoomEventHub hub,
+        ControlPlaneStore store,
+        string roomId,
+        string participantId,
+        byte[] payload,
+        ILogger logger)
+    {
+        _ = HandleClientMessageAsync(hub, store, roomId, participantId, payload, logger);
+    }
+
+    private static async Task HandleClientMessageAsync(
+        RoomEventHub hub,
+        ControlPlaneStore store,
         string roomId,
         string participantId,
         byte[] payload,
@@ -287,30 +341,148 @@ public static class RoomWebSocketHandler
             if (!doc.RootElement.TryGetProperty("type", out var typeEl))
                 return;
             var type = typeEl.GetString();
-            if (type != "chat.send") return;
 
-            if (!doc.RootElement.TryGetProperty("data", out var data))
-                return;
-            var message = data.GetProperty("message").GetString();
-            if (string.IsNullOrWhiteSpace(message)) return;
-            var displayName = data.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
-            if (string.IsNullOrWhiteSpace(displayName)) displayName = "Guest";
-
-            hub.Broadcast(roomId, new RoomEvent
+            switch (type)
             {
-                Type = "chat.message",
-                Data = new
-                {
-                    participantId,
-                    displayName,
-                    message,
-                    at = DateTime.UtcNow,
-                },
-            });
+                case "chat.send":
+                    HandleChatSend(hub, roomId, participantId, doc.RootElement);
+                    break;
+                case "chat.dm":
+                    await HandleChatDmAsync(hub, store, roomId, participantId, doc.RootElement);
+                    break;
+                case "hand.raise":
+                case "hand.lower":
+                case "hand.sync":
+                    await HandleHandAsync(hub, store, roomId, participantId, type!);
+                    break;
+            }
         }
         catch (Exception ex)
         {
             logger.LogDebug(ex, "ignored ws client message");
         }
+    }
+
+    private static void HandleChatSend(
+        RoomEventHub hub,
+        string roomId,
+        string participantId,
+        JsonElement root)
+    {
+        if (!root.TryGetProperty("data", out var data))
+            return;
+        var message = data.GetProperty("message").GetString();
+        if (string.IsNullOrWhiteSpace(message)) return;
+        if (message.Length > 500) message = message[..500];
+        var displayName = data.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
+        if (string.IsNullOrWhiteSpace(displayName)) displayName = "Guest";
+
+        hub.Broadcast(roomId, new RoomEvent
+        {
+            Type = "chat.message",
+            Data = new
+            {
+                participantId,
+                displayName,
+                message,
+                at = DateTime.UtcNow,
+            },
+        });
+    }
+
+    private static async Task HandleChatDmAsync(
+        RoomEventHub hub,
+        ControlPlaneStore store,
+        string roomId,
+        string participantId,
+        JsonElement root)
+    {
+        if (!root.TryGetProperty("data", out var data))
+            return;
+
+        var toParticipantId = data.TryGetProperty("toParticipantId", out var toEl)
+            ? toEl.GetString()
+            : null;
+        if (string.IsNullOrWhiteSpace(toParticipantId)) return;
+        if (string.Equals(toParticipantId, participantId, StringComparison.Ordinal)) return;
+
+        var message = data.TryGetProperty("message", out var msgEl) ? msgEl.GetString() : null;
+        if (string.IsNullOrWhiteSpace(message)) return;
+        if (message.Length > 500) message = message[..500];
+
+        var recipient = await store.GetParticipantAsync(roomId, toParticipantId);
+        if (recipient is null) return;
+
+        var sender = await store.GetParticipantAsync(roomId, participantId);
+        var displayName = data.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
+        if (string.IsNullOrWhiteSpace(displayName))
+            displayName = sender?.DisplayName ?? "Guest";
+
+        hub.SendToParticipants(
+            roomId,
+            [participantId, toParticipantId],
+            new RoomEvent
+            {
+                Type = "chat.dm",
+                Data = new
+                {
+                    participantId,
+                    displayName,
+                    message,
+                    toParticipantId,
+                    toDisplayName = recipient.DisplayName,
+                    at = DateTime.UtcNow,
+                },
+            });
+    }
+
+    private static async Task HandleHandAsync(
+        RoomEventHub hub,
+        ControlPlaneStore store,
+        string roomId,
+        string participantId,
+        string type)
+    {
+        var room = await store.GetRoomAsync(roomId);
+        if (room is null) return;
+
+        // Raise/lower only apply in webinar; sync still returns current (possibly empty) list.
+        if (type is "hand.raise" or "hand.lower")
+        {
+            if (!string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal))
+                return;
+
+            var participant = await store.GetParticipantAsync(roomId, participantId);
+            if (participant is null) return;
+
+            if (type == "hand.raise")
+                await store.RaiseHandAsync(roomId, participantId);
+            else
+                await store.LowerHandAsync(roomId, participantId);
+        }
+
+        await BroadcastRaisedHandsAsync(hub, store, roomId);
+    }
+
+    public static async Task BroadcastRaisedHandsAsync(
+        RoomEventHub hub,
+        ControlPlaneStore store,
+        string roomId,
+        CancellationToken ct = default)
+    {
+        var raised = await store.ListRaisedHandsAsync(roomId, ct);
+        hub.Broadcast(roomId, new RoomEvent
+        {
+            Type = "hand.updated",
+            Data = new
+            {
+                raised = raised.Select(h => new
+                {
+                    participantId = h.ParticipantId,
+                    displayName = h.DisplayName,
+                    at = h.At,
+                }),
+            },
+        });
     }
 }

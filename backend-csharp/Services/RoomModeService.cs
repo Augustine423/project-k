@@ -70,6 +70,18 @@ public sealed class RoomModeService
                 roomId, previous, nextMode, stats.Publishers, stats.Listeners);
 
             await _store.EnqueueModeApplyAsync(roomId, ct);
+
+            // Raised hands are webinar-only; clear when leaving webinar.
+            if (string.Equals(previous, RoomModes.Webinar, StringComparison.Ordinal)
+                && !string.Equals(nextMode, RoomModes.Webinar, StringComparison.Ordinal))
+            {
+                await _store.ClearRaisedHandsAsync(roomId, ct);
+                _hub.Broadcast(roomId, new RoomEvent
+                {
+                    Type = "hand.updated",
+                    Data = new { raised = Array.Empty<object>() },
+                });
+            }
         }
 
         await _store.SaveRoomAsync(room, ct);
@@ -103,6 +115,7 @@ public sealed class RoomModeService
             return;
         }
 
+        var previous = room.Mode;
         room.Mode = nextMode;
         room.MaxPublishers = nextMode == RoomModes.Webinar
             ? _config.WebinarMaxPublishers
@@ -111,6 +124,17 @@ public sealed class RoomModeService
         await _store.SaveRoomAsync(room, ct);
         await _store.EnqueueModeApplyAsync(roomId, ct);
         await _store.RefreshScalingMetricsAsync(ct);
+
+        if (string.Equals(previous, RoomModes.Webinar, StringComparison.Ordinal)
+            && !string.Equals(nextMode, RoomModes.Webinar, StringComparison.Ordinal))
+        {
+            await _store.ClearRaisedHandsAsync(roomId, ct);
+            _hub.Broadcast(roomId, new RoomEvent
+            {
+                Type = "hand.updated",
+                Data = new { raised = Array.Empty<object>() },
+            });
+        }
 
         _hub.Broadcast(roomId, new RoomEvent
         {
@@ -142,23 +166,50 @@ public sealed class RoomModeService
         return currentMode;
     }
 
-    public bool IsListenerOnly(
+    /// <summary>
+    /// Webinar attendees may publish audio freely; video/screen stay host/co-host only.
+    /// Interactive rooms still cap publishers via maxPublishers.
+    /// </summary>
+    public PublishCapabilities GetPublishCapabilities(
         RoomRecord room,
         ParticipantRecord participant,
         int activePublishers,
         bool isCurrentlyPublishing = false)
     {
         if (participant.Role is ParticipantRoles.Host or ParticipantRoles.CoHost)
-            return false;
+            return PublishCapabilities.Full;
 
         if (string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal))
-            return true;
+            return PublishCapabilities.AudioOnly;
 
-        return activePublishers >= room.MaxPublishers && !isCurrentlyPublishing;
+        if (activePublishers >= room.MaxPublishers && !isCurrentlyPublishing)
+            return PublishCapabilities.None;
+
+        return PublishCapabilities.Full;
+    }
+
+    /// <summary>True when the participant cannot publish audio or video (interactive capacity only).</summary>
+    public bool IsListenerOnly(
+        RoomRecord room,
+        ParticipantRecord participant,
+        int activePublishers,
+        bool isCurrentlyPublishing = false)
+    {
+        var caps = GetPublishCapabilities(room, participant, activePublishers, isCurrentlyPublishing);
+        return !caps.CanPublishAudio && !caps.CanPublishVideo;
     }
 
     public bool ShouldJoinAsListener(RoomRecord room, ParticipantRecord participant)
         => IsListenerOnly(room, participant, room.ActivePublishers, isCurrentlyPublishing: false);
+}
+
+public sealed record PublishCapabilities(bool CanPublishAudio, bool CanPublishVideo)
+{
+    public static PublishCapabilities Full { get; } = new(true, true);
+    public static PublishCapabilities AudioOnly { get; } = new(true, false);
+    public static PublishCapabilities None { get; } = new(false, false);
+
+    public bool CanPublishAnything => CanPublishAudio || CanPublishVideo;
 }
 
 public sealed record MediaStats(int TotalParticipants, int Publishers, int Listeners);

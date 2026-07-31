@@ -73,6 +73,8 @@ public sealed class MediaPresenceRecord
     public DateTime UpdatedAt { get; set; }
 }
 
+public sealed record RaisedHandRecord(string ParticipantId, string DisplayName, DateTime At);
+
 public sealed class RoomEvent
 {
     public required string Type { get; set; }

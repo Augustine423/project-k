@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { ChatIcon } from "./MediaIcons";
+import {
+  avatarInitials,
+  avatarTone,
+  formatChatTime,
+  type ChatMessage,
+} from "./chatTypes";
 
-export interface ChatMessage {
-  id: string;
-  displayName: string;
-  message: string;
-  at: string;
-}
+export type { ChatMessage } from "./chatTypes";
 
 interface ChatPanelProps {
   messages: ChatMessage[];
@@ -16,20 +17,7 @@ interface ChatPanelProps {
   collapsed?: boolean;
   onToggleCollapse?: () => void;
   selfName?: string;
-}
-
-function formatTime(iso: string): string {
-  try {
-    return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
-  } catch {
-    return "";
-  }
-}
-
-function avatarInitials(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+  selfId?: string;
 }
 
 export function ChatPanel({
@@ -40,6 +28,7 @@ export function ChatPanel({
   collapsed = false,
   onToggleCollapse,
   selfName,
+  selfId,
 }: ChatPanelProps) {
   const [draft, setDraft] = useState("");
   const messagesRef = useRef<HTMLDivElement>(null);
@@ -81,14 +70,17 @@ export function ChatPanel({
           <div className="chat-messages" ref={messagesRef}>
             {messages.length === 0 && <p className="chat-empty">No messages yet. Say hello!</p>}
             {messages.map((msg) => {
-              const isSelf = selfName && msg.displayName === selfName;
+              const isSelf =
+                (selfId && msg.participantId === selfId) ||
+                (!!selfName && msg.displayName === selfName);
               return (
-                <div
-                  key={msg.id}
-                  className={`chat-bubble-row ${isSelf ? "self" : "other"}`}
-                >
+                <div key={msg.id} className={`chat-bubble-row ${isSelf ? "self" : "other"}`}>
                   {!isSelf && (
-                    <span className="chat-avatar" aria-hidden="true">
+                    <span
+                      className="chat-avatar"
+                      aria-hidden="true"
+                      style={{ background: avatarTone(msg.participantId || msg.displayName) }}
+                    >
                       {avatarInitials(msg.displayName)}
                     </span>
                   )}
@@ -96,7 +88,7 @@ export function ChatPanel({
                     {!isSelf && <span className="chat-sender">{msg.displayName}</span>}
                     <p className="chat-text">{msg.message}</p>
                     <time className="chat-time" dateTime={msg.at}>
-                      {formatTime(msg.at)}
+                      {formatChatTime(msg.at)}
                     </time>
                   </div>
                 </div>

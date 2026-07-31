@@ -195,3 +195,25 @@ export function sendRoomChat(
 ): void {
   sendRoomEvent(roomId, token, "chat.send", { displayName, message });
 }
+
+export function sendDirectChat(
+  roomId: string,
+  token: string,
+  displayName: string,
+  toParticipantId: string,
+  message: string,
+): void {
+  sendRoomEvent(roomId, token, "chat.dm", { displayName, toParticipantId, message });
+}
+
+export function raiseHand(roomId: string, token: string): void {
+  sendRoomEvent(roomId, token, "hand.raise", {});
+}
+
+export function lowerHand(roomId: string, token: string): void {
+  sendRoomEvent(roomId, token, "hand.lower", {});
+}
+
+export function syncRaisedHands(roomId: string, token: string): void {
+  sendRoomEvent(roomId, token, "hand.sync", {});
+}

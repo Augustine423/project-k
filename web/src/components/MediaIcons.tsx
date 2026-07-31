@@ -140,6 +140,33 @@ export function ReactionsIcon({ className, size }: IconProps) {
   );
 }
 
+/** Raised hand — simple open-palm gesture for webinar Q&A signaling. */
+export function RaiseHandIcon({ className, size }: IconProps) {
+  return (
+    <IconShell className={className} size={size}>
+      <path
+        d="M9 11V6.5a1.5 1.5 0 0 1 3 0V11"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+      <path
+        d="M12 11V5.5a1.5 1.5 0 0 1 3 0V11"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+      />
+      <path
+        d="M15 11V7.5a1.5 1.5 0 0 1 3 0V13c0 3.5-2.5 6-6 6h-1c-3 0-5-2-5-5V9.5a1.5 1.5 0 0 1 3 0V11"
+        stroke="currentColor"
+        strokeWidth={STROKE}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </IconShell>
+  );
+}
+
 export function SettingsIcon({ className, size }: IconProps) {
   return (
     <IconShell className={className} size={size}>

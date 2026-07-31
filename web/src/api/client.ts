@@ -137,7 +137,12 @@ export function reportMediaPresence(
   roomId: string,
   token: string,
   state: MediaPresenceInput,
-): Promise<{ mode: string; listenerOnly: boolean }> {
+): Promise<{
+  mode: string;
+  listenerOnly: boolean;
+  canPublishAudio: boolean;
+  canPublishVideo: boolean;
+}> {
   return request(`/api/rooms/${roomId}/media`, {
     method: "POST",
     headers: authHeader(token),

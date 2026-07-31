@@ -3,6 +3,7 @@ import {
   ChatIcon,
   EndCallIcon,
   MicIcon,
+  RaiseHandIcon,
   ReactionsIcon,
   ShareScreenIcon,
 } from "./MediaIcons";
@@ -15,8 +16,14 @@ interface ControlBarProps {
   onShareScreen: () => void;
   onLeave: () => void;
   showScreenShare?: boolean;
-  /** Hide mic/camera when joined as webinar listener */
-  showMediaControls?: boolean;
+  /** Show mic control (webinar attendees may unmute; interactive capacity may hide). */
+  showAudioControl?: boolean;
+  /** Show camera control (host/co-host in webinar; all publishers in interactive). */
+  showVideoControl?: boolean;
+  /** Webinar raise-hand signal (does not gate the mic). */
+  showRaiseHand?: boolean;
+  handRaised?: boolean;
+  onToggleRaiseHand?: () => void;
   chatBadge?: number | string;
   /** Disable mic/camera/screen while a device toggle is in progress. */
   mediaBusy?: boolean;
@@ -35,37 +42,47 @@ export function ControlBar({
   onShareScreen,
   onLeave,
   showScreenShare = true,
-  showMediaControls = true,
+  showAudioControl = true,
+  showVideoControl = true,
+  showRaiseHand = false,
+  handRaised = false,
+  onToggleRaiseHand,
   chatBadge,
   mediaBusy = false,
   onFocusChat,
 }: ControlBarProps) {
+  const hasMedia = showAudioControl || showVideoControl || showScreenShare;
+
   return (
     <div className="control-dock-wrap">
       <div className="control-dock" role="toolbar" aria-label="Meeting controls">
-        {showMediaControls && (
+        {hasMedia && (
           <>
-            <button
-              type="button"
-              className={`dock-btn dock-btn-media ${audioEnabled ? "active" : "off"}`}
-              onClick={onToggleAudio}
-              disabled={mediaBusy}
-              aria-pressed={audioEnabled}
-              aria-label={audioEnabled ? "Mute microphone" : "Unmute microphone"}
-            >
-              <MicIcon muted={!audioEnabled} size={22} />
-            </button>
+            {showAudioControl && (
+              <button
+                type="button"
+                className={`dock-btn dock-btn-media ${audioEnabled ? "active" : "off"}`}
+                onClick={onToggleAudio}
+                disabled={mediaBusy}
+                aria-pressed={audioEnabled}
+                aria-label={audioEnabled ? "Mute microphone" : "Unmute microphone"}
+              >
+                <MicIcon muted={!audioEnabled} size={22} />
+              </button>
+            )}
 
-            <button
-              type="button"
-              className={`dock-btn dock-btn-media ${videoEnabled ? "active" : "off"}`}
-              onClick={onToggleVideo}
-              disabled={mediaBusy}
-              aria-pressed={videoEnabled}
-              aria-label={videoEnabled ? "Turn camera off" : "Turn camera on"}
-            >
-              <CameraIcon off={!videoEnabled} size={22} />
-            </button>
+            {showVideoControl && (
+              <button
+                type="button"
+                className={`dock-btn dock-btn-media ${videoEnabled ? "active" : "off"}`}
+                onClick={onToggleVideo}
+                disabled={mediaBusy}
+                aria-pressed={videoEnabled}
+                aria-label={videoEnabled ? "Turn camera off" : "Turn camera on"}
+              >
+                <CameraIcon off={!videoEnabled} size={22} />
+              </button>
+            )}
 
             {showScreenShare && (
               <button
@@ -83,10 +100,17 @@ export function ControlBar({
           </>
         )}
 
-        {!showMediaControls && showScreenShare && (
-          <>
-            <span className="dock-divider" aria-hidden="true" />
-          </>
+        {showRaiseHand && onToggleRaiseHand && (
+          <button
+            type="button"
+            className={`dock-btn dock-btn-secondary ${handRaised ? "hand-raised" : ""}`}
+            onClick={onToggleRaiseHand}
+            aria-pressed={handRaised}
+            aria-label={handRaised ? "Lower hand" : "Raise hand"}
+            title={handRaised ? "Lower hand" : "Raise hand"}
+          >
+            <RaiseHandIcon size={22} />
+          </button>
         )}
 
         <button

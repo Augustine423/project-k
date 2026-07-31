@@ -9,19 +9,25 @@ import {
   MAX_CHAT_MESSAGES,
   setRoomLocked,
 } from "../api/client";
-import { sendRoomChat, useRoomEvents } from "../api/useRoomEvents";
+import { sendRoomChat, sendDirectChat, raiseHand, lowerHand, syncRaisedHands, useRoomEvents } from "../api/useRoomEvents";
 import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant, Room } from "../api/types";
-import type { ChatMessage } from "../components/ChatPanel";
+import type { ChatMessage } from "../components/chatTypes";
 import { MeetingHeader } from "../components/MeetingChrome";
 import { InviteLinkBar } from "../components/InviteLinkBar";
-import { RoomSidePanel, type SidePanelTab } from "../components/RoomSidePanel";
+import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { LiveKitConference } from "../livekit/LiveKitConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
 import { mediaUnavailableReason } from "../media/secureContext";
 
 const SMALL_ROOM_LIVE_LIST = 200;
+
+export type RaisedHand = {
+  participantId: string;
+  displayName: string;
+  at: string;
+};
 
 function isHostRole(role: string): boolean {
   return role === "host" || role === "cohost";
@@ -47,13 +53,29 @@ export function RoomPage() {
   const [hostBusy, setHostBusy] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
   const [inviteCollapsed, setInviteCollapsed] = useState(true);
-  const [chatReadCount, setChatReadCount] = useState(0);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
+  const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
+  const [dmPeer, setDmPeer] = useState<DmPeer | null>(null);
+  const [dmThreads, setDmThreads] = useState<Record<string, ChatMessage[]>>({});
+  const [openDmPeers, setOpenDmPeers] = useState<DmPeer[]>([]);
+  const [dmUnreadByPeer, setDmUnreadByPeer] = useState<Record<string, number>>({});
+  const [roomChatReadCount, setRoomChatReadCount] = useState(0);
 
   const token = ticket?.participantToken ?? "";
+  const selfId = ticket?.participant.id ?? "";
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
-  const unreadChat = Math.max(0, chatMessages.length - chatReadCount);
+  const unreadRoomChat = Math.max(0, chatMessages.length - roomChatReadCount);
+  const unreadDmTotal = Object.values(dmUnreadByPeer).reduce((a, b) => a + b, 0);
+  const unreadChat = unreadRoomChat + unreadDmTotal;
+  const selfHandRaised = Boolean(
+    ticket && raisedHands.some((h) => h.participantId === ticket.participant.id),
+  );
+  const isWebinar = ticket?.room.mode === "webinar";
+  const dmPeerRef = useRef(dmPeer);
+  dmPeerRef.current = dmPeer;
+  const sideTabRef = useRef(sideTab);
+  sideTabRef.current = sideTab;
 
   const refreshCount = useCallback(async () => {
     if (!roomId) return;
@@ -96,15 +118,49 @@ export function RoomPage() {
     (tab: SidePanelTab = "chat") => {
       setSideTab(tab);
       setMobileSidebarOpen(true);
-      if (tab === "chat") setChatReadCount(chatMessages.length);
+      if (tab === "chat") {
+        setRoomChatReadCount(chatMessages.length);
+        if (dmPeer) {
+          setDmUnreadByPeer((prev) => ({ ...prev, [dmPeer.participantId]: 0 }));
+        }
+      }
       window.setTimeout(() => sidePanelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 50);
     },
-    [chatMessages.length],
+    [chatMessages.length, dmPeer],
   );
+
+  const openDm = useCallback((peer: DmPeer) => {
+    setOpenDmPeers((prev) =>
+      prev.some((p) => p.participantId === peer.participantId) ? prev : [...prev, peer],
+    );
+    setDmPeer(peer);
+    setSideTab("chat");
+    setMobileSidebarOpen(true);
+    setDmUnreadByPeer((prev) => ({ ...prev, [peer.participantId]: 0 }));
+  }, []);
+
+  const changeDmPeer = useCallback((peer: DmPeer | null) => {
+    setDmPeer(peer);
+    if (peer) {
+      setDmUnreadByPeer((prev) => ({ ...prev, [peer.participantId]: 0 }));
+    } else {
+      setRoomChatReadCount((c) => Math.max(c, chatMessages.length));
+    }
+  }, [chatMessages.length]);
 
   const onRoomEvent = useCallback(
     (evt: { type: string; data: unknown }) => {
-      if (evt.type === "ws.open" || evt.type === "ws.close") return;
+      if (evt.type === "ws.open") {
+        if (roomId && token) {
+          try {
+            syncRaisedHands(roomId, token);
+          } catch {
+            // ws just opened; sync is best-effort
+          }
+        }
+        return;
+      }
+      if (evt.type === "ws.close") return;
 
       if (evt.type === "chat.message") {
         const data = evt.data as {
@@ -118,11 +174,82 @@ export function RoomPage() {
         setChatMessages((prev) =>
           appendChatMessage(prev, {
             id,
+            participantId: data.participantId,
             displayName: data.displayName ?? "Guest",
             message: data.message!,
             at: data.at ?? new Date().toISOString(),
           }),
         );
+        return;
+      }
+
+      if (evt.type === "chat.dm") {
+        const data = evt.data as {
+          displayName?: string;
+          message?: string;
+          at?: string;
+          participantId?: string;
+          toParticipantId?: string;
+          toDisplayName?: string;
+        };
+        if (!data.message || !data.participantId || !data.toParticipantId || !selfId) return;
+
+        const peerId =
+          data.participantId === selfId ? data.toParticipantId : data.participantId;
+        const peerName =
+          data.participantId === selfId
+            ? (data.toDisplayName ?? "Guest")
+            : (data.displayName ?? "Guest");
+
+        const id = `dm-${data.participantId}-${data.toParticipantId}-${data.at ?? Date.now()}`;
+        const nextMsg: ChatMessage = {
+          id,
+          participantId: data.participantId,
+          displayName: data.displayName ?? "Guest",
+          message: data.message,
+          at: data.at ?? new Date().toISOString(),
+          dm: true,
+          toParticipantId: data.toParticipantId,
+          toDisplayName: data.toDisplayName,
+        };
+
+        setOpenDmPeers((prev) =>
+          prev.some((p) => p.participantId === peerId)
+            ? prev
+            : [...prev, { participantId: peerId, displayName: peerName }],
+        );
+        setDmThreads((prev) => ({
+          ...prev,
+          [peerId]: appendChatMessage(prev[peerId] ?? [], nextMsg),
+        }));
+
+        const viewingThisDm =
+          sideTabRef.current === "chat" &&
+          dmPeerRef.current?.participantId === peerId;
+        if (!viewingThisDm && data.participantId !== selfId) {
+          setDmUnreadByPeer((prev) => ({
+            ...prev,
+            [peerId]: (prev[peerId] ?? 0) + 1,
+          }));
+        }
+        return;
+      }
+
+      if (evt.type === "hand.updated") {
+        const data = evt.data as {
+          raised?: { participantId?: string; displayName?: string; at?: string }[];
+        };
+        const next = (data.raised ?? [])
+          .filter((h): h is { participantId: string; displayName: string; at: string } =>
+            Boolean(h.participantId),
+          )
+          .map((h) => ({
+            participantId: h.participantId,
+            displayName: h.displayName || "Guest",
+            at: h.at || new Date().toISOString(),
+          }));
+        setRaisedHands(next);
+        return;
       }
       if (evt.type === "room.participant_count") {
         const data = evt.data as { count?: number };
@@ -141,6 +268,7 @@ export function RoomPage() {
         const data = evt.data as { participantId?: string };
         if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
+          setRaisedHands((prev) => prev.filter((h) => h.participantId !== data.participantId));
           setParticipantCount((c) => Math.max(0, c - 1));
         }
         return;
@@ -152,6 +280,7 @@ export function RoomPage() {
           navigate("/", { replace: true });
         } else if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
+          setRaisedHands((prev) => prev.filter((h) => h.participantId !== data.participantId));
           setParticipantCount((c) => Math.max(0, c - 1));
         }
       }
@@ -173,6 +302,7 @@ export function RoomPage() {
               }
             : prev,
         );
+        if (data.mode && data.mode !== "webinar") setRaisedHands([]);
         return;
       }
       if (evt.type === "room.locked") {
@@ -181,22 +311,29 @@ export function RoomPage() {
         );
       }
     },
-    [roomId, navigate, ticket?.participant.id],
+    [roomId, navigate, ticket?.participant.id, token, selfId],
   );
 
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);
 
   useEffect(() => {
     if (sideTab === "chat" && mobileSidebarOpen) {
-      setChatReadCount(chatMessages.length);
+      if (dmPeer) {
+        setDmUnreadByPeer((prev) => ({ ...prev, [dmPeer.participantId]: 0 }));
+      } else {
+        setRoomChatReadCount(chatMessages.length);
+      }
     }
-  }, [sideTab, mobileSidebarOpen, chatMessages.length]);
+  }, [sideTab, mobileSidebarOpen, chatMessages.length, dmPeer]);
 
   useEffect(() => {
-    if (sideTab === "chat") {
-      setChatReadCount(chatMessages.length);
+    if (sideTab !== "chat") return;
+    if (dmPeer) {
+      setDmUnreadByPeer((prev) => ({ ...prev, [dmPeer.participantId]: 0 }));
+    } else {
+      setRoomChatReadCount(chatMessages.length);
     }
-  }, [sideTab, chatMessages.length]);
+  }, [sideTab, chatMessages.length, dmPeer]);
 
   function leaveRoom() {
     const t = ticket?.participantToken;
@@ -218,9 +355,29 @@ export function RoomPage() {
   function sendChat(text: string) {
     if (!ticket) return;
     try {
-      sendRoomChat(roomId, ticket.participantToken, ticket.participant.displayName, text);
+      if (dmPeer) {
+        sendDirectChat(
+          roomId,
+          ticket.participantToken,
+          ticket.participant.displayName,
+          dmPeer.participantId,
+          text,
+        );
+      } else {
+        sendRoomChat(roomId, ticket.participantToken, ticket.participant.displayName, text);
+      }
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : "Chat send failed");
+    }
+  }
+
+  function toggleRaiseHand() {
+    if (!ticket || !isWebinar) return;
+    try {
+      if (selfHandRaised) lowerHand(roomId, ticket.participantToken);
+      else raiseHand(roomId, ticket.participantToken);
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Raise hand failed");
     }
   }
 
@@ -351,6 +508,10 @@ export function RoomPage() {
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
               onFocusChat={() => focusSidePanel("chat")}
               roomMode={ticket.room.mode}
+              participantRole={ticket.participant.role}
+              showRaiseHand={isWebinar}
+              handRaised={selfHandRaised}
+              onToggleRaiseHand={toggleRaiseHand}
             />
           )}
         </main>
@@ -365,6 +526,7 @@ export function RoomPage() {
               chatDisabled={!chatReady}
               chatDisabledHint={chatReady ? undefined : "Connecting chat…"}
               selfName={ticket.participant.displayName}
+              selfId={ticket.participant.id}
               liveParticipants={liveParticipantList}
               isHost={isHost}
               locked={ticket.room.locked}
@@ -373,6 +535,14 @@ export function RoomPage() {
               hostBusy={hostBusy}
               activeTab={sideTab}
               onTabChange={setSideTab}
+              raisedHands={raisedHands}
+              showRaisedHands={isWebinar}
+              dmPeer={dmPeer}
+              onDmPeerChange={changeDmPeer}
+              dmThreads={dmThreads}
+              openDmPeers={openDmPeers}
+              dmUnreadByPeer={dmUnreadByPeer}
+              onOpenDm={openDm}
             />
           </div>
           <InviteLinkBar

@@ -95,10 +95,11 @@ app.MapGet("/", () => "KZYS C# Control Plane Running");
 var hub = app.Services.GetRequiredService<RoomEventHub>();
 var jwt = app.Services.GetRequiredService<JwtTokenService>();
 var presence = app.Services.GetRequiredService<RoomPresenceService>();
+var store = app.Services.GetRequiredService<ControlPlaneStore>();
 var wsLogger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("RoomWebSocket");
 
 hub.ClientMessage += (roomId, participantId, payload) =>
-    RoomWebSocketHandler.HandleClientMessage(hub, roomId, participantId, payload, wsLogger);
+    RoomWebSocketHandler.HandleClientMessage(hub, store, roomId, participantId, payload, wsLogger);
 
 app.Map("/ws/rooms/{roomId}", async (HttpContext ctx, string roomId, RoomEventHub roomHub) =>
 {

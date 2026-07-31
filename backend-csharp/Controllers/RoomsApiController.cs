@@ -147,8 +147,9 @@ public sealed class RoomsApiController : ControllerBase
 
             var participant = await _store.GetParticipantAsync(roomId, claims.ParticipantId, ct);
 
-            var listenerOnly = participant is not null
-                && _modes.IsListenerOnly(room, participant, room.ActivePublishers, body.Publishing);
+            var caps = participant is not null
+                ? _modes.GetPublishCapabilities(room, participant, room.ActivePublishers, body.Publishing)
+                : PublishCapabilities.None;
 
             return Ok(new
             {
@@ -156,7 +157,10 @@ public sealed class RoomsApiController : ControllerBase
                 maxPublishers = room.MaxPublishers,
                 activePublishers = room.ActivePublishers,
                 activeListeners = room.ActiveListeners,
-                listenerOnly,
+                canPublishAudio = caps.CanPublishAudio,
+                canPublishVideo = caps.CanPublishVideo,
+                // Backward-compatible alias: true only when neither audio nor video may publish.
+                listenerOnly = !caps.CanPublishAnything,
             });
         }
         catch (RoomServiceException ex) when (ex.Error == RoomError.NotFound)

@@ -23,9 +23,21 @@ public sealed class LiveKitTokenService
         string identity,
         string displayName,
         bool canPublish = true,
-        bool canSubscribe = true)
+        bool canSubscribe = true,
+        IReadOnlyList<string>? canPublishSources = null)
     {
         var now = DateTimeOffset.UtcNow;
+        var video = new Dictionary<string, object?>
+        {
+            ["roomJoin"] = true,
+            ["room"] = roomName,
+            ["canPublish"] = canPublish,
+            ["canSubscribe"] = canSubscribe,
+        };
+        // Restrict publishable track kinds when set (e.g. webinar attendees → microphone only).
+        if (canPublish && canPublishSources is { Count: > 0 })
+            video["canPublishSources"] = canPublishSources.ToArray();
+
         var payload = new JwtPayload(
             issuer: _apiKey,
             audience: null,
@@ -36,13 +48,7 @@ public sealed class LiveKitTokenService
         {
             ["sub"] = identity,
             ["name"] = displayName,
-            ["video"] = new Dictionary<string, object?>
-            {
-                ["roomJoin"] = true,
-                ["room"] = roomName,
-                ["canPublish"] = canPublish,
-                ["canSubscribe"] = canSubscribe,
-            },
+            ["video"] = video,
         };
 
         var credentials = new SigningCredentials(
