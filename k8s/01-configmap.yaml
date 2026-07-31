@@ -1,5 +1,7 @@
-# Test config — no domain. After deploy, set LIVEKIT_PUBLIC_URL / TURN_HOST /
-# CORS_ORIGIN to the web LoadBalancer external IP, then re-apply this file.
+# Test config — no domain. After deploy, set LIVEKIT_PUBLIC_URL / TURN_HOST to
+# the LoadBalancer IPs, then re-apply this file.
+#
+# Camera/mic require HTTPS: open https://<WEB_LB_IP>/ and accept the self-signed warning.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -9,7 +11,7 @@ metadata:
     app.kubernetes.io/part-of: project-k
 data:
   SERVICE_NAME: "kzys-control-plane"
-  # Use "*" for IP-only test access (no domain / TLS).
+  # Use "*" for IP-only test access (no domain / public CA).
   CORS_ORIGIN: "*"
   MAX_ROOM_PARTICIPANTS: "500"
   LARGE_ROOM_EVENT_THRESHOLD: "200"
@@ -20,13 +22,15 @@ data:
   WEBINAR_EXIT_LISTENERS: "20"
   INTERACTIVE_MAX_PUBLISHERS: "50"
   WEBINAR_MAX_PUBLISHERS: "16"
-  # Replace CHANGE_ME_LB_IP with: kubectl get svc kzys-web -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  # Coturn LB IP: kubectl get svc coturn -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
   TURN_HOST: "CHANGE_ME_LB_IP"
   TURN_PORT: "3478"
   TURN_TLS_PORT: "5349"
   TURN_USE_TLS: "false"
   TURN_REALM: "kzys"
-  LIVEKIT_PUBLIC_URL: "ws://CHANGE_ME_LB_IP/livekit"
+  # Web LB IP + wss (must match HTTPS page origin to avoid mixed content):
+  # kubectl get svc kzys-web -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+  LIVEKIT_PUBLIC_URL: "wss://CHANGE_ME_LB_IP/livekit"
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -37,7 +41,7 @@ metadata:
     app.kubernetes.io/part-of: project-k
 data:
   # keys.devkey MUST match LIVEKIT_API_SECRET in kzys-secrets.
-  # node_ip is set at runtime via --node-ip (see livekit.yaml Deployment).
+  # node_ip is set at runtime via --node-ip (see 04-livekit.yaml Deployment).
   livekit.yaml: |
     port: 7880
     bind_addresses:
@@ -78,7 +82,7 @@ data:
     log-file=stdout
     verbose
 ---
-# Nginx in front of static UI — same-origin /api /ws /livekit (IP LoadBalancer, no domain).
+# Nginx — HTTP + HTTPS (self-signed). Same-origin /api /ws /livekit.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -88,11 +92,26 @@ metadata:
     app.kubernetes.io/part-of: project-k
 data:
   default.conf: |
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
     server {
         listen 80;
         server_name _;
+        return 301 https://$host$request_uri;
+    }
+
+    server {
+        listen 443 ssl;
+        server_name _;
         root /usr/share/nginx/html;
         index index.html;
+
+        ssl_certificate     /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
 
         location /api/ {
             proxy_pass http://kzys-control-plane:4000;
@@ -100,15 +119,16 @@ data:
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto $scheme;
+            proxy_set_header X-Forwarded-Proto https;
         }
 
         location /ws/ {
             proxy_pass http://kzys-control-plane:4000;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
+            proxy_set_header Connection $connection_upgrade;
             proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
             proxy_read_timeout 86400;
         }
 
@@ -128,8 +148,9 @@ data:
             proxy_pass http://kzys-livekit:7880/;
             proxy_http_version 1.1;
             proxy_set_header Upgrade $http_upgrade;
-            proxy_set_header Connection "upgrade";
+            proxy_set_header Connection $connection_upgrade;
             proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
             proxy_read_timeout 86400;
         }
 
