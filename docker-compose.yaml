@@ -1,13 +1,12 @@
 name: project-k
 
-# Profiles:
-#   dev (default)  — Vite HMR + hot reload
-#   prod           — nginx static build (production-like local testing)
-#
 # Usage:
-#   docker compose up --build                          # dev
-#   docker compose --profile prod up --build           # prod-like
-#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml --profile prod up --build
+#   docker compose up --build                 # full stack including nginx UI (web)
+#   docker compose --profile dev up --build   # also start Vite HMR (web-dev)
+#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml up --build
+#
+# Note: services with `profiles:` are skipped unless that profile is enabled.
+# The production UI (`web`) has NO profile so plain `up` always includes it.
 
 x-server-env: &server-env
   PORT: 4000
@@ -31,7 +30,7 @@ x-server-env: &server-env
   SERVICE_NAME: kzys-control-plane
   LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
   LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
-  # Override in .env for HTTPS UI (e.g. wss://VM_IP:5173/livekit via Vite proxy).
+  # Browser-facing LiveKit URL. Behind nginx UI use same-origin /livekit proxy when possible.
   LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://${PUBLIC_HOST}:${LIVEKIT_PORT:-7880}}
 
 services:
@@ -119,8 +118,35 @@ services:
           cpus: "${SERVER_CPU_LIMIT:-2}"
           memory: "${SERVER_MEM_LIMIT:-512m}"
 
-  # Dev UI — Vite HMR (default profile)
+  # Production UI — nginx + self-signed HTTPS (same as previous Vite basicSsl UX).
+  # Open https://PUBLIC_HOST:WEB_PORT and accept the certificate warning.
+  # Always started (no Compose profile) so GCP / plain `docker compose up` includes the web UI.
   web:
+    build:
+      context: ./web
+      target: production
+      args:
+        VITE_API_URL: ""
+        NGINX_CONF: nginx.compose.conf
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+    ports:
+      # Map host WEB_PORT → container HTTPS 443 (use https://host:WEB_PORT)
+      - "${WEB_PORT:-5173}:443"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Optional Vite HMR for local coding only — enable with: --profile dev
+  web-dev:
     profiles: ["dev"]
     build:
       context: ./web
@@ -134,34 +160,11 @@ services:
       VITE_PROXY_TARGET: "http://server:4000"
       VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
     ports:
-      - "${WEB_PORT:-5173}:5173"
+      - "${WEB_DEV_PORT:-5174}:5173"
     volumes:
       - ./web/src:/app/src
       - ./web/index.html:/app/index.html
       - ./web/vite.config.ts:/app/vite.config.ts
-
-  # Production-like UI — nginx serving /dist with same-origin proxy
-  web-prod:
-    profiles: ["prod"]
-    build:
-      context: ./web
-      target: production
-      args:
-        VITE_API_URL: ""
-        NGINX_CONF: nginx.compose.conf
-    restart: unless-stopped
-    depends_on:
-      server:
-        condition: service_healthy
-      livekit:
-        condition: service_healthy
-    ports:
-      - "${WEB_PORT:-8080}:80"
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
 
 volumes:
   redis-data:

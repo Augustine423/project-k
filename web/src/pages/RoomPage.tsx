@@ -478,7 +478,7 @@ export function RoomPage() {
         statusMessage={statusMessage}
         connected={isLive}
         live={isLive}
-        viewerCount={participantCount}
+        viewerCount={Math.max(0, participantCount - 1)}
       />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}

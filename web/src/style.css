@@ -1043,6 +1043,7 @@ h1, h2, h3, h4 {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  justify-content: flex-start;
   overflow: hidden;
 }
 
@@ -1511,8 +1512,13 @@ button.rsp-face:disabled {
   margin: 0;
   padding: 0 0 0.5rem;
   overflow-y: auto;
-  flex: 1;
+  flex: 1 1 auto;
   min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch;
+  align-content: flex-start;
   scrollbar-width: thin;
 }
 
@@ -1527,6 +1533,9 @@ button.rsp-face:disabled {
   grid-template-columns: 2.15rem minmax(0, 1fr) auto;
   gap: 0.7rem;
   align-items: start;
+  height: auto;
+  min-height: 0;
+  flex: 0 0 auto;
   padding: 0.7rem 0.9rem;
   border-bottom: 1px solid rgba(232, 226, 214, 0.06);
 }

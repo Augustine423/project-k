@@ -56,16 +56,18 @@ export function MeetingHeader({
           <span className="live-badge-dot" aria-hidden="true" />
           LIVE
         </span>
-        <span className="live-viewer-count" title={`${viewerCount} watching`}>
-          <svg className="live-viewer-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-            <path
-              fill="currentColor"
-              d="M12 5c-7.6 0-10 7-10 7s2.4 7 10 7 10-7 10-7-2.4-7-10-7Zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9Zm0-7.2a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4Z"
-            />
-          </svg>
-          <strong>{formatViewerCount(viewerCount)}</strong>
-          <span className="live-viewer-label">watching</span>
-        </span>
+        {viewerCount > 0 && (
+          <span className="live-viewer-count" title={`${viewerCount} watching`}>
+            <svg className="live-viewer-icon" width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                fill="currentColor"
+                d="M12 5c-7.6 0-10 7-10 7s2.4 7 10 7 10-7 10-7-2.4-7-10-7Zm0 11.5A4.5 4.5 0 1 1 12 7.5a4.5 4.5 0 0 1 0 9Zm0-7.2a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4Z"
+              />
+            </svg>
+            <strong>{formatViewerCount(viewerCount)}</strong>
+            <span className="live-viewer-label">watching</span>
+          </span>
+        )}
       </div>
 
       <div className="meeting-header-right">

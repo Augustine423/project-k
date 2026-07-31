@@ -1,15 +1,14 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------------------
-# Production image (CI / GKE)
+# Production image (CI / GKE / docker compose)
 #
 # BUILD-TIME (baked into static assets by Vite):
-#   VITE_API_URL — leave empty for same-origin behind Gateway (/api, /ws).
+#   VITE_API_URL — leave empty for same-origin behind nginx (/api, /ws).
 #                  Set only when API is on a different public origin.
 #
-# RUNTIME (K8s ConfigMap / Secret / Gateway — NOT this Dockerfile):
-#   LIVEKIT_URL, TURN_HOST, JWT secrets → C# control plane env
-#   Join ticket returns livekitUrl to the browser at runtime
+# RUNTIME:
+#   PUBLIC_HOST — used to stamp self-signed cert SAN (camera/mic need HTTPS)
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS build
 WORKDIR /app
@@ -22,13 +21,16 @@ RUN npm run build
 
 FROM nginx:1.27-alpine AS production
 ARG NGINX_CONF=nginx.conf
+RUN apk add --no-cache openssl
 COPY ${NGINX_CONF} /etc/nginx/conf.d/default.conf
+COPY docker-entrypoint.sh /docker-entrypoint-web.sh
+RUN chmod +x /docker-entrypoint-web.sh
 COPY --from=build /app/dist /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+EXPOSE 80 443
+ENTRYPOINT ["/docker-entrypoint-web.sh"]
 
 # ---------------------------------------------------------------------------
-# Dev image (local docker compose — Vite HMR + proxy env at container runtime)
+# Dev image (local docker compose — Vite HMR + HTTPS via basicSsl)
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS dev
 WORKDIR /app

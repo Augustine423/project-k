@@ -3,7 +3,7 @@
 # Requires PostgreSQL (SQLite breaks with multiple server replicas).
 #
 # Usage:
-#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml --profile prod up --build --scale server=3
+#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml up --build --scale server=3
 #   - Lower WEBINAR_ENTER_LISTENERS in .env to trigger webinar mode with fewer clients
 #   - Watch Redis keys: kzys:room_count, kzys:total_node_load
 #   - API scaling metrics: GET /api/rooms/scaling/metrics
