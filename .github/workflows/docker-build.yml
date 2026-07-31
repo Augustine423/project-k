@@ -1,4 +1,4 @@
-name: Build · Push · Deploy
+name: Build and Push Docker Hub
 
 on:
   push:
@@ -7,7 +7,6 @@ on:
     branches: [main, master]
 
 env:
-  REGISTRY: docker.io
   IMAGE_PREFIX: kyawzayarsoe/project-k
 
 concurrency:
@@ -19,10 +18,9 @@ jobs:
     name: Detect changed paths
     runs-on: ubuntu-latest
     outputs:
-      csharp:  ${{ steps.filter.outputs.csharp }}
-      coturn:  ${{ steps.filter.outputs.coturn }}
-      web:     ${{ steps.filter.outputs.web }}
-      k8s:     ${{ steps.filter.outputs.k8s }}
+      csharp: ${{ steps.filter.outputs.csharp }}
+      coturn: ${{ steps.filter.outputs.coturn }}
+      web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -36,8 +34,6 @@ jobs:
               - 'infra/coturn/**'
             web:
               - 'web/**'
-            k8s:
-              - 'k8s/**'
 
   build-csharp:
     name: Build C# control plane
@@ -51,6 +47,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -72,7 +69,7 @@ jobs:
   build-coturn:
     name: Build coturn
     needs: changes
-    if: needs.changes.outputs.coturn == 'true'
+    if: needs.changes.outputs.coturn == 'true' || github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,6 +78,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -111,6 +109,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
+        if: github.event_name == 'push'
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKER_USERNAME }}

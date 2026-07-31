@@ -16,6 +16,8 @@ spec:
       labels:
         app: livekit
     spec:
+      # Avoid K8s service-link env (LIVEKIT_PORT=tcp://...) clobbering LiveKit flags.
+      enableServiceLinks: false
       initContainers:
         - name: wait-redis
           image: redis:7-alpine
@@ -37,6 +39,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.hostIP
+            - name: LIVEKIT_PORT
+              value: "7880"
           ports:
             - name: signal
               containerPort: 7880
@@ -73,7 +77,8 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: livekit
+  # Not named "livekit" — that injects LIVEKIT_PORT=tcp://... and breaks the server.
+  name: kzys-livekit
   namespace: kzys
   labels:
     app: livekit
