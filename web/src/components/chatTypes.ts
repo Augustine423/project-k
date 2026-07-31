@@ -11,13 +11,21 @@ export interface ChatMessage {
   toDisplayName?: string;
 }
 
-/** Deterministic pastel avatar tone from a name/id. */
+/** Soft ink-desk avatar fills (graphite / slate / ink — not neon). */
 export function avatarTone(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
-  const hues = [168, 198, 212, 152, 24, 280, 320, 40];
-  const hue = hues[Math.abs(hash) % hues.length];
-  return `hsl(${hue} 42% 38%)`;
+  const tones = [
+    "#3d4a5c",
+    "#4a3f38",
+    "#2f4a48",
+    "#453c55",
+    "#3a4550",
+    "#4b4034",
+    "#334851",
+    "#4a3842",
+  ];
+  return tones[Math.abs(hash) % tones.length];
 }
 
 export function avatarInitials(name: string): string {

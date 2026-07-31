@@ -29,7 +29,6 @@ interface RoomSidePanelProps {
   chatDisabledHint?: string;
   selfName?: string;
   selfId?: string;
-  /** Small rooms: incremental join/leave updates without refetch. */
   liveParticipants?: Participant[];
   isHost?: boolean;
   locked?: boolean;
@@ -40,7 +39,6 @@ interface RoomSidePanelProps {
   onTabChange: (tab: SidePanelTab) => void;
   raisedHands?: RaisedHandInfo[];
   showRaisedHands?: boolean;
-  /** null = room-wide Everyone chat; otherwise active DM peer. */
   dmPeer: DmPeer | null;
   onDmPeerChange: (peer: DmPeer | null) => void;
   dmThreads: Record<string, ChatMessage[]>;
@@ -142,10 +140,9 @@ export function RoomSidePanel({
   const displayedPeople = useMemo(() => {
     if (useLiveList && liveParticipants) {
       const q = debouncedQuery.toLowerCase();
-      const list = q
+      return q
         ? liveParticipants.filter((p) => p.displayName.toLowerCase().includes(q))
         : liveParticipants;
-      return list;
     }
     return pageItems;
   }, [useLiveList, liveParticipants, debouncedQuery, pageItems]);
@@ -191,53 +188,55 @@ export function RoomSidePanel({
   const composerPlaceholder = chatDisabled
     ? (chatDisabledHint ?? "Chat unavailable")
     : dmPeer
-      ? `Message ${dmPeer.displayName}…`
-      : "Message everyone…";
+      ? `Write to ${dmPeer.displayName}…`
+      : "Write to the room…";
 
   return (
-    <section className="side-panel room-side-panel">
-      <div className="room-side-tabs" role="tablist" aria-label="Chat and people">
-        <button
-          type="button"
-          role="tab"
-          id="tab-chat"
-          aria-selected={activeTab === "chat"}
-          aria-controls="panel-chat"
-          className={`room-side-tab ${activeTab === "chat" ? "active" : ""}`}
-          onClick={() => onTabChange("chat")}
-        >
-          <ChatIcon size={16} />
-          Chat
-        </button>
-        <button
-          type="button"
-          role="tab"
-          id="tab-people"
-          aria-selected={activeTab === "people"}
-          aria-controls="panel-people"
-          className={`room-side-tab ${activeTab === "people" ? "active" : ""}`}
-          onClick={() => onTabChange("people")}
-        >
-          <ParticipantsIcon size={16} />
-          People
-          <span className="room-side-tab-count">{participantCount}</span>
-        </button>
-      </div>
+    <section className="rsp">
+      <header className="rsp-head">
+        <div className="rsp-tabs" role="tablist" aria-label="Chat and people">
+          <button
+            type="button"
+            role="tab"
+            id="tab-chat"
+            aria-selected={activeTab === "chat"}
+            aria-controls="panel-chat"
+            className={`rsp-tab ${activeTab === "chat" ? "is-active" : ""}`}
+            onClick={() => onTabChange("chat")}
+          >
+            <ChatIcon size={15} />
+            <span>Chat</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="tab-people"
+            aria-selected={activeTab === "people"}
+            aria-controls="panel-people"
+            className={`rsp-tab ${activeTab === "people" ? "is-active" : ""}`}
+            onClick={() => onTabChange("people")}
+          >
+            <ParticipantsIcon size={15} />
+            <span>People</span>
+            <span className="rsp-tab-count">{participantCount}</span>
+          </button>
+        </div>
+      </header>
 
       {activeTab === "chat" ? (
         <div
-          className="side-panel-body chat-panel-body"
+          className="rsp-body rsp-chat"
           role="tabpanel"
           id="panel-chat"
           aria-labelledby="tab-chat"
         >
-          <div className="chat-scope-bar" role="tablist" aria-label="Chat destination">
+          <nav className="rsp-lanes" aria-label="Chat destination">
             <button
               type="button"
-              className={`chat-scope-chip ${dmPeer == null ? "active" : ""}`}
+              className={`rsp-lane ${dmPeer == null ? "is-active" : ""}`}
               onClick={() => onDmPeerChange(null)}
             >
-              Everyone
+              Room
             </button>
             {openDmPeers.map((peer) => {
               const unread = dmUnreadByPeer[peer.participantId] ?? 0;
@@ -245,59 +244,66 @@ export function RoomSidePanel({
                 <button
                   key={peer.participantId}
                   type="button"
-                  className={`chat-scope-chip ${dmPeer?.participantId === peer.participantId ? "active" : ""}`}
+                  className={`rsp-lane ${dmPeer?.participantId === peer.participantId ? "is-active" : ""}`}
                   onClick={() => onDmPeerChange(peer)}
                   title={`Direct message with ${peer.displayName}`}
                 >
                   <span
-                    className="chat-scope-avatar"
+                    className="rsp-lane-mark"
                     style={{ background: avatarTone(peer.participantId) }}
                     aria-hidden="true"
                   >
-                    {avatarInitials(peer.displayName)}
+                    {avatarInitials(peer.displayName).slice(0, 1)}
                   </span>
-                  <span className="chat-scope-name">{peer.displayName}</span>
-                  {unread > 0 && <span className="chat-scope-unread">{unread > 9 ? "9+" : unread}</span>}
+                  <span className="rsp-lane-label">{peer.displayName}</span>
+                  {unread > 0 && (
+                    <span className="rsp-lane-badge">{unread > 9 ? "9+" : unread}</span>
+                  )}
                 </button>
               );
             })}
-          </div>
+          </nav>
 
           {dmPeer && (
-            <div className="chat-dm-banner">
+            <div className="rsp-dm-bar">
               <span
-                className="chat-avatar chat-avatar-sm"
+                className="rsp-face rsp-face-sm"
                 style={{ background: avatarTone(dmPeer.participantId) }}
                 aria-hidden="true"
               >
                 {avatarInitials(dmPeer.displayName)}
               </span>
-              <div className="chat-dm-banner-text">
+              <div className="rsp-dm-copy">
                 <strong>{dmPeer.displayName}</strong>
-                <span>Private message · only you two can see this</span>
+                <span>Private · only the two of you</span>
               </div>
-              <button type="button" className="link-btn" onClick={() => onDmPeerChange(null)}>
-                Back
+              <button type="button" className="rsp-text-btn" onClick={() => onDmPeerChange(null)}>
+                Room chat
               </button>
             </div>
           )}
 
-          <div className="chat-messages" ref={messagesRef}>
+          <div className="rsp-feed" ref={messagesRef}>
             {visibleMessages.length === 0 && (
-              <p className="chat-empty">
-                {dmPeer
-                  ? `No messages yet with ${dmPeer.displayName}. Say hello!`
-                  : "No messages yet. Say hello to everyone!"}
-              </p>
+              <div className="rsp-empty">
+                <p>
+                  {dmPeer
+                    ? `Start a private note with ${dmPeer.displayName}.`
+                    : "The room is quiet. Leave the first note."}
+                </p>
+              </div>
             )}
             {visibleMessages.map((msg) => {
               const self = isSelfMessage(msg);
               return (
-                <div key={msg.id} className={`chat-bubble-row ${self ? "self" : "other"}`}>
-                  {!self && (
+                <article
+                  key={msg.id}
+                  className={`rsp-msg ${self ? "is-self" : "is-other"}`}
+                >
+                  {!self ? (
                     <button
                       type="button"
-                      className="chat-avatar"
+                      className="rsp-face"
                       style={{ background: avatarTone(msg.participantId || msg.displayName) }}
                       aria-label={`Message ${msg.displayName}`}
                       title={`Message ${msg.displayName}`}
@@ -306,30 +312,38 @@ export function RoomSidePanel({
                     >
                       {avatarInitials(msg.displayName)}
                     </button>
+                  ) : (
+                    <span className="rsp-face rsp-face-self" aria-hidden="true">
+                      You
+                    </span>
                   )}
-                  <div className="chat-bubble">
-                    {!self && (
-                      <button
-                        type="button"
-                        className="chat-sender"
-                        onClick={() => openDmFromChat(msg)}
-                        disabled={!msg.participantId}
-                        title={msg.participantId ? `Message ${msg.displayName}` : undefined}
-                      >
-                        {msg.displayName}
-                      </button>
-                    )}
-                    {self && dmPeer && <span className="chat-sender chat-sender-self">You</span>}
-                    <p className="chat-text">{msg.message}</p>
-                    <time className="chat-time" dateTime={msg.at}>
-                      {formatChatTime(msg.at)}
-                    </time>
+                  <div className="rsp-msg-main">
+                    <div className="rsp-msg-meta">
+                      {!self ? (
+                        <button
+                          type="button"
+                          className="rsp-msg-name"
+                          onClick={() => openDmFromChat(msg)}
+                          disabled={!msg.participantId}
+                          title={msg.participantId ? `Message ${msg.displayName}` : undefined}
+                        >
+                          {msg.displayName}
+                        </button>
+                      ) : (
+                        <span className="rsp-msg-name is-you">You</span>
+                      )}
+                      <time className="rsp-msg-time" dateTime={msg.at}>
+                        {formatChatTime(msg.at)}
+                      </time>
+                    </div>
+                    <p className="rsp-msg-body">{msg.message}</p>
                   </div>
-                </div>
+                </article>
               );
             })}
           </div>
-          <form className="chat-form" onSubmit={submit}>
+
+          <form className="rsp-composer" onSubmit={submit}>
             <input
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
@@ -345,18 +359,17 @@ export function RoomSidePanel({
         </div>
       ) : (
         <div
-          className="side-panel-body participants-panel-body room-people-body"
+          className="rsp-body rsp-people"
           role="tabpanel"
           id="panel-people"
           aria-labelledby="tab-people"
         >
-          <div className="participants-toolbar">
-            <label className="participants-search-wrap">
+          <div className="rsp-people-tools">
+            <label className="rsp-search">
               <span className="sr-only">Search participants</span>
               <input
                 type="search"
-                className="participants-search"
-                placeholder="Search people…"
+                placeholder="Find someone…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 autoComplete="off"
@@ -366,7 +379,7 @@ export function RoomSidePanel({
             {isHost && onToggleLock && (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm participants-lock-btn"
+                className="rsp-tool-btn"
                 onClick={onToggleLock}
                 disabled={hostBusy}
                 title={locked ? "Unlock room" : "Lock room"}
@@ -375,101 +388,103 @@ export function RoomSidePanel({
               </button>
             )}
           </div>
-          <p className="participants-count-line muted">
+
+          <p className="rsp-people-sum">
             {query.trim()
-              ? `${displayedPeople.length} shown · ${participantCount} in meeting`
-              : `${participantCount} in meeting · click a name to message`}
+              ? `${displayedPeople.length} match · ${participantCount} total`
+              : `${participantCount} here · tap a name to message`}
           </p>
+
           {showRaisedHands && orderedRaisedHands.length > 0 && (
-            <div className="raised-hands-queue" aria-label="Raised hands">
-              <p className="raised-hands-title">Raised hands ({orderedRaisedHands.length})</p>
-              <ol className="raised-hands-list">
+            <div className="rsp-queue" aria-label="Raised hands">
+              <div className="rsp-queue-label">Hands up · {orderedRaisedHands.length}</div>
+              <ol className="rsp-queue-list">
                 {orderedRaisedHands.map((h, index) => (
-                  <li key={h.participantId} className="raised-hand-row">
-                    <span className="raised-hand-rank">{index + 1}</span>
+                  <li key={h.participantId}>
+                    <span className="rsp-queue-n">{index + 1}</span>
                     <button
                       type="button"
-                      className="raised-hand-name linkish"
+                      className="rsp-queue-name"
                       onClick={() =>
                         onOpenDm({ participantId: h.participantId, displayName: h.displayName })
                       }
                     >
                       {h.displayName}
                     </button>
-                    <RaiseHandIcon size={16} />
+                    <RaiseHandIcon size={15} />
                   </li>
                 ))}
               </ol>
             </div>
           )}
-          <ul className="participants-list" role="list">
+
+          <ul className="rsp-dir" role="list">
             {peopleLoading && displayedPeople.length === 0 && (
-              <li className="participants-empty muted">Loading participants…</li>
+              <li className="rsp-dir-empty">Loading people…</li>
             )}
             {!peopleLoading && displayedPeople.length === 0 && (
-              <li className="participants-empty muted">No matching participants.</li>
+              <li className="rsp-dir-empty">No matches.</li>
             )}
             {displayedPeople.map((p) => {
               const isSelf = Boolean(selfId && p.id === selfId);
               const role = roleLabel(p.role);
               return (
-                <li key={p.id} className="participant-row">
+                <li key={p.id} className={`rsp-person ${isSelf ? "is-self" : ""}`}>
                   <span
-                    className="participant-avatar"
+                    className="rsp-face"
                     aria-hidden="true"
                     style={{ background: avatarTone(p.id) }}
                   >
                     {avatarInitials(p.displayName)}
                   </span>
-                  <div className="participant-meta">
+                  <div className="rsp-person-copy">
                     {isSelf ? (
-                      <span className="participant-name">
+                      <span className="rsp-person-name">
                         {p.displayName}
                         <em>You</em>
                       </span>
                     ) : (
                       <button
                         type="button"
-                        className="participant-name participant-name-btn"
+                        className="rsp-person-name"
                         onClick={() => openDmFromParticipant(p)}
                         title={`Message ${p.displayName}`}
                       >
                         {p.displayName}
                       </button>
                     )}
-                    <div className="participant-subline">
-                      {role && <span className="participant-role-pill">{role}</span>}
-                      {raisedById.has(p.id) && (
-                        <span className="hand-raised-label">Hand raised</span>
-                      )}
-                      {!isSelf && <span className="participant-dm-hint">Message</span>}
+                    <div className="rsp-person-meta">
+                      {role && <span className="rsp-role">{role}</span>}
+                      {raisedById.has(p.id) && <span className="rsp-hand">Hand raised</span>}
+                      {!isSelf && <span className="rsp-dm-cue">Message</span>}
                     </div>
                   </div>
-                  <span className="participant-status">
+                  <div className="rsp-person-actions">
                     {raisedById.has(p.id) ? (
-                      <RaiseHandIcon className="hand-raised-icon" size={14} />
+                      <RaiseHandIcon className="rsp-status-icon is-hand" size={14} />
                     ) : (
-                      <MicMutedSmall className="muted-icon" />
+                      <MicMutedSmall className="rsp-status-icon" />
                     )}
                     {isHost && p.role !== "host" && onKick && (
                       <button
                         type="button"
-                        className="link-btn"
+                        className="rsp-text-btn"
                         onClick={() => onKick(p.id)}
                         disabled={hostBusy}
                       >
                         Remove
                       </button>
                     )}
-                  </span>
+                  </div>
                 </li>
               );
             })}
           </ul>
+
           {!useLiveList && hasMore && (
             <button
               type="button"
-              className="btn btn-ghost btn-sm participants-load-more"
+              className="rsp-more"
               disabled={peopleLoading}
               onClick={() => void loadPeople(pageOffset + PEOPLE_PAGE_SIZE, true)}
             >
