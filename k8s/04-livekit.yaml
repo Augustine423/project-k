@@ -1,13 +1,17 @@
+# LiveKit SFU — hostNetwork so RTC UDP 50000-50100 + TCP 7881 reach the node.
+# Requires GKE Standard (not Autopilot) + firewall (see configure-public-ips.ps1).
+# Signaling for browsers still goes through kzys-web HTTPS /livekit proxy.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: livekit
-  namespace: kzys
   labels:
     app: livekit
     app.kubernetes.io/part-of: project-k
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: livekit
@@ -16,7 +20,8 @@ spec:
       labels:
         app: livekit
     spec:
-      # Avoid K8s service-link env (LIVEKIT_PORT=tcp://...) clobbering LiveKit flags.
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       enableServiceLinks: false
       initContainers:
         - name: wait-redis
@@ -31,22 +36,33 @@ spec:
           args:
             - --config
             - /etc/livekit/livekit.yaml
-            - --node-ip
-            - $(NODE_IP)
+            - --keys
+            - "$(LIVEKIT_API_KEY): $(LIVEKIT_API_SECRET)"
           env:
-            # Advertise the node IP so ICE works without STUN (use_external_ip: false).
-            - name: NODE_IP
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
             - name: LIVEKIT_PORT
               value: "7880"
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: LIVEKIT_API_SECRET
           ports:
             - name: signal
               containerPort: 7880
+              hostPort: 7880
+              protocol: TCP
             - name: rtc-tcp
               containerPort: 7881
-            - containerPort: 50000
+              hostPort: 7881
+              protocol: TCP
+            - name: rtc-udp
+              containerPort: 50000
+              hostPort: 50000
               protocol: UDP
           volumeMounts:
             - name: config
@@ -54,11 +70,11 @@ spec:
               readOnly: true
           resources:
             requests:
-              cpu: 250m
-              memory: 256Mi
+              cpu: 500m
+              memory: 512Mi
             limits:
-              cpu: "2"
-              memory: 2Gi
+              cpu: "4"
+              memory: 4Gi
           readinessProbe:
             tcpSocket:
               port: 7880
@@ -79,7 +95,6 @@ kind: Service
 metadata:
   # Not named "livekit" — that injects LIVEKIT_PORT=tcp://... and breaks the server.
   name: kzys-livekit
-  namespace: kzys
   labels:
     app: livekit
 spec:

@@ -7,6 +7,9 @@ mkdir -p "$CERT_DIR"
 
 if [ ! -f "$CERT_DIR/tls.crt" ] || [ ! -f "$CERT_DIR/tls.key" ]; then
   HOST="${PUBLIC_HOST:-localhost}"
+  case "$HOST" in
+    ""|localhost|CHANGE_ME*|CHANGE_ME_*) HOST="localhost" ;;
+  esac
   SAN="DNS:localhost,IP:127.0.0.1"
   if echo "$HOST" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$'; then
     SAN="${SAN},IP:${HOST}"

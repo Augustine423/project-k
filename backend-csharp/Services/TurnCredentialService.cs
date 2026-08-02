@@ -55,7 +55,16 @@ public static class MediaHostHelper
 {
     public static string FromRequest(HttpRequest request, string configuredHost)
     {
-        // Prefer Origin / Host so LAN phone clients get LiveKit/TURN on the Wi‑Fi IP,
+        // K8s / split-LB: TURN often lives on a different IP than the web Origin.
+        // Prefer an explicit non-loopback TURN_HOST so cam/mic ICE is not pointed at nginx.
+        if (!string.IsNullOrWhiteSpace(configuredHost)
+            && !IsLoopback(configuredHost)
+            && !configuredHost.StartsWith("CHANGE_ME", StringComparison.OrdinalIgnoreCase))
+        {
+            return configuredHost.Trim();
+        }
+
+        // Local compose / LAN: Prefer Origin / Host so phones get the Wi‑Fi IP,
         // not loopback (localhost is unreachable from other devices).
         if (!string.IsNullOrWhiteSpace(request.Headers.Origin))
         {

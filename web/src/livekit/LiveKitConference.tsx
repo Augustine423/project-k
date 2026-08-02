@@ -496,7 +496,7 @@ export function LiveKitConference({
     if (!room || mediaBusyRef.current || !canPublishVideo) return;
     roomRef.current = room;
     if (room.state !== ConnectionState.Connected) {
-      onError("Not connected to media server — open https://localhost:5173 and refresh.");
+      onError("Not connected to media server — open this page over HTTPS and refresh.");
       return;
     }
     mediaBusyRef.current = true;

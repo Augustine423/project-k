@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kzys-control-plane
-  namespace: kzys
   labels:
     app: kzys-control-plane
     app.kubernetes.io/part-of: project-k
@@ -26,7 +25,7 @@ spec:
             - name: PORT
               value: "4000"
             - name: REDIS_URL
-              value: redis://redis.kzys.svc.cluster.local:6379
+              value: redis://redis:6379
             - name: JWT_SIGNING_SECRET
               valueFrom:
                 secretKeyRef:
@@ -141,17 +140,16 @@ spec:
             periodSeconds: 5
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 200m
+              memory: 256Mi
             limits:
-              cpu: 1000m
-              memory: 512Mi
+              cpu: "2"
+              memory: 1Gi
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: kzys-control-plane
-  namespace: kzys
   labels:
     app: kzys-control-plane
 spec:

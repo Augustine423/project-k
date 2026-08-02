@@ -1,10 +1,9 @@
-# Coturn for WebRTC TURN. Exposed via its own UDP/TCP LoadBalancer (media needs L4).
-# HTTP UI/API goes through kzys-web LoadBalancer only.
+# Coturn — hostNetwork so TURN relay UDP 20000-20100 is reachable (needed for stress/NAT).
+# TURN_HOST must be the node external IP (configure-public-ips.ps1 sets it).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: coturn
-  namespace: kzys
   labels:
     app: coturn
     app.kubernetes.io/part-of: project-k
@@ -20,6 +19,8 @@ spec:
       labels:
         app: coturn
     spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: coturn
           image: coturn/coturn:4.6.2
@@ -48,39 +49,46 @@ spec:
           ports:
             - name: turn-udp
               containerPort: 3478
+              hostPort: 3478
               protocol: UDP
             - name: turn-tcp
               containerPort: 3478
+              hostPort: 3478
               protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 3478
+            periodSeconds: 10
+            initialDelaySeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 3478
+            periodSeconds: 20
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
           volumeMounts:
             - name: config
               mountPath: /etc/coturn
               readOnly: true
-          resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 500m
-              memory: 256Mi
       volumes:
         - name: config
           configMap:
             name: coturn-config
 ---
+# ClusterIP only — browsers reach TURN via node external IP (hostNetwork), not this Service.
 apiVersion: v1
 kind: Service
 metadata:
   name: coturn
-  namespace: kzys
   labels:
     app: coturn
-  annotations:
-    cloud.google.com/l4-rbs: "enabled"
-    networking.gke.io/load-balancer-type: "External"
 spec:
-  type: LoadBalancer
-  externalTrafficPolicy: Local
   selector:
     app: coturn
   ports:

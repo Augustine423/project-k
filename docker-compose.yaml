@@ -1,8 +1,8 @@
 name: project-k
 
 # Usage:
-#   docker compose up --build                 # full stack including nginx UI (web)
-#   docker compose --profile dev up --build   # also start Vite HMR (web-dev)
+#   docker compose up --build                 # full stack — UI at https://PUBLIC_HOST/ (:443)
+#   docker compose --profile dev up --build   # also start Vite HMR (web-dev on :5174)
 #   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml up --build
 #
 # Note: services with `profiles:` are skipped unless that profile is enabled.
@@ -118,8 +118,8 @@ services:
           cpus: "${SERVER_CPU_LIMIT:-2}"
           memory: "${SERVER_MEM_LIMIT:-512m}"
 
-  # Production UI — nginx + self-signed HTTPS (same as previous Vite basicSsl UX).
-  # Open https://PUBLIC_HOST:WEB_PORT and accept the certificate warning.
+  # Production UI — nginx on container :80 (redirect) and :443 (HTTPS).
+  # Open https://PUBLIC_HOST/ (or http://PUBLIC_HOST/ → redirects). Cam/mic need HTTPS.
   # Always started (no Compose profile) so GCP / plain `docker compose up` includes the web UI.
   web:
     build:
@@ -137,8 +137,8 @@ services:
     environment:
       PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
     ports:
-      # Map host WEB_PORT → container HTTPS 443 (use https://host:WEB_PORT)
-      - "${WEB_PORT:-5173}:443"
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://127.0.0.1/ >/dev/null || exit 1"]
       interval: 10s

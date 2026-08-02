@@ -20,7 +20,8 @@ ENV VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM nginx:1.27-alpine AS production
-ARG NGINX_CONF=nginx.conf
+# Compose passes nginx.compose.conf; K8s mounts its own ConfigMap over default.conf.
+ARG NGINX_CONF=nginx.compose.conf
 RUN apk add --no-cache openssl
 COPY ${NGINX_CONF} /etc/nginx/conf.d/default.conf
 COPY docker-entrypoint.sh /docker-entrypoint-web.sh

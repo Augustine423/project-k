@@ -1,17 +1,18 @@
-# Test config — no domain. After deploy, set LIVEKIT_PUBLIC_URL / TURN_HOST to
-# the LoadBalancer IPs, then re-apply this file.
+# GKE lab config — no domain, default namespace.
 #
-# Camera/mic require HTTPS: open https://<WEB_LB_IP>/ and accept the self-signed warning.
+# After first apply, run:  powershell -File k8s/configure-public-ips.ps1
+# That patches PUBLIC_HOST / TURN_HOST / LIVEKIT_PUBLIC_URL to real IPs,
+# then restarts web + coturn + control-plane (self-signed cert SAN + TURN).
+#
+# UI: https://<WEB_LB_IP>/  (accept self-signed warning — needed for cam/mic)
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kzys-app-config
-  namespace: kzys
   labels:
     app.kubernetes.io/part-of: project-k
 data:
   SERVICE_NAME: "kzys-control-plane"
-  # Use "*" for IP-only test access (no domain / public CA).
   CORS_ORIGIN: "*"
   MAX_ROOM_PARTICIPANTS: "500"
   LARGE_ROOM_EVENT_THRESHOLD: "200"
@@ -22,26 +23,25 @@ data:
   WEBINAR_EXIT_LISTENERS: "20"
   INTERACTIVE_MAX_PUBLISHERS: "50"
   WEBINAR_MAX_PUBLISHERS: "16"
-  # Coturn LB IP: kubectl get svc coturn -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-  TURN_HOST: "CHANGE_ME_LB_IP"
+  # Filled by configure-public-ips.ps1 (web LoadBalancer IP).
+  PUBLIC_HOST: "CHANGE_ME_WEB_LB_IP"
+  # Filled by configure-public-ips.ps1 (node external IP — coturn hostNetwork).
+  TURN_HOST: "CHANGE_ME_TURN_IP"
   TURN_PORT: "3478"
   TURN_TLS_PORT: "5349"
   TURN_USE_TLS: "false"
   TURN_REALM: "kzys"
-  # Web LB IP + wss (must match HTTPS page origin to avoid mixed content):
-  # kubectl get svc kzys-web -n kzys -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-  LIVEKIT_PUBLIC_URL: "wss://CHANGE_ME_LB_IP/livekit"
+  # Same-origin LiveKit via nginx HTTPS proxy (cam/mic secure context).
+  LIVEKIT_PUBLIC_URL: "wss://CHANGE_ME_WEB_LB_IP/livekit"
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kzys-livekit-config
-  namespace: kzys
   labels:
     app.kubernetes.io/part-of: project-k
 data:
-  # keys.devkey MUST match LIVEKIT_API_SECRET in kzys-secrets.
-  # node_ip is set at runtime via --node-ip (see 04-livekit.yaml Deployment).
+  # API key/secret come from --keys at runtime (see 04-livekit.yaml), not this file.
   livekit.yaml: |
     port: 7880
     bind_addresses:
@@ -50,10 +50,8 @@ data:
       tcp_port: 7881
       port_range_start: 50000
       port_range_end: 50100
-      use_external_ip: false
+      use_external_ip: true
       enable_loopback_candidate: false
-    keys:
-      devkey: REPLACE_ME_LIVEKIT_API_SECRET_MIN_32_CHARS
     redis:
       address: redis:6379
     logging:
@@ -63,7 +61,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: coturn-config
-  namespace: kzys
   labels:
     app.kubernetes.io/part-of: project-k
 data:
@@ -82,12 +79,11 @@ data:
     log-file=stdout
     verbose
 ---
-# Nginx — HTTP + HTTPS (self-signed). Same-origin /api /ws /livekit.
+# Nginx — HTTP→HTTPS + same-origin /api /ws /livekit (not Vite :5173).
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kzys-web-nginx
-  namespace: kzys
   labels:
     app.kubernetes.io/part-of: project-k
 data:

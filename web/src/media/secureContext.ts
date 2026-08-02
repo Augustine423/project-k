@@ -17,7 +17,9 @@ export function mediaUnavailableReason(): string {
     if (isLoopback) {
       return "Camera/mic unavailable in this browser. Try Chrome or Edge.";
     }
-    return `Camera/mic need HTTPS on ${host}. Open https://${host}:${window.location.port || "5173"} (accept the dev certificate). Chat still works.`;
+    const port = window.location.port;
+    const portSuffix = !port || port === "443" || port === "80" ? "" : `:${port}`;
+    return `Camera/mic need HTTPS on ${host}. Open https://${host}${portSuffix}/ (accept the certificate warning). Chat still works.`;
   }
   return "Camera/mic unavailable in this browser.";
 }

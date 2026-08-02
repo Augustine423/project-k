@@ -49,10 +49,10 @@ export function MeetingHeader({
         <span className={`meeting-signal ${connected ? "online" : "offline"}`} title={statusMessage}>
           <SignalIcon size={16} />
         </span>
-      </div>
-
-      <div className="meeting-header-center" aria-live="polite">
-        <span className={`live-badge ${live ? "is-live" : "is-offline"}`} title={live ? "Live" : statusMessage}>
+        <span
+          className={`live-badge ${live ? "is-live" : "is-offline"}`}
+          title={live ? "Live" : statusMessage}
+        >
           <span className="live-badge-dot" aria-hidden="true" />
           LIVE
         </span>

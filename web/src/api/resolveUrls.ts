@@ -58,6 +58,8 @@ export function resolveJoinTicketMedia(
   if (useSameOriginProxy) {
     const secure = window.location.protocol === "https:";
     const liveKitUrl = `${secure ? "wss" : "ws"}://${window.location.host}/livekit`;
+    // Keep server-issued TURN host when it is already a public/LB IP (K8s coturn
+    // is not on the web LoadBalancer). Only rewrite loopback/LAN for compose.
     const turnHost = isLoopbackHost(host) ? LOCAL_DEV_HOST : host;
     return { liveKitUrl, turn: rewriteTurn(ticket, turnHost) };
   }
