@@ -126,6 +126,16 @@ spec:
                 configMapKeyRef:
                   name: kzys-app-config
                   key: SERVICE_NAME
+            - name: SFU_PUBLISHERS_PER_NODE
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: SFU_PUBLISHERS_PER_NODE
+            - name: KZYS_SFU_STANDBY_POOL
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: KZYS_SFU_STANDBY_POOL
           livenessProbe:
             httpGet:
               path: /health

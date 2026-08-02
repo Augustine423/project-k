@@ -113,6 +113,19 @@ export function setRoomLocked(roomId: string, token: string, locked: boolean): P
   });
 }
 
+export function setRoomMode(
+  roomId: string,
+  token: string,
+  mode: "interactive" | "webinar",
+  pin = true,
+): Promise<{ mode: string; maxPublishers: number; modePinned: boolean }> {
+  return request(`/api/rooms/${roomId}/mode`, {
+    method: "POST",
+    headers: authHeader(token),
+    body: JSON.stringify({ mode, pin }),
+  });
+}
+
 export function kickParticipant(roomId: string, token: string, participantId: string): Promise<void> {
   return request(`/api/rooms/${roomId}/participants/${participantId}/kick`, {
     method: "POST",

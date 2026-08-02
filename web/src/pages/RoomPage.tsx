@@ -8,6 +8,7 @@ import {
   listParticipantsPage,
   MAX_CHAT_MESSAGES,
   setRoomLocked,
+  setRoomMode,
 } from "../api/client";
 import { sendRoomChat, sendDirectChat, raiseHand, lowerHand, syncRaisedHands, useRoomEvents } from "../api/useRoomEvents";
 import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
@@ -17,7 +18,7 @@ import { MeetingHeader } from "../components/MeetingChrome";
 import { InviteLinkBar } from "../components/InviteLinkBar";
 import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
-import { LiveKitConference } from "../livekit/LiveKitConference";
+import { MediaConference } from "../media/MediaConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
 import { mediaUnavailableReason } from "../media/secureContext";
 
@@ -289,7 +290,7 @@ export function RoomPage() {
         clearTicket(roomId);
       }
       if (evt.type === "room.mode_changed") {
-        const data = evt.data as { mode?: string; maxPublishers?: number };
+        const data = evt.data as { mode?: string; maxPublishers?: number; modePinned?: boolean };
         setTicket((prev) =>
           prev
             ? {
@@ -298,6 +299,7 @@ export function RoomPage() {
                   ...prev.room,
                   mode: (data.mode as Room["mode"]) ?? prev.room.mode,
                   maxPublishers: data.maxPublishers ?? prev.room.maxPublishers,
+                  modePinned: data.modePinned ?? prev.room.modePinned,
                 },
               }
             : prev,
@@ -395,6 +397,28 @@ export function RoomPage() {
     }
   }
 
+  async function setMeetingMode(mode: "interactive" | "webinar") {
+    if (!ticket) return;
+    setHostBusy(true);
+    try {
+      const result = await setRoomMode(roomId, ticket.participantToken, mode, true);
+      const updated = {
+        ...ticket,
+        room: {
+          ...ticket.room,
+          mode: result.mode as Room["mode"],
+          maxPublishers: result.maxPublishers,
+          modePinned: result.modePinned,
+        },
+      };
+      setTicket(updated);
+      saveTicket(updated);
+      if (mode === "interactive") setRaisedHands([]);
+    } finally {
+      setHostBusy(false);
+    }
+  }
+
   async function endMeeting() {
     if (!ticket) return;
     setHostBusy(true);
@@ -453,9 +477,6 @@ export function RoomPage() {
     );
   }
 
-  const { liveKitUrl, turn } = mediaConfig;
-  const liveKitToken = ticket.liveKitToken;
-
   const liveParticipantList =
     participants.length > 0
       ? participants
@@ -492,12 +513,10 @@ export function RoomPage() {
       <div className="meeting-body">
         <main className="meeting-stage">
           {status !== "ended" && (
-            <LiveKitConference
+            <MediaConference
               roomId={roomId}
               participantToken={token}
-              liveKitUrl={liveKitUrl}
-              liveKitToken={liveKitToken}
-              turn={turn}
+              session={mediaConfig}
               displayName={ticket.participant.displayName}
               onConnected={handleConnected}
               onStatus={setStatusMessage}
@@ -530,6 +549,9 @@ export function RoomPage() {
               liveParticipants={liveParticipantList}
               isHost={isHost}
               locked={ticket.room.locked}
+              roomMode={ticket.room.mode}
+              modePinned={ticket.room.modePinned}
+              onSetMeetingMode={setMeetingMode}
               onToggleLock={toggleLock}
               onKick={kick}
               hostBusy={hostBusy}

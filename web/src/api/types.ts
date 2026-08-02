@@ -9,6 +9,7 @@ export interface Room {
   maxParticipants: number;
   maxPublishers: number;
   locked: boolean;
+  modePinned?: boolean;
   createdAt: string;
   hostParticipantId: string;
 }
@@ -31,8 +32,13 @@ export interface TurnInfo {
 export interface JoinTicket {
   room: Room;
   participant: Participant;
+  /** Legacy LiveKit field names — always present from API today. */
   liveKitUrl: string;
   liveKitToken: string;
+  /** Forward-compatible SFU fields (optional until API adds them explicitly). */
+  mediaUrl?: string;
+  mediaToken?: string;
+  mediaProvider?: string;
   participantToken: string;
   turn: TurnInfo;
 }

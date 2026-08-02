@@ -23,7 +23,7 @@ spec:
             - "--appendonly"
             - "yes"
             - "--maxmemory"
-            - "512mb"
+            - "1gb"
             - "--maxmemory-policy"
             - "allkeys-lru"
           ports:
@@ -38,11 +38,11 @@ spec:
             periodSeconds: 10
           resources:
             requests:
-              cpu: 100m
-              memory: 256Mi
+              cpu: 200m
+              memory: 512Mi
             limits:
               cpu: "1"
-              memory: 768Mi
+              memory: 1536Mi
           volumeMounts:
             - name: data
               mountPath: /data

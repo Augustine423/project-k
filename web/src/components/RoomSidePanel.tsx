@@ -32,6 +32,9 @@ interface RoomSidePanelProps {
   liveParticipants?: Participant[];
   isHost?: boolean;
   locked?: boolean;
+  roomMode?: "interactive" | "webinar";
+  modePinned?: boolean;
+  onSetMeetingMode?: (mode: "interactive" | "webinar") => void;
   onToggleLock?: () => void;
   onKick?: (participantId: string) => void;
   hostBusy?: boolean;
@@ -65,6 +68,9 @@ export function RoomSidePanel({
   liveParticipants,
   isHost,
   locked,
+  roomMode = "interactive",
+  modePinned,
+  onSetMeetingMode,
   onToggleLock,
   onKick,
   hostBusy,
@@ -376,6 +382,28 @@ export function RoomSidePanel({
                 spellCheck={false}
               />
             </label>
+            {isHost && onSetMeetingMode && (
+              <>
+                <button
+                  type="button"
+                  className={`rsp-tool-btn ${roomMode === "interactive" ? "active" : ""}`}
+                  onClick={() => onSetMeetingMode("interactive")}
+                  disabled={hostBusy || roomMode === "interactive"}
+                  title="Everyone can use camera (interactive)"
+                >
+                  Interactive
+                </button>
+                <button
+                  type="button"
+                  className={`rsp-tool-btn ${roomMode === "webinar" ? "active" : ""}`}
+                  onClick={() => onSetMeetingMode("webinar")}
+                  disabled={hostBusy || roomMode === "webinar"}
+                  title="Host/co-host video; others listen (webinar)"
+                >
+                  Webinar
+                </button>
+              </>
+            )}
             {isHost && onToggleLock && (
               <button
                 type="button"
@@ -393,6 +421,7 @@ export function RoomSidePanel({
             {query.trim()
               ? `${displayedPeople.length} match · ${participantCount} total`
               : `${participantCount} here · tap a name to message`}
+            {isHost && modePinned ? " · mode pinned" : ""}
           </p>
 
           {showRaisedHands && orderedRaisedHands.length > 0 && (

@@ -1,10 +1,8 @@
 import type { JoinTicket } from "./types";
+import { normalizeJoinTicket, type MediaSession } from "../media/normalizeJoinTicket";
+import { clientReachableHost, isLoopbackHost } from "./resolveUrlsHost";
 
-const LOCAL_DEV_HOST = "localhost";
-
-function isLoopbackHost(host: string): boolean {
-  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
-}
+export { clientReachableHost };
 
 function isPrivateLanHost(host: string): boolean {
   if (isLoopbackHost(host)) return false;
@@ -31,12 +29,6 @@ function rewriteHost(url: string, targetHost: string): string {
   return url;
 }
 
-/** Hostname the browser can reach (LAN IP when opened from a phone on Wi‑Fi). */
-export function clientReachableHost(): string {
-  if (typeof window === "undefined") return LOCAL_DEV_HOST;
-  return window.location.hostname;
-}
-
 function rewriteTurn(ticket: JoinTicket, turnHost: string): JoinTicket["turn"] {
   return {
     ...ticket.turn,
@@ -45,31 +37,28 @@ function rewriteTurn(ticket: JoinTicket, turnHost: string): JoinTicket["turn"] {
 }
 
 /**
- * Rewrite LiveKit / TURN so this browser can reach them.
- * Same-origin stacks (Vite dev, nginx compose prod, K8s Gateway) proxy /livekit.
+ * Rewrite SFU / TURN URLs for this browser. Same-origin stacks proxy /livekit.
  */
-export function resolveJoinTicketMedia(
-  ticket: JoinTicket,
-): Pick<JoinTicket, "liveKitUrl" | "turn"> {
+export function resolveJoinTicketMedia(ticket: JoinTicket): MediaSession {
+  const base = normalizeJoinTicket(ticket);
   const host = clientReachableHost();
   const useSameOriginProxy =
     typeof window !== "undefined" && !import.meta.env.VITE_API_URL;
 
   if (useSameOriginProxy) {
     const secure = window.location.protocol === "https:";
-    const liveKitUrl = `${secure ? "wss" : "ws"}://${window.location.host}/livekit`;
-    // Keep server-issued TURN host when it is already a public/LB IP (K8s coturn
-    // is not on the web LoadBalancer). Only rewrite loopback/LAN for compose.
-    const turnHost = isLoopbackHost(host) ? LOCAL_DEV_HOST : host;
-    return { liveKitUrl, turn: rewriteTurn(ticket, turnHost) };
+    const url = `${secure ? "wss" : "ws"}://${window.location.host}/livekit`;
+    const turnHost = isLoopbackHost(host) ? "localhost" : host;
+    return { ...base, url, turn: rewriteTurn(ticket, turnHost) };
   }
 
   if (isLoopbackHost(host)) {
-    return { liveKitUrl: ticket.liveKitUrl, turn: ticket.turn };
+    return base;
   }
 
   return {
-    liveKitUrl: rewriteHost(ticket.liveKitUrl, host),
+    ...base,
+    url: rewriteHost(base.url, host),
     turn: rewriteTurn(ticket, host),
   };
 }

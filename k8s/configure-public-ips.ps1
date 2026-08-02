@@ -36,7 +36,6 @@ $webIp = Wait-ExternalIp "kzys-web"
 Write-Host "    WEB_LB_IP = $webIp"
 
 Write-Host "==> Resolving coturn node IP (hostNetwork)..."
-# Coturn may still be starting; wait briefly for the pod.
 $deadline = (Get-Date).AddSeconds(180)
 $turnIp = $null
 while ((Get-Date) -lt $deadline) {
@@ -70,5 +69,5 @@ Write-Host "  https://$webIp/"
 Write-Host ""
 Write-Host "Open GKE node firewall for WebRTC (once per project), adjust --target-tags to your node tags:"
 Write-Host @"
-  gcloud compute firewall-rules create project-k-webrtc --allow udp:3478,tcp:3478,udp:20000-20100,tcp:7881,udp:50000-50100 --direction=INGRESS --source-ranges=0.0.0.0/0 --target-tags=TAG_FROM_gcloud_compute_instances_list
+  gcloud compute firewall-rules create project-k-webrtc --allow udp:3478,tcp:3478,udp:20000-20999,tcp:7881,udp:50000-50999 --direction=INGRESS --source-ranges=0.0.0.0/0 --target-tags=TAG_FROM_gcloud_compute_instances_list
 "@

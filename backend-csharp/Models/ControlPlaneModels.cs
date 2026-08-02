@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Kzys.Backend.Services.Media;
 
 namespace Kzys.Backend.Models;
 
@@ -24,6 +25,8 @@ public sealed class RoomRecord
     public int ActivePublishers { get; set; }
     public int ActiveListeners { get; set; }
     public bool Locked { get; set; }
+    /// <summary>When true, host pinned mode — auto webinar/interactive flip is disabled.</summary>
+    public bool ModePinned { get; set; }
     [JsonIgnore] public string Pin { get; set; } = "";
     [JsonIgnore] public string Secret { get; set; } = "";
     public DateTime CreatedAt { get; set; }
@@ -53,6 +56,8 @@ public sealed class JoinTicketDto
     public required ParticipantRecord Participant { get; set; }
     public required string LiveKitUrl { get; set; }
     public required string LiveKitToken { get; set; }
+    /// <summary>SFU vendor — today "livekit"; clients may also read liveKitUrl/liveKitToken.</summary>
+    public string MediaProvider { get; set; } = MediaProviders.LiveKit;
     public required string ParticipantToken { get; set; }
     public required TurnInfoDto Turn { get; set; }
 }

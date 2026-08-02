@@ -378,7 +378,13 @@ return 1
         await RefreshScalingMetricsAsync(ct);
         var active = (int)await _db.SetLengthAsync(ActiveRoomsKey);
         var standby = ServerTimeoutOptions.SfuStandbyPool;
-        var desired = Math.Max(standby, active);
+        var totalLoad = (long)await _db.StringGetAsync("kzys:total_node_load");
+        if (totalLoad < 0) totalLoad = 0;
+
+        var perNode = ServerTimeoutOptions.SfuPublishersPerNode;
+        var loadBased = (int)Math.Ceiling(totalLoad / (double)Math.Max(1, perNode));
+        var desired = Math.Max(standby, Math.Max(active, loadBased));
+
         var created = (long)await _db.StringGetAsync(RoomCreatedCounterKey);
         if (created < 0) created = 0;
         return new ScalingMetrics(active, desired, standby, created);

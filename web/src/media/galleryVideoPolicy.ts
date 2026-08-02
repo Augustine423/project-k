@@ -8,6 +8,7 @@
  * | 10–25     | 25            | 1        | 8      | 16   | 4–12 Mbps       |
  * | 26–49     | 25            | 1        | 4      | 20   | 4–10 Mbps       |
  * | 50–200    | 25            | 1        | 4      | 20   | 4–10 Mbps       |
+ * | 201–300   | 25            | 1        | 4      | 20   | 4–10 Mbps       |
  *
  * Everyone may publish camera; each client only downloads video for the current page.
  * Off-page publishers remain audio-only until the user changes page.
@@ -74,13 +75,22 @@ export const GALLERY_VIDEO_TIERS: readonly GalleryVideoTier[] = [
     label: "Large (50–200)",
   },
   {
+    maxRoomSize: 300,
+    videosPerPage: 25,
+    hdSlots: 1,
+    mediumSlots: 4,
+    lowSlots: 20,
+    estDownloadMbps: { min: 4, max: 10 },
+    label: "XXL (201–300)",
+  },
+  {
     maxRoomSize: 10_000,
     videosPerPage: 25,
     hdSlots: 1,
     mediumSlots: 4,
     lowSlots: 20,
     estDownloadMbps: { min: 4, max: 10 },
-    label: "Unlimited (200+)",
+    label: "Unlimited (300+)",
   },
 ] as const;
 

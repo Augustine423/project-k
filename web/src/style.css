@@ -1422,6 +1422,12 @@ button.rsp-face:disabled {
   color: var(--rsp-accent);
 }
 
+.rsp-tool-btn.active {
+  border-color: var(--rsp-accent);
+  background: rgba(31, 158, 138, 0.18);
+  color: var(--rsp-accent);
+}
+
 .rsp-tool-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;

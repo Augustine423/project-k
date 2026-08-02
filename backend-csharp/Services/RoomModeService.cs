@@ -52,6 +52,7 @@ public sealed class RoomModeService
 
         var nextMode = EvaluateMode(
             room.Mode,
+            room.ModePinned,
             stats.TotalParticipants,
             stats.Publishers,
             stats.Listeners);
@@ -92,7 +93,7 @@ public sealed class RoomModeService
             _hub.Broadcast(roomId, new RoomEvent
             {
                 Type = "room.mode_changed",
-                Data = new { mode = room.Mode, maxPublishers = room.MaxPublishers },
+                Data = new { mode = room.Mode, maxPublishers = room.MaxPublishers, modePinned = room.ModePinned },
             });
         }
 
@@ -108,7 +109,7 @@ public sealed class RoomModeService
         room.ActivePublishers = stats.Publishers;
         room.ActiveListeners = stats.Listeners;
 
-        var nextMode = EvaluateMode(room.Mode, stats.TotalParticipants, stats.Publishers, stats.Listeners);
+        var nextMode = EvaluateMode(room.Mode, room.ModePinned, stats.TotalParticipants, stats.Publishers, stats.Listeners);
         if (string.Equals(nextMode, room.Mode, StringComparison.Ordinal))
         {
             await _store.SaveRoomAsync(room, ct);
@@ -139,12 +140,20 @@ public sealed class RoomModeService
         _hub.Broadcast(roomId, new RoomEvent
         {
             Type = "room.mode_changed",
-            Data = new { mode = room.Mode, maxPublishers = room.MaxPublishers },
+            Data = new { mode = room.Mode, maxPublishers = room.MaxPublishers, modePinned = room.ModePinned },
         });
     }
 
-    public string EvaluateMode(string currentMode, int totalParticipants, int publishers, int listeners)
+    public string EvaluateMode(
+        string currentMode,
+        bool modePinned,
+        int totalParticipants,
+        int publishers,
+        int listeners)
     {
+        if (modePinned)
+            return currentMode;
+
         if (string.Equals(currentMode, RoomModes.Interactive, StringComparison.Ordinal))
         {
             if (totalParticipants >= _config.WebinarEnterListeners)
@@ -164,6 +173,53 @@ public sealed class RoomModeService
         }
 
         return currentMode;
+    }
+
+    /// <summary>Host/co-host sets room mode. Pin prevents automatic webinar/interactive switching.</summary>
+    public async Task<RoomRecord> SetRoomModeAsync(
+        string roomId,
+        string mode,
+        bool pin,
+        CancellationToken ct = default)
+    {
+        if (mode is not (RoomModes.Interactive or RoomModes.Webinar))
+            throw new RoomServiceException(RoomError.InvalidMode, "invalid room mode");
+
+        var room = await _store.GetRoomAsync(roomId, ct)
+            ?? throw new RoomServiceException(RoomError.NotFound, "room not found");
+
+        room.Mode = mode;
+        room.ModePinned = pin;
+        room.MaxPublishers = mode == RoomModes.Webinar
+            ? _config.WebinarMaxPublishers
+            : Math.Min(room.MaxParticipants, _config.InteractiveMaxPublishers);
+
+        var stats = await _store.GetMediaStatsAsync(roomId, ct);
+        room.ActivePublishers = stats.Publishers;
+        room.ActiveListeners = stats.Listeners;
+
+        await _store.SaveRoomAsync(room, ct);
+        await _store.EnqueueModeApplyAsync(roomId, ct);
+        await _store.RefreshScalingMetricsAsync(ct);
+
+        if (mode == RoomModes.Interactive)
+        {
+            await _store.ClearRaisedHandsAsync(roomId, ct);
+            _hub.Broadcast(roomId, new RoomEvent
+            {
+                Type = "hand.updated",
+                Data = new { raised = Array.Empty<object>() },
+            });
+        }
+
+        _hub.Broadcast(roomId, new RoomEvent
+        {
+            Type = "room.mode_changed",
+            Data = new { mode = room.Mode, maxPublishers = room.MaxPublishers, modePinned = room.ModePinned },
+        });
+
+        _log.LogInformation("room {RoomId} mode set to {Mode} pinned={Pinned}", roomId, mode, pin);
+        return room;
     }
 
     /// <summary>

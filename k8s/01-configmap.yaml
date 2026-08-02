@@ -14,15 +14,20 @@ metadata:
 data:
   SERVICE_NAME: "kzys-control-plane"
   CORS_ORIGIN: "*"
-  MAX_ROOM_PARTICIPANTS: "500"
-  LARGE_ROOM_EVENT_THRESHOLD: "200"
+  # Target: Zoom Business (300 cam/mic) / Meet Enterprise (1000 in room).
+  # One LiveKit room still lives on one SFU node (~100–150 publishers/node realistic).
+  MAX_ROOM_PARTICIPANTS: "1000"
+  LARGE_ROOM_EVENT_THRESHOLD: "500"
   PARTICIPANTS_PAGE_SIZE: "50"
-  PARTICIPANTS_SEARCH_SCAN_CAP: "3000"
-  WEBINAR_ENTER_LISTENERS: "45"
-  WEBINAR_ENTER_RATIO: "2.0"
-  WEBINAR_EXIT_LISTENERS: "20"
-  INTERACTIVE_MAX_PUBLISHERS: "50"
-  WEBINAR_MAX_PUBLISHERS: "16"
+  PARTICIPANTS_SEARCH_SCAN_CAP: "5000"
+  WEBINAR_ENTER_LISTENERS: "400"
+  WEBINAR_ENTER_RATIO: "8.0"
+  WEBINAR_EXIT_LISTENERS: "50"
+  INTERACTIVE_MAX_PUBLISHERS: "300"
+  WEBINAR_MAX_PUBLISHERS: "50"
+  # SFU autosize hint — used by GET /api/rooms/scaling/metrics (desiredSfuPods).
+  SFU_PUBLISHERS_PER_NODE: "100"
+  KZYS_SFU_STANDBY_POOL: "2"
   # Filled by configure-public-ips.ps1 (web LoadBalancer IP).
   PUBLIC_HOST: "CHANGE_ME_WEB_LB_IP"
   # Filled by configure-public-ips.ps1 (node external IP — coturn hostNetwork).
@@ -49,11 +54,18 @@ data:
     rtc:
       tcp_port: 7881
       port_range_start: 50000
-      port_range_end: 50100
+      port_range_end: 50999
       use_external_ip: true
       enable_loopback_candidate: false
     redis:
       address: redis:6379
+    room:
+      empty_timeout: 300
+      departure_timeout: 20
+    # Distributed SFU — pick least-loaded node (needs Redis + multiple replicas).
+    node_selector:
+      kind: sysload
+      sysload_limit: 0.75
     logging:
       level: info
 ---
@@ -69,7 +81,7 @@ data:
     tls-listening-port=5349
     use-auth-secret
     min-port=20000
-    max-port=20100
+    max-port=20999
     no-tls
     no-dtls
     fingerprint

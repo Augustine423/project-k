@@ -1,4 +1,4 @@
-using Kzys.Backend.Configuration;
+using Kzys.Backend.Services.Media;
 using Kzys.Backend.Data;
 using Kzys.Backend.Models;
 using Kzys.Backend.Services;
@@ -36,8 +36,7 @@ builder.Services.AddSingleton<JwtTokenService>(_ => new JwtTokenService(config.J
 builder.Services.AddSingleton<TurnCredentialService>(_ =>
     new TurnCredentialService(config.TurnSharedSecret, config.TurnHost, config.TurnPort, config.TurnTlsPort, config.TurnUseTls));
 
-builder.Services.AddSingleton<LiveKitTokenService>(_ =>
-    new LiveKitTokenService(config.LiveKitApiKey, config.LiveKitApiSecret));
+builder.Services.AddSingleton<IMediaTokenService, LiveKitMediaTokenService>();
 builder.Services.AddSingleton<RoomService>();
 builder.Services.AddSingleton<RoomModeService>();
 builder.Services.AddSingleton<RoomPresenceBroadcaster>();

@@ -42,6 +42,7 @@ public sealed class RoomsApiController : ControllerBase
     public sealed record CreateRoomBody(string DisplayName, int MaxUsers = 0, string? Pin = null);
     public sealed record JoinRoomBody(string DisplayName, string? Pin = null);
     public sealed record LockBody(bool Locked);
+    public sealed record SetModeBody(string Mode, bool Pin = true);
     public sealed record MediaPresenceBody(bool Publishing, bool Audio, bool Video);
 
     [HttpPost]
@@ -222,6 +223,26 @@ public sealed class RoomsApiController : ControllerBase
         return Ok(new { locked = body.Locked });
     }
 
+    [HttpPost("{roomId}/mode")]
+    public async Task<IActionResult> SetMode(string roomId, [FromBody] SetModeBody body, CancellationToken ct)
+    {
+        var claims = RequireHost(roomId);
+        if (claims is null) return Forbid();
+
+        if (body.Mode is not (RoomModes.Interactive or RoomModes.Webinar))
+            return BadRequest(new { error = "mode must be interactive or webinar" });
+
+        try
+        {
+            var room = await _modes.SetRoomModeAsync(roomId, body.Mode, body.Pin, ct);
+            return Ok(new { mode = room.Mode, maxPublishers = room.MaxPublishers, modePinned = room.ModePinned });
+        }
+        catch (RoomServiceException ex) when (ex.Error == RoomError.NotFound)
+        {
+            return NotFound(new { error = "room not found" });
+        }
+    }
+
     [HttpPost("{roomId}/participants/{participantId}/kick")]
     public async Task<IActionResult> Kick(string roomId, string participantId, CancellationToken ct)
     {
@@ -262,36 +283,6 @@ public sealed class RoomsApiController : ControllerBase
         catch
         {
             return null;
-        }
-    }
-}
-
-[ApiController]
-public sealed class HealthController : ControllerBase
-{
-    private readonly ControlPlaneStore _store;
-    private readonly AppConfig _config;
-
-    public HealthController(ControlPlaneStore store, AppConfig config)
-    {
-        _store = store;
-        _config = config;
-    }
-
-    [HttpGet("/health")]
-    public IActionResult Health() => Ok(new { status = "healthy" });
-
-    [HttpGet("/ready")]
-    public async Task<IActionResult> Ready(CancellationToken ct)
-    {
-        try
-        {
-            await _store.PingAsync(ct);
-            return Ok(new { status = "ready", service = _config.ServiceName });
-        }
-        catch
-        {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable, new { status = "not ready" });
         }
     }
 }

@@ -7,13 +7,13 @@ public sealed class AppConfig
     public string JwtSigningSecret { get; init; } = "dev-jwt-signing-secret";
     public string CorsOrigin { get; init; } = "*";
     public int MaxRoomParticipants { get; init; } = 10000;
-    public int WebinarEnterListeners { get; init; } = 45;
-    public double WebinarEnterRatio { get; init; } = 2.0;
-    public int WebinarExitListeners { get; init; } = 20;
-    public int InteractiveMaxPublishers { get; init; } = 50;
-    public int WebinarMaxPublishers { get; init; } = 16;
+    public int WebinarEnterListeners { get; init; } = 400;
+    public double WebinarEnterRatio { get; init; } = 8.0;
+    public int WebinarExitListeners { get; init; } = 50;
+    public int InteractiveMaxPublishers { get; init; } = 300;
+    public int WebinarMaxPublishers { get; init; } = 50;
     /// <summary>Above this count, WS uses count-only events instead of per-join fanout.</summary>
-    public int LargeRoomEventThreshold { get; init; } = 200;
+    public int LargeRoomEventThreshold { get; init; } = 500;
     /// <summary>Default page size for GET /participants.</summary>
     public int ParticipantsPageSizeDefault { get; init; } = 50;
     /// <summary>Max participants returned by search scan (large rooms).</summary>
@@ -38,12 +38,12 @@ public sealed class AppConfig
             JwtSigningSecret = Env("JWT_SIGNING_SECRET", "dev-jwt-signing-secret"),
             CorsOrigin = Env("CORS_ORIGIN", "*"),
             MaxRoomParticipants = int.TryParse(Env("MAX_ROOM_PARTICIPANTS", "10000"), out var max) ? max : 10000,
-            WebinarEnterListeners = int.TryParse(Env("WEBINAR_ENTER_LISTENERS", "45"), out var wel) ? wel : 45,
-            WebinarEnterRatio = double.TryParse(Env("WEBINAR_ENTER_RATIO", "2.0"), out var wer) ? wer : 2.0,
-            WebinarExitListeners = int.TryParse(Env("WEBINAR_EXIT_LISTENERS", "20"), out var wex) ? wex : 20,
-            InteractiveMaxPublishers = int.TryParse(Env("INTERACTIVE_MAX_PUBLISHERS", "50"), out var imp) ? imp : 50,
-            WebinarMaxPublishers = int.TryParse(Env("WEBINAR_MAX_PUBLISHERS", "16"), out var wmp) ? wmp : 16,
-            LargeRoomEventThreshold = int.TryParse(Env("LARGE_ROOM_EVENT_THRESHOLD", "200"), out var lrt) ? lrt : 200,
+            WebinarEnterListeners = int.TryParse(Env("WEBINAR_ENTER_LISTENERS", "400"), out var wel) ? wel : 400,
+            WebinarEnterRatio = double.TryParse(Env("WEBINAR_ENTER_RATIO", "8.0"), out var wer) ? wer : 8.0,
+            WebinarExitListeners = int.TryParse(Env("WEBINAR_EXIT_LISTENERS", "50"), out var wex) ? wex : 50,
+            InteractiveMaxPublishers = int.TryParse(Env("INTERACTIVE_MAX_PUBLISHERS", "300"), out var imp) ? imp : 300,
+            WebinarMaxPublishers = int.TryParse(Env("WEBINAR_MAX_PUBLISHERS", "50"), out var wmp) ? wmp : 50,
+            LargeRoomEventThreshold = int.TryParse(Env("LARGE_ROOM_EVENT_THRESHOLD", "500"), out var lrt) ? lrt : 500,
             ParticipantsPageSizeDefault = int.TryParse(Env("PARTICIPANTS_PAGE_SIZE", "50"), out var pps) ? pps : 50,
             ParticipantsSearchScanCap = int.TryParse(Env("PARTICIPANTS_SEARCH_SCAN_CAP", "3000"), out var psc) ? psc : 3000,
             TurnSharedSecret = Env("TURN_SHARED_SECRET", "dev-turn-shared-secret"),

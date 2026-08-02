@@ -1,6 +1,7 @@
 using Kzys.Backend.Configuration;
 using Kzys.Backend.Models;
 using Kzys.Backend.Realtime;
+using Kzys.Backend.Services.Media;
 
 namespace Kzys.Backend.Services;
 
@@ -9,7 +10,7 @@ public sealed class RoomService
     private readonly ControlPlaneStore _store;
     private readonly JwtTokenService _jwt;
     private readonly TurnCredentialService _turn;
-    private readonly LiveKitTokenService _liveKit;
+    private readonly IMediaTokenService _media;
     private readonly RoomModeService _modes;
     private readonly RoomEventHub _hub;
     private readonly AppConfig _config;
@@ -19,7 +20,7 @@ public sealed class RoomService
         ControlPlaneStore store,
         JwtTokenService jwt,
         TurnCredentialService turn,
-        LiveKitTokenService liveKit,
+        IMediaTokenService media,
         RoomModeService modes,
         RoomEventHub hub,
         AppConfig config,
@@ -28,7 +29,7 @@ public sealed class RoomService
         _store = store;
         _jwt = jwt;
         _turn = turn;
-        _liveKit = liveKit;
+        _media = media;
         _modes = modes;
         _hub = hub;
         _config = config;
@@ -157,18 +158,23 @@ public sealed class RoomService
         if (caps.CanPublishAudio && !caps.CanPublishVideo)
             publishSources = ["microphone"];
 
+        var signalingUrl = MediaHostHelper.RewriteUrlHost(_config.LiveKitPublicUrl, mediaHost);
+        var grant = _media.CreateJoinGrant(new MediaJoinRequest(
+            room.Id,
+            participant.Id,
+            participant.DisplayName,
+            signalingUrl,
+            caps.CanPublishAnything,
+            canSubscribe: true,
+            publishSources));
+
         return new JoinTicketDto
         {
             Room = room,
             Participant = participant,
-            LiveKitUrl = MediaHostHelper.RewriteUrlHost(_config.LiveKitPublicUrl, mediaHost),
-            LiveKitToken = _liveKit.CreateJoinToken(
-                room.Id,
-                participant.Id,
-                participant.DisplayName,
-                canPublish: caps.CanPublishAnything,
-                canSubscribe: true,
-                canPublishSources: publishSources),
+            LiveKitUrl = grant.Url,
+            LiveKitToken = grant.Token,
+            MediaProvider = grant.Provider,
             ParticipantToken = token,
             Turn = new TurnInfoDto
             {
@@ -199,6 +205,7 @@ public enum RoomError
     Locked,
     BadPin,
     Full,
+    InvalidMode,
 }
 
 public sealed class RoomServiceException : Exception

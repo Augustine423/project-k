@@ -1,0 +1,43 @@
+import { LiveKitConference } from "../livekit/LiveKitConference";
+import type { MediaSession } from "./normalizeJoinTicket";
+
+export interface MediaConferenceProps {
+  roomId: string;
+  participantToken: string;
+  session: MediaSession;
+  displayName: string;
+  onConnected: () => void;
+  onDisconnected: () => void;
+  onError: (message: string) => void;
+  onStatus?: (message: string) => void;
+  onLeave: () => void;
+  participantCount?: number;
+  chatBadge?: number | string;
+  onFocusChat?: () => void;
+  roomMode?: string;
+  participantRole?: string;
+  showRaiseHand?: boolean;
+  handRaised?: boolean;
+  onToggleRaiseHand?: () => void;
+}
+
+/**
+ * Media conference entry — dispatches to the configured SFU client.
+ * LiveKit today; add branches here when a second provider is wired.
+ */
+export function MediaConference(props: MediaConferenceProps) {
+  const { session, ...rest } = props;
+
+  switch (session.provider) {
+    case "livekit":
+    default:
+      return (
+        <LiveKitConference
+          {...rest}
+          liveKitUrl={session.url}
+          liveKitToken={session.token}
+          turn={session.turn}
+        />
+      );
+  }
+}
