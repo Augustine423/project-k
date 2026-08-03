@@ -16,6 +16,13 @@ public sealed class AuthTokenService
         _secret = SHA256.HashData(Encoding.UTF8.GetBytes(secret + ":user-auth"));
     }
 
+    private static JwtSecurityTokenHandler CreateHandler()
+    {
+        // Keep short claim names (email/userId/typ). Default inbound mapping remaps "email"
+        // and breaks FindFirst("email") after ValidateToken.
+        return new JwtSecurityTokenHandler { MapInboundClaims = false };
+    }
+
     public string Issue(string userId, string email)
     {
         var claims = new[]
@@ -30,12 +37,12 @@ public sealed class AuthTokenService
             signingCredentials: new SigningCredentials(
                 new SymmetricSecurityKey(_secret),
                 SecurityAlgorithms.HmacSha256));
-        return new JwtSecurityTokenHandler().WriteToken(token);
+        return CreateHandler().WriteToken(token);
     }
 
     public UserAuthClaims Verify(string token)
     {
-        var handler = new JwtSecurityTokenHandler();
+        var handler = CreateHandler();
         var principal = handler.ValidateToken(token, new TokenValidationParameters
         {
             ValidateIssuer = false,

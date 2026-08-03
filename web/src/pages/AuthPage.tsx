@@ -33,7 +33,24 @@ export function AuthPage() {
   const [socialNotice, setSocialNotice] = useState("");
 
   function goAfterAuth(needsUsernameSetup: boolean) {
-    if (needsUsernameSetup) return;
+    // #region agent log
+    fetch("http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c10931" },
+      body: JSON.stringify({
+        sessionId: "c10931",
+        hypothesisId: "L1",
+        location: "AuthPage.tsx:goAfterAuth",
+        message: "post-login navigation",
+        data: { needsUsernameSetup },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    if (needsUsernameSetup) {
+      // Stay on /login so AuthPage can render UsernameSetupForm.
+      return;
+    }
     navigate("/dashboard", { replace: true });
   }
 
@@ -101,7 +118,7 @@ export function AuthPage() {
 
           {signupDone && view === "signin" && (
             <p className="auth-banner auth-banner--success">
-              Signup successful. Please login with your username and password.
+              Signup successful. Please login with your email and password.
             </p>
           )}
 

@@ -9,7 +9,7 @@ interface UsernameSetupFormProps {
 
 export function UsernameSetupForm({ onSuccess }: UsernameSetupFormProps) {
   const { setUsername, user } = useAuth();
-  const [username, setUsernameValue] = useState(user?.username ?? "");
+  const [username, setUsernameValue] = useState(user?.username ?? user?.fullName ?? "");
   const [fieldError, setFieldError] = useState<string | undefined>();
   const [formError, setFormError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,7 +37,7 @@ export function UsernameSetupForm({ onSuccess }: UsernameSetupFormProps) {
     <div className="auth-view">
       <AuthHeader
         title="Choose your username"
-        subtitle="This name appears in meetings for your team."
+        subtitle="Required once after login — this name appears in meetings."
       />
 
       <form className="auth-form" onSubmit={onSubmit} noValidate>
