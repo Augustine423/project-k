@@ -573,6 +573,9 @@ export function LiveKitConference({
     if (galleryPage > totalGalleryPages) setGalleryPage(totalGalleryPages);
   }, [galleryPage, totalGalleryPages]);
 
+  /** Hosts: equal gallery. Clients: fullscreen host + self PiP (Zoom-style). */
+  const layoutMode = isHostRole ? "gallery" : "spotlight";
+
   const localTile = useMemo<StageTile>(
     () => ({
       id: "local",
@@ -586,6 +589,7 @@ export function LiveKitConference({
   );
 
   const galleryTiles = useMemo<StageTile[]>(() => {
+    if (layoutMode !== "gallery") return [];
     const result: StageTile[] = [localTile];
     const remotes: StageTile[] = [];
 
@@ -616,13 +620,47 @@ export function LiveKitConference({
     }
 
     return result;
-  }, [hostParticipantId, localStream, localTile, paginatedRemoteIds, remoteFeeds, visibleRemoteIds]);
+  }, [
+    hostParticipantId,
+    layoutMode,
+    localStream,
+    localTile,
+    paginatedRemoteIds,
+    remoteFeeds,
+    visibleRemoteIds,
+  ]);
+
+  const spotlightHostTile = useMemo<StageTile | null>(() => {
+    if (layoutMode !== "spotlight") return null;
+    if (hostParticipantId) {
+      const feed = remoteFeeds.get(hostParticipantId);
+      if (feed) {
+        return {
+          id: hostParticipantId,
+          label: feed.displayName,
+          stream: feed.stream,
+          trackSignature: feed.trackSignature,
+          hasVideo: feed.hasVideo,
+          roleBadge: "Host",
+          spotlight: true,
+        };
+      }
+    }
+    return {
+      id: "host-waiting",
+      label: "Waiting for host",
+      stream: null,
+      hasVideo: false,
+      roleBadge: "Host",
+      spotlight: true,
+    };
+  }, [hostParticipantId, layoutMode, remoteFeeds]);
 
   const gridCount = Math.min(Math.max(galleryTiles.length, 1), galleryTier.videosPerPage + 1);
   const offPageCount = Math.max(0, paginatedRemoteIds.length - visibleRemoteIds.size);
 
   return (
-    <div className="conference-root is-gallery">
+    <div className={`conference-root is-${layoutMode}`}>
       {!mediaAvailable && (
         <div className="join-banner warn">{mediaUnavailableReason()}</div>
       )}
@@ -635,30 +673,67 @@ export function LiveKitConference({
       {silenceNotice && connected && (
         <div className="join-banner info">{silenceNotice}</div>
       )}
-      <GalleryPagination
-        page={galleryPage}
-        totalPages={totalGalleryPages}
-        onPageChange={setGalleryPage}
-        totalParticipants={participantCount}
-        offPageCount={offPageCount}
-      />
-      <div className="video-stage" data-layout="gallery" data-count={String(gridCount)}>
-        {galleryTiles.map((tile) => (
-          <StreamVideoTile
-            key={tile.id}
-            stream={tile.stream}
-            trackSignature={tile.trackSignature}
-            label={tile.label}
-            muted={Boolean(tile.mirror)}
-            mirror={tile.mirror}
-            hasVideo={tile.hasVideo}
-            roleBadge={tile.roleBadge}
-          />
-        ))}
-      </div>
+      {layoutMode === "gallery" && (
+        <GalleryPagination
+          page={galleryPage}
+          totalPages={totalGalleryPages}
+          onPageChange={setGalleryPage}
+          totalParticipants={participantCount}
+          offPageCount={offPageCount}
+        />
+      )}
+      {layoutMode === "gallery" ? (
+        <div className="video-stage" data-layout="gallery" data-count={String(gridCount)}>
+          {galleryTiles.map((tile) => (
+            <StreamVideoTile
+              key={tile.id}
+              stream={tile.stream}
+              trackSignature={tile.trackSignature}
+              label={tile.label}
+              muted={Boolean(tile.mirror)}
+              mirror={tile.mirror}
+              hasVideo={tile.hasVideo}
+              roleBadge={tile.roleBadge}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="video-stage" data-layout="spotlight-zoom">
+          {spotlightHostTile && (
+            <div className="video-host-full">
+              <StreamVideoTile
+                stream={spotlightHostTile.stream}
+                trackSignature={spotlightHostTile.trackSignature}
+                label={spotlightHostTile.label}
+                hasVideo={spotlightHostTile.hasVideo}
+                roleBadge={spotlightHostTile.roleBadge}
+                size="spotlight"
+              />
+            </div>
+          )}
+          <div className="video-self-pip">
+            <StreamVideoTile
+              stream={localTile.stream}
+              label={localTile.label}
+              muted
+              mirror={localTile.mirror}
+              hasVideo={localTile.hasVideo}
+              roleBadge={localTile.roleBadge}
+              size="strip"
+            />
+          </div>
+        </div>
+      )}
       <div className="hide" aria-hidden>
         {sortedRemoteIds
-          .filter((id) => !visibleRemoteIds.has(id))
+          .filter((id) => {
+            if (layoutMode === "spotlight" && hostParticipantId && id === hostParticipantId) {
+              return false;
+            }
+            if (layoutMode === "gallery" && visibleRemoteIds.has(id)) return false;
+            if (layoutMode === "spotlight") return true;
+            return !visibleRemoteIds.has(id);
+          })
           .map((id) => {
             const feed = remoteFeeds.get(id);
             if (!feed?.stream.getAudioTracks().length) return null;

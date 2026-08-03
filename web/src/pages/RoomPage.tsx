@@ -58,6 +58,8 @@ export function RoomPage() {
   const [inviteCollapsed, setInviteCollapsed] = useState(true);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
+  const [chromeVisible, setChromeVisible] = useState(true);
+  const chromeHideTimer = useRef<number | null>(null);
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [dmPeer, setDmPeer] = useState<DmPeer | null>(null);
   const [dmThreads, setDmThreads] = useState<Record<string, ChatMessage[]>>({});
@@ -79,6 +81,8 @@ export function RoomPage() {
   dmPeerRef.current = dmPeer;
   const sideTabRef = useRef(sideTab);
   sideTabRef.current = sideTab;
+  const sidePanelOpenRef = useRef(sidePanelOpen);
+  sidePanelOpenRef.current = sidePanelOpen;
 
   const refreshCount = useCallback(async () => {
     if (!roomId) return;
@@ -134,6 +138,32 @@ export function RoomPage() {
 
   const closeSidePanel = useCallback(() => setSidePanelOpen(false), []);
 
+  const revealChrome = useCallback(() => {
+    setChromeVisible(true);
+    if (!isHost) {
+      if (chromeHideTimer.current) window.clearTimeout(chromeHideTimer.current);
+      chromeHideTimer.current = window.setTimeout(() => {
+        if (!sidePanelOpenRef.current) setChromeVisible(false);
+      }, 3200);
+    }
+  }, [isHost]);
+
+  useEffect(() => {
+    if (isHost) {
+      setChromeVisible(true);
+      if (chromeHideTimer.current) window.clearTimeout(chromeHideTimer.current);
+      return;
+    }
+    revealChrome();
+    return () => {
+      if (chromeHideTimer.current) window.clearTimeout(chromeHideTimer.current);
+    };
+  }, [isHost, revealChrome]);
+
+  useEffect(() => {
+    if (sidePanelOpen) setChromeVisible(true);
+  }, [sidePanelOpen]);
+
   const shareInvite = useCallback(() => {
     void copyInviteLink(roomId);
     setInviteCollapsed(false);
@@ -180,6 +210,9 @@ export function RoomPage() {
           at?: string;
           participantId?: string;
         };
+        // #region agent log
+        fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'C',location:'RoomPage.tsx:chat.message',message:'received chat.message',data:{hasMessage:Boolean(data.message),fromSelf:data.participantId===selfId,participantId:data.participantId?String(data.participantId).slice(0,8):null,msgLen:data.message?.length??0,sideTab:sideTabRef.current,panelOpen:sidePanelOpenRef.current},timestamp:Date.now()})}).catch(()=>{});
+        // #endregion
         if (!data.message) return;
         const id = `${data.participantId ?? "unknown"}-${data.at ?? Date.now()}`;
         setChatMessages((prev) =>
@@ -367,6 +400,9 @@ export function RoomPage() {
   function sendChat(text: string) {
     if (!ticket) return;
     try {
+      // #region agent log
+      fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'D',location:'RoomPage.tsx:sendChat',message:'user send chat',data:{isDm:Boolean(dmPeer),chatReady,roomId,selfId:selfId.slice(0,8),msgLen:text.length},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (dmPeer) {
         sendDirectChat(
           roomId,
@@ -379,6 +415,9 @@ export function RoomPage() {
         sendRoomChat(roomId, ticket.participantToken, ticket.participant.displayName, text);
       }
     } catch (err) {
+      // #region agent log
+      fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'A',location:'RoomPage.tsx:sendChatError',message:'chat send failed',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       setStatusMessage(err instanceof Error ? err.message : "Chat send failed");
     }
   }
@@ -504,7 +543,11 @@ export function RoomPage() {
   const isLive = status === "connected";
 
   return (
-    <div className="meeting-app meeting-v2 meeting-light">
+    <div
+      className={`meeting-app meeting-v2 meeting-light ${!isHost && !chromeVisible ? "chrome-hidden" : ""} ${!isHost ? "is-client-view" : "is-host-view"}`}
+      onPointerDown={revealChrome}
+      onKeyDown={revealChrome}
+    >
       <MeetingHeader
         statusMessage={statusMessage}
         connected={isLive}

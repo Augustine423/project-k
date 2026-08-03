@@ -153,6 +153,11 @@ export function useRoomEvents(roomId: string, token: string, onEvent: (evt: Room
     const listener: Listener = (evt) => {
       if (evt.type === "ws.open") setChatReady(true);
       if (evt.type === "ws.close" || evt.type === "ws.error") setChatReady(false);
+      // #region agent log
+      if (evt.type === "ws.open" || evt.type === "ws.close" || evt.type === "ws.error" || evt.type.startsWith("chat.")) {
+        fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:evt.type.startsWith('chat.')?'B':'A',location:'useRoomEvents.ts:listener',message:'room ws event',data:{type:evt.type,roomId,readyState:sock.ws.readyState,hasData:evt.data!=null},timestamp:Date.now()})}).catch(()=>{});
+      }
+      // #endregion
       onEventRef.current(evt);
     };
     sock.listeners.add(listener);
@@ -181,6 +186,9 @@ export function sendRoomEvent(
   if (!roomId || !token) throw new Error("room not connected");
   const url = wsUrlFor(roomId, token);
   const sock = shared.get(url);
+  // #region agent log
+  fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'A',location:'useRoomEvents.ts:sendRoomEvent',message:'attempt send',data:{type,roomId,hasSock:Boolean(sock),readyState:sock?.ws.readyState??-1,msgLen:typeof (data as {message?:string})?.message==='string'?(data as {message:string}).message.length:null},timestamp:Date.now()})}).catch(()=>{});
+  // #endregion
   if (!sock || sock.ws.readyState !== WebSocket.OPEN) {
     throw new Error("room WebSocket not connected");
   }

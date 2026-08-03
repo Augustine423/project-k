@@ -4001,3 +4001,99 @@ html:has(.auth-page) body {
     border-radius: 50%;
   }
 }
+
+/* Zoom-style client spotlight + contain fit + chrome auto-hide */
+.video-stage .video-tile .video-feed,
+.video-stage .video-tile video {
+  object-fit: contain !important;
+  background: #0b0f14;
+}
+
+.video-stage[data-layout="spotlight-zoom"] {
+  display: grid;
+  grid-template: 1fr / 1fr;
+  padding: 0;
+  gap: 0;
+  position: relative;
+  background: #0b0f14;
+}
+
+.video-host-full {
+  grid-area: 1 / 1;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.video-host-full .video-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background: #0b0f14;
+}
+
+.video-self-pip {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  width: min(220px, 28vw);
+  aspect-ratio: 16 / 10;
+  z-index: 4;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  border: 2px solid rgba(255, 255, 255, 0.55);
+}
+
+.video-self-pip .video-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+}
+
+.meeting-app.is-client-view.chrome-hidden .meeting-v2-header,
+.meeting-app.is-client-view.chrome-hidden .meeting-rail,
+.meeting-app.is-client-view.chrome-hidden .meeting-v2-control-bar-wrap,
+.meeting-app.is-client-view.chrome-hidden .meeting-sidebar:not(.open),
+.meeting-app.is-client-view.chrome-hidden .join-banner {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-8px);
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.meeting-app.is-client-view .meeting-v2-header,
+.meeting-app.is-client-view .meeting-rail,
+.meeting-app.is-client-view .meeting-v2-control-bar-wrap,
+.meeting-app.is-client-view .join-banner {
+  transition: opacity 220ms ease, transform 220ms ease;
+}
+
+.meeting-app.is-client-view.chrome-hidden .meeting-v2-control-bar-wrap {
+  transform: translate(-50%, 12px);
+}
+
+.meeting-app.is-client-view .meeting-body {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 0;
+  gap: 0;
+}
+
+.meeting-app.is-client-view .meeting-stage {
+  border-radius: 0;
+  border: none;
+}
+
+.meeting-app.is-client-view .conference-root {
+  padding-bottom: 0;
+}
+
+.meeting-app.is-client-view .video-stage {
+  padding-bottom: 0;
+}
+
+.meeting-app.is-host-view .video-stage[data-layout="gallery"] {
+  padding: 10px 10px 5.75rem;
+}
