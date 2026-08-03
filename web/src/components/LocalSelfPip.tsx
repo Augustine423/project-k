@@ -1,5 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
+import { useViewerViewport } from "../hooks/useViewerViewport";
+import { classifyStreamAspect, type StreamAspect } from "../media/conferenceLayout";
 
 type LocalSelfPipProps = {
   stream: MediaStream | null;
@@ -9,12 +11,26 @@ type LocalSelfPipProps = {
   visible: boolean;
 };
 
+function readAspect(stream: MediaStream | null, video: HTMLVideoElement | null): StreamAspect {
+  if (video && video.videoWidth > 0 && video.videoHeight > 0) {
+    return classifyStreamAspect(video.videoWidth, video.videoHeight);
+  }
+  const track = stream?.getVideoTracks()[0];
+  const s = track?.getSettings?.() ?? {};
+  const w = Number(s.width) || 0;
+  const h = Number(s.height) || 0;
+  if (w > 0 && h > 0) return classifyStreamAspect(w, h);
+  return "unknown";
+}
+
 /**
- * Dedicated floating self-view. Binds localStream directly to its own <video>
- * (outside the gallery grid) so preview is never lost when remotes fill the stage.
+ * Floating self-view sized to the *source camera* aspect:
+ * portrait cam → 9:16 PiP, landscape cam → 16:9 PiP.
  */
 export function LocalSelfPip({ stream, label, hasVideo = false, visible }: LocalSelfPipProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const viewport = useViewerViewport();
+  const [streamAspect, setStreamAspect] = useState<StreamAspect>("unknown");
 
   const videoTrack = stream?.getVideoTracks().find((t) => t.readyState === "live")
     ?? stream?.getVideoTracks()[0]
@@ -27,6 +43,7 @@ export function LocalSelfPip({ stream, label, hasVideo = false, visible }: Local
 
     if (!videoTrack) {
       videoEl.srcObject = null;
+      setStreamAspect("unknown");
       return;
     }
 
@@ -36,15 +53,25 @@ export function LocalSelfPip({ stream, label, hasVideo = false, visible }: Local
     videoEl.playsInline = true;
     void videoEl.play().catch(() => undefined);
 
+    const refreshAspect = () => setStreamAspect(readAspect(stream, videoEl));
+    videoEl.addEventListener("loadedmetadata", refreshAspect);
+    videoEl.addEventListener("resize", refreshAspect);
+    refreshAspect();
+    const timer = window.setInterval(refreshAspect, 1000);
+
     const onEnded = () => {
       if (videoEl.srcObject === preview) videoEl.srcObject = null;
+      setStreamAspect("unknown");
     };
     videoTrack.addEventListener("ended", onEnded);
     return () => {
+      window.clearInterval(timer);
       videoTrack.removeEventListener("ended", onEnded);
+      videoEl.removeEventListener("loadedmetadata", refreshAspect);
+      videoEl.removeEventListener("resize", refreshAspect);
       videoEl.srcObject = null;
     };
-  }, [videoTrack, videoTrackId]);
+  }, [stream, videoTrack, videoTrackId]);
 
   if (!visible) return null;
 
@@ -52,11 +79,23 @@ export function LocalSelfPip({ stream, label, hasVideo = false, visible }: Local
   const tone = avatarTone(label);
   const initials = avatarInitials(label);
 
+  // Prefer real source-cam dimensions; fall back to device orientation until metadata arrives.
+  const pipShape: "portrait" | "landscape" =
+    streamAspect === "portrait"
+      ? "portrait"
+      : streamAspect === "landscape"
+        ? "landscape"
+        : viewport.isPortrait
+          ? "portrait"
+          : "landscape";
+
   return (
     <aside
       className="video-self-pip"
       aria-label="Your video (picture-in-picture)"
       data-has-video={showVideo ? "true" : "false"}
+      data-pip-shape={pipShape}
+      data-stream-aspect={streamAspect}
     >
       <div className="video-self-pip-inner">
         <video

@@ -35,8 +35,8 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 }
 
 /**
- * Landscape streams may crop-to-fill cells.
- * Portrait (9:16) phone streams always use contain (optionally with blur pad) — never stretch.
+ * Fit policy driven by the *source camera* aspect, not the viewer's window.
+ * Portrait sources stay upright (contain / soft blur pad). Landscape sources fill cells.
  */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
@@ -45,18 +45,16 @@ export function resolveTileFit(opts: {
 }): TileFitMode {
   const { streamAspect, layout, size } = opts;
 
-  // Never crop/stretch portrait camera into landscape boxes.
   if (streamAspect === "portrait") {
-    return size === "strip" ? "contain" : "contain-blur";
+    // Keep phone upright in every viewer layout — never stretch to 16:9.
+    return size === "strip" || size === "spotlight" ? "contain" : "contain-blur";
   }
 
+  if (streamAspect === "square") return "contain";
+
   if (size === "strip") return "cover";
-
   if (layout === "landscape-focus") return "contain";
-
   if (layout === "active-speaker" && size === "spotlight") return "cover";
-
-  // Desktop gallery landscape → fill cell
   return "cover";
 }
 

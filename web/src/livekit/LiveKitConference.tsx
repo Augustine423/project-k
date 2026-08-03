@@ -26,6 +26,7 @@ import {
   sliceGalleryPage,
 } from "../media/galleryVideoPolicy";
 import {
+  applyOrientationCaptureConstraints,
   applyRemoteSimulcastPreferences,
   buildLocalParticipantStream,
   cameraEnableCaptureOptions,
@@ -499,6 +500,8 @@ export function LiveKitConference({
           await lp.setCameraEnabled(false);
           await lp.setCameraEnabled(true, cameraEnableCaptureOptions());
           await waitForLocalTrack(lp, Track.Source.Camera);
+          const cam = lp.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack;
+          await applyOrientationCaptureConstraints(cam);
           applyLocalStateRef.current(room);
         } catch {
           // keep previous track if restart fails
@@ -545,7 +548,11 @@ export function LiveKitConference({
           if (enabling) await waitForLocalTrack(lp, Track.Source.Microphone);
         } else {
           await lp.setCameraEnabled(enabling, cameraEnableCaptureOptions());
-          if (enabling) await waitForLocalTrack(lp, Track.Source.Camera);
+          if (enabling) {
+            await waitForLocalTrack(lp, Track.Source.Camera);
+            const cam = lp.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack;
+            await applyOrientationCaptureConstraints(cam);
+          }
         }
         applyLocalState(room);
       } catch (err) {

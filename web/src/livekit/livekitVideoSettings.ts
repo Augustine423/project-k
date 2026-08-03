@@ -25,25 +25,49 @@ export function isPortraitCapturePreferred(): boolean {
     if (type.startsWith("portrait")) return true;
     if (type.startsWith("landscape")) return false;
   }
-  return window.matchMedia("(orientation: portrait)").matches;
+  if (typeof window.matchMedia === "function") {
+    return window.matchMedia("(orientation: portrait)").matches;
+  }
+  return window.innerHeight > window.innerWidth;
 }
 
 /**
  * Capture near 720p without forcing a laptop landscape crop on phones.
- * Portrait devices request 720×1280 so the full camera frame can letterbox with object-fit:contain.
+ * Portrait phones request 720×1280 (+ aspectRatio) so the published frame matches the native camera FOV.
  */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {
   const portrait = isPortraitCapturePreferred();
-  const longEdge = VideoPresets.h720.width;
-  const shortEdge = VideoPresets.h720.height;
+  const longEdge = VideoPresets.h720.width; // 1280
+  const shortEdge = VideoPresets.h720.height; // 720
   return {
     resolution: {
       width: portrait ? shortEdge : longEdge,
       height: portrait ? longEdge : shortEdge,
       frameRate: LIVEKIT_MAX_FRAMERATE,
+      aspectRatio: portrait ? 9 / 16 : 16 / 9,
     },
     facingMode: "user",
   };
+}
+
+/** After LiveKit enables the camera, tighten native track constraints (Android often ignores ideal size). */
+export async function applyOrientationCaptureConstraints(
+  track: MediaStreamTrack | undefined | null,
+): Promise<void> {
+  if (!track || track.kind !== "video") return;
+  const portrait = isPortraitCapturePreferred();
+  const longEdge = VideoPresets.h720.width;
+  const shortEdge = VideoPresets.h720.height;
+  try {
+    await track.applyConstraints({
+      width: { ideal: portrait ? shortEdge : longEdge },
+      height: { ideal: portrait ? longEdge : shortEdge },
+      aspectRatio: { ideal: portrait ? 9 / 16 : 16 / 9 },
+      frameRate: { ideal: LIVEKIT_MAX_FRAMERATE },
+    });
+  } catch {
+    // Browser may reject; keep whatever LiveKit negotiated.
+  }
 }
 
 /**
