@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  ConnectionQuality,
   ConnectionState,
   Room,
   RoomEvent,
   Track,
+  type LocalTrackPublication,
+  type Participant,
   type RemoteParticipant,
   type TrackPublication,
 } from "livekit-client";
@@ -24,13 +27,17 @@ import {
   resolveGalleryTier,
   sliceGalleryPage,
 } from "../media/galleryVideoPolicy";
+import { attachOpenSourceNoiseFilter } from "./livekitAudioProcessor";
 import {
+  applyAudioProcessingConstraints,
+  applyLocalUplinkVideoQuality,
   applyOrientationCaptureConstraints,
   applyRemoteSimulcastPreferences,
   buildLocalParticipantStream,
   cameraEnableCaptureOptions,
   collectRemoteMediaTracks,
   mediaToggleErrorMessage,
+  microphoneEnableCaptureOptions,
   participantHasVideo,
   remoteTrackSignature,
   syncMediaStreamTracks,
@@ -292,6 +299,13 @@ export function LiveKitConference({
       if (!cancelled) applyLocalStateRef.current(room);
     };
 
+    const onLocalTrackPublished = (pub: LocalTrackPublication) => {
+      onLocalMediaChange();
+      if (pub.source === Track.Source.Microphone) {
+        void attachOpenSourceNoiseFilter(pub);
+      }
+    };
+
     const onRemoteMediaChange = () => {
       if (!cancelled) refreshRemotes(room);
     };
@@ -334,17 +348,23 @@ export function LiveKitConference({
       setActiveSpeakerIds(speakers.map((s) => s.identity));
     };
 
+    const onConnectionQualityChanged = (quality: ConnectionQuality, participant: Participant) => {
+      if (cancelled || !participant.isLocal) return;
+      applyLocalUplinkVideoQuality(room, quality);
+    };
+
     const finishConnected = () => {
       if (cancelled) return;
       setConnected(true);
       applyLocalStateRef.current(room);
       refreshRemotes(room);
+      applyLocalUplinkVideoQuality(room, room.localParticipant.connectionQuality);
       onStatusRef.current?.("Connected — use the toolbar to turn on camera and mic");
       onConnectedRef.current();
     };
 
     room.on(RoomEvent.Connected, finishConnected);
-    room.on(RoomEvent.LocalTrackPublished, onLocalMediaChange);
+    room.on(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
     room.on(RoomEvent.LocalTrackUnpublished, onLocalMediaChange);
     room.on(RoomEvent.TrackMuted, onTrackMuted);
     room.on(RoomEvent.TrackUnmuted, onTrackUnmuted);
@@ -355,6 +375,7 @@ export function LiveKitConference({
     room.on(RoomEvent.Reconnected, onReconnected);
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakersChanged);
+    room.on(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged);
 
     if (room.state === ConnectionState.Connected) {
       finishConnected();
@@ -388,7 +409,7 @@ export function LiveKitConference({
     return () => {
       cancelled = true;
       room.off(RoomEvent.Connected, finishConnected);
-      room.off(RoomEvent.LocalTrackPublished, onLocalMediaChange);
+      room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
       room.off(RoomEvent.LocalTrackUnpublished, onLocalMediaChange);
       room.off(RoomEvent.TrackMuted, onTrackMuted);
       room.off(RoomEvent.TrackUnmuted, onTrackUnmuted);
@@ -399,6 +420,7 @@ export function LiveKitConference({
       room.off(RoomEvent.Reconnected, onReconnected);
       room.off(RoomEvent.Disconnected, onDisconnected);
       room.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakersChanged);
+      room.off(RoomEvent.ConnectionQualityChanged, onConnectionQualityChanged);
       releaseLiveKitRoom(sessionKey);
       if (roomRef.current === room) roomRef.current = null;
     };
@@ -540,14 +562,21 @@ export function LiveKitConference({
 
       try {
         if (kind === "audio") {
-          await lp.setMicrophoneEnabled(enabling);
-          if (enabling) await waitForLocalTrack(lp, Track.Source.Microphone);
+          await lp.setMicrophoneEnabled(enabling, enabling ? microphoneEnableCaptureOptions() : undefined);
+          if (enabling) {
+            await waitForLocalTrack(lp, Track.Source.Microphone);
+            const micPub = lp.getTrackPublication(Track.Source.Microphone);
+            const mic = micPub?.track?.mediaStreamTrack;
+            await applyAudioProcessingConstraints(mic);
+            if (micPub) await attachOpenSourceNoiseFilter(micPub as LocalTrackPublication);
+          }
         } else {
           await lp.setCameraEnabled(enabling, cameraEnableCaptureOptions());
           if (enabling) {
             await waitForLocalTrack(lp, Track.Source.Camera);
             const cam = lp.getTrackPublication(Track.Source.Camera)?.track?.mediaStreamTrack;
             await applyOrientationCaptureConstraints(cam);
+            applyLocalUplinkVideoQuality(room, lp.connectionQuality);
           }
         }
         applyLocalState(room);

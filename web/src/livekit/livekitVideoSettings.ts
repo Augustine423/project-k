@@ -1,6 +1,11 @@
 import {
+  AudioPresets,
+  ConnectionQuality,
+  LocalVideoTrack,
   Track,
   VideoPresets,
+  VideoQuality,
+  type AudioCaptureOptions,
   type LocalParticipant,
   type RemoteParticipant,
   type RemoteTrackPublication,
@@ -16,6 +21,64 @@ import {
 /** Prefer device max quality — do not cap to 720p. Viewers adapt via simulcast. */
 export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h1080.encoding.maxBitrate;
 export const LIVEKIT_MAX_FRAMERATE = VideoPresets.h1080.encoding.maxFramerate ?? 30;
+
+/**
+ * Capture-side WebRTC DSP (before open-source DTLN track processor):
+ * Raw mic → AEC (speaker reference) → AGC.
+ * Browser `noiseSuppression` stays off so DTLN is the only ANS stage.
+ */
+export function microphoneEnableCaptureOptions(): AudioCaptureOptions {
+  return {
+    echoCancellation: true,
+    noiseSuppression: false,
+    autoGainControl: true,
+    channelCount: 1,
+  };
+}
+
+/** Re-assert AEC/AGC after enable (some devices drop constraints on restart). */
+export async function applyAudioProcessingConstraints(
+  track: MediaStreamTrack | undefined | null,
+): Promise<void> {
+  if (!track || track.kind !== "audio") return;
+  try {
+    await track.applyConstraints({
+      echoCancellation: true,
+      noiseSuppression: false,
+      autoGainControl: true,
+      channelCount: 1,
+    });
+  } catch {
+    // Keep negotiated settings if the browser rejects a constraint.
+  }
+}
+
+/**
+ * Cap local camera simulcast publish layers when uplink quality drops.
+ * Receive-side adaptation remains on adaptiveStream + gallery layer prefs.
+ */
+export function applyLocalUplinkVideoQuality(room: Room, quality: ConnectionQuality): void {
+  const pub = room.localParticipant.getTrackPublication(Track.Source.Camera);
+  const track = pub?.track;
+  if (!track || !(track instanceof LocalVideoTrack)) return;
+
+  let maxQuality: VideoQuality;
+  switch (quality) {
+    case ConnectionQuality.Poor:
+      maxQuality = VideoQuality.MEDIUM;
+      break;
+    case ConnectionQuality.Lost:
+      maxQuality = VideoQuality.LOW;
+      break;
+    case ConnectionQuality.Good:
+    case ConnectionQuality.Excellent:
+    case ConnectionQuality.Unknown:
+    default:
+      maxQuality = VideoQuality.HIGH;
+      break;
+  }
+  track.setPublishingQuality(maxQuality);
+}
 
 /** Ideal capture targets — browser picks the best mode the camera supports. */
 const CAPTURE_LONG_EDGE = 1920;
@@ -74,6 +137,7 @@ export async function applyOrientationCaptureConstraints(
 /**
  * Publishers send high quality + simulcast ladders.
  * Each viewer only downloads the layer their bandwidth / tile size can sustain.
+ * Mic: browser AEC/AGC + open-source DTLN ANS before Opus.
  */
 export function createLiveKitRoomOptions(): RoomOptions {
   return {
@@ -82,15 +146,21 @@ export function createLiveKitRoomOptions(): RoomOptions {
     },
     dynacast: true,
     stopLocalTrackOnUnpublish: false,
+    audioCaptureDefaults: microphoneEnableCaptureOptions(),
     videoCaptureDefaults: cameraEnableCaptureOptions(),
     publishDefaults: {
       simulcast: true,
       videoCodec: "vp9",
       backupCodec: { codec: "vp8", encoding: VideoPresets.h1080.encoding },
       stopMicTrackOnMute: false,
+      audioPreset: AudioPresets.speech,
+      dtx: true,
+      red: true,
+      forceStereo: false,
       videoEncoding: VideoPresets.h1080.encoding,
       videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360, VideoPresets.h720],
-      degradationPreference: "maintain-resolution",
+      // Let WebRTC trade resolution/framerate under congestion (best overall quality for bandwidth).
+      degradationPreference: "balanced",
     },
   };
 }

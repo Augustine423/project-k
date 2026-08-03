@@ -1,0 +1,147 @@
+name: project-k
+
+# Usage:
+#   docker compose up --build                 # full stack — UI at https://PUBLIC_HOST/ (:443)
+#   docker compose --profile dev up --build   # also start Vite HMR (web-dev on :5174)
+#   docker compose -f docker-compose.yaml -f docker-compose.stress.yaml up --build
+#
+# Note: services with `profiles:` are skipped unless that profile is enabled.
+# The production UI (`web`) has NO profile so plain `up` always includes it.
+
+x-server-env: &server-env
+  PORT: 4000
+  REDIS_URL: redis://redis:6379
+  JWT_SIGNING_SECRET: ${JWT_SIGNING_SECRET}
+  TURN_SHARED_SECRET: ${TURN_SHARED_SECRET}
+  TURN_HOST: ${PUBLIC_HOST}
+  TURN_PORT: ${TURN_PORT}
+  TURN_TLS_PORT: ${TURN_TLS_PORT}
+  TURN_USE_TLS: ${TURN_USE_TLS}
+  MAX_ROOM_PARTICIPANTS: "${MAX_ROOM_PARTICIPANTS:-500}"
+  LARGE_ROOM_EVENT_THRESHOLD: "${LARGE_ROOM_EVENT_THRESHOLD:-200}"
+  PARTICIPANTS_PAGE_SIZE: "${PARTICIPANTS_PAGE_SIZE:-50}"
+  PARTICIPANTS_SEARCH_SCAN_CAP: "${PARTICIPANTS_SEARCH_SCAN_CAP:-3000}"
+  WEBINAR_ENTER_LISTENERS: "${WEBINAR_ENTER_LISTENERS:-400}"
+  WEBINAR_ENTER_RATIO: "${WEBINAR_ENTER_RATIO:-8.0}"
+  WEBINAR_EXIT_LISTENERS: "${WEBINAR_EXIT_LISTENERS:-50}"
+  INTERACTIVE_MAX_PUBLISHERS: "${INTERACTIVE_MAX_PUBLISHERS:-300}"
+  WEBINAR_MAX_PUBLISHERS: "${WEBINAR_MAX_PUBLISHERS:-50}"
+  CORS_ORIGIN: "${CORS_ORIGIN:-*}"
+  SERVICE_NAME: kzys-control-plane
+  LIVEKIT_API_KEY: ${LIVEKIT_API_KEY}
+  LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET}
+  # Browser-facing LiveKit URL. Behind nginx UI use same-origin /livekit proxy when possible.
+  LIVEKIT_PUBLIC_URL: ${LIVEKIT_PUBLIC_URL:-ws://${PUBLIC_HOST}:${LIVEKIT_PORT:-7880}}
+
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command:
+      - redis-server
+      - "--appendonly"
+      - "yes"
+      - "--maxmemory"
+      - "${REDIS_MAXMEMORY:-256mb}"
+      - "--maxmemory-policy"
+      - "allkeys-lru"
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  livekit:
+    image: livekit/livekit-server:master
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    command:
+      - --config
+      - /etc/livekit.yaml
+      - --node-ip
+      - ${LIVEKIT_NODE_IP:-${PUBLIC_HOST:-127.0.0.1}}
+    volumes:
+      - ./media/livekit/livekit.yaml:/etc/livekit.yaml:ro
+    ports:
+      - "${LIVEKIT_PORT:-7880}:7880"
+      - "${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
+      - "50000-50999:50000-50999/udp"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7880/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  coturn:
+    image: coturn/coturn:4.6.2
+    restart: unless-stopped
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.conf"
+      - "--realm=${TURN_REALM}"
+      - "--static-auth-secret=${TURN_SHARED_SECRET}"
+      - "--external-ip=${PUBLIC_HOST}"
+    volumes:
+      - ./infra/coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    ports:
+      - "${TURN_PORT:-3478}:3478"
+      - "${TURN_PORT:-3478}:3478/udp"
+      - "20000-20200:20000-20200/udp"
+
+  server:
+    build:
+    image: kyawzayarsoe/project-k-csharp:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+    environment:
+      <<: *server-env
+    ports:
+      - "${SERVER_PORT:-4000}:4000"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:4000/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: "${SERVER_CPU_LIMIT:-2}"
+          memory: "${SERVER_MEM_LIMIT:-512m}"
+
+  # Production UI — nginx on container :80 (redirect) and :443 (HTTPS).
+  # Open https://PUBLIC_HOST/ (or http://PUBLIC_HOST/ → redirects). Cam/mic need HTTPS.
+  # Always started (no Compose profile) so GCP / plain `docker compose up` includes the web UI.
+  web:
+    image:  kyawzayarsoe/project-k-web:latest
+      # args:
+      #   VITE_API_URL: ""
+      #   NGINX_CONF: nginx.compose.conf
+    restart: unless-stopped
+    depends_on:
+      server:
+        condition: service_healthy
+      livekit:
+        condition: service_healthy
+    environment:
+      PUBLIC_HOST: ${PUBLIC_HOST:-localhost}
+    ports:
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- --no-check-certificate https://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+  

@@ -1,12 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import basicSsl from "@vitejs/plugin-basic-ssl";
+import { noiseSuppressionAudioWorkletVitePlugin } from "@workadventure/noise-suppression/vite";
 
 const proxyTarget = process.env.VITE_PROXY_TARGET ?? "http://127.0.0.1:4000";
 const livekitTarget = process.env.VITE_LIVEKIT_PROXY_TARGET ?? "http://127.0.0.1:7880";
 
 export default defineConfig({
-  plugins: [react(), basicSsl()],
+  plugins: [react(), basicSsl(), noiseSuppressionAudioWorkletVitePlugin()],
   server: {
     host: "0.0.0.0",
     port: 5173,
