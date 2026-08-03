@@ -694,7 +694,8 @@ h1, h2, h3, h4 {
 }
 
 .video-stage .video-tile video,
-.video-stage .video-tile .video-feed {
+.video-stage .video-tile .video-feed,
+.video-tile .video-feed {
   position: absolute;
   inset: 0;
   width: 100%;
@@ -705,7 +706,9 @@ h1, h2, h3, h4 {
   background: #0f141c;
 }
 
-.video-stage .video-tile .mirror {
+.video-stage .video-tile .mirror,
+.video-tile .mirror,
+.video-self-pip-feed.mirror {
   transform: scaleX(-1);
 }
 
@@ -4041,7 +4044,8 @@ html:has(.auth-page) body {
 
 /* Zoom-style client spotlight + contain fit + chrome auto-hide */
 .video-stage .video-tile .video-feed,
-.video-stage .video-tile video.video-feed {
+.video-stage .video-tile video.video-feed,
+.video-tile .video-feed {
   object-position: center;
   background: transparent;
 }
@@ -4051,10 +4055,20 @@ html:has(.auth-page) body {
   object-fit: cover !important;
 }
 
-/* Letterbox without harsh black bars — soft pad */
-.video-tile[data-fit="contain"] .video-feed {
+/* Letterbox without distortion — preserve native aspect */
+.video-tile[data-fit="contain"] .video-feed,
+.video-tile[data-stream-aspect="portrait"] .video-feed {
   object-fit: contain !important;
   background: #0b0f14;
+}
+
+/* Hard rule: portrait phone streams never stretch inside landscape cells */
+.video-tile[data-stream-aspect="portrait"] {
+  background: #0b0f14;
+}
+
+.video-tile[data-stream-aspect="portrait"][data-fit="cover"] .video-feed {
+  object-fit: contain !important;
 }
 
 /* Portrait phone → desktop cell: centered feed + blurred side padding */
@@ -4170,6 +4184,7 @@ html:has(.auth-page) body {
   width: 100%;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .video-stage-shell > .video-stage {
@@ -4177,22 +4192,63 @@ html:has(.auth-page) body {
   min-height: 0;
 }
 
+/* Dedicated local self-view — outside grid, always on top */
 .video-self-pip {
   position: absolute;
-  top: 1rem;
   right: 1rem;
-  width: min(200px, 26vw);
+  bottom: calc(5.5rem + env(safe-area-inset-bottom, 0px));
+  top: auto;
+  width: min(200px, 28vw);
   aspect-ratio: 16 / 10;
   max-height: min(32vh, 220px);
-  z-index: 6;
+  z-index: 40;
   border-radius: 14px;
   overflow: hidden;
   box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 10px 28px rgba(0, 0, 0, 0.45),
     0 0 0 2px rgba(255, 255, 255, 0.55);
   background: #0b0f14;
   animation: pip-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
   pointer-events: none;
+}
+
+.video-self-pip-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  overflow: hidden;
+  background: #0b0f14;
+}
+
+.video-self-pip-feed {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  object-position: center;
+  background: #0b0f14;
+  z-index: 1;
+}
+
+.video-self-pip .video-chrome {
+  position: absolute;
+  left: 0.4rem;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.video-self-pip .no-video-container {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
 }
 
 @keyframes pip-in {
@@ -4218,17 +4274,12 @@ html:has(.auth-page) body {
   box-shadow: none;
 }
 
-.video-stage.has-self-pip {
-  position: relative;
-}
-
-/* Portrait phones: taller self PiP so your camera isn't letterboxed harshly */
+/* Portrait phones: taller self PiP */
 .viewport-mobile-portrait .video-self-pip,
 .video-stage-shell[data-layout="active-speaker"] .video-self-pip {
   width: min(132px, 34vw);
   aspect-ratio: 9 / 14;
   max-height: min(28vh, 240px);
-  top: auto;
   bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   right: 0.75rem;
 }
@@ -4237,13 +4288,7 @@ html:has(.auth-page) body {
   padding-right: min(148px, 38vw);
 }
 
-.meeting-app.is-host-view .video-stage-shell[data-layout="gallery"] .video-self-pip {
-  top: 0.85rem;
-  right: 0.85rem;
-}
-
 .meeting-app.chrome-hidden .video-self-pip {
-  /* Keep self-view visible when chrome fades */
   opacity: 1;
   pointer-events: none;
   transform: none;
@@ -4321,9 +4366,9 @@ html:has(.auth-page) body {
     width: min(148px, 22vw);
     aspect-ratio: 16 / 10;
     max-height: min(36vh, 160px);
-    top: 0.65rem;
+    bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
     right: 0.65rem;
-    bottom: auto;
+    top: auto;
   }
 
   .video-stage[data-layout="landscape-focus"] {

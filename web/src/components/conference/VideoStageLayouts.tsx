@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { LocalSelfPip } from "../LocalSelfPip";
 import { StreamVideoTile } from "../StreamVideoTile";
 import {
   galleryDataCount,
@@ -11,6 +12,11 @@ type CommonProps = {
   primaryId: string;
   tiles: StageParticipantTile[];
   maxPerPage?: number;
+  /**
+   * Host gallery: keep everyone (including self) in the equal grid.
+   * Client / mobile layouts: remotes in stage, self as floating PiP.
+   */
+  selfInGrid?: boolean;
 };
 
 function Tile({
@@ -18,11 +24,13 @@ function Tile({
   layoutMode,
   size,
   className,
+  fit,
 }: {
   tile: StageParticipantTile;
   layoutMode: ConferenceLayoutMode;
   size: "grid" | "spotlight" | "strip";
   className?: string;
+  fit?: "cover" | "contain" | "contain-blur";
 }) {
   return (
     <StreamVideoTile
@@ -37,6 +45,7 @@ function Tile({
       size={size}
       layoutMode={layoutMode}
       className={className}
+      fit={fit}
     />
   );
 }
@@ -50,46 +59,24 @@ function othersOnly(tiles: StageParticipantTile[], selfId?: string): StagePartic
   return tiles.filter((t) => t.id !== selfId);
 }
 
-/**
- * Floating mirrored self-view for host and client.
- * Hidden when alone so you don't get a duplicate preview of yourself.
- */
-function SelfViewPip({
-  self,
-  othersCount,
-  layoutMode,
-}: {
-  self?: StageParticipantTile;
-  othersCount: number;
-  layoutMode: ConferenceLayoutMode;
-}) {
-  if (!self || othersCount === 0) return null;
-
-  return (
-    <div className="video-self-pip" aria-label="Your video (picture-in-picture)">
-      <Tile tile={self} layoutMode={layoutMode} size="strip" className="video-self-pip-tile" />
-    </div>
-  );
-}
-
-/** Stage shell: grid/spotlight content + overlay PiP (PiP is not a grid cell). */
+/** Stage shell: remote/grid content + optional floating self PiP. */
 function StageWithPip({
   layout,
-  selfPip,
-  alone,
+  self,
+  showPip,
   children,
   count,
 }: {
   layout: ConferenceLayoutMode | "gallery";
-  selfPip: ReactNode;
-  alone: boolean;
+  self?: StageParticipantTile;
+  showPip: boolean;
   children: ReactNode;
   count?: number;
 }) {
   return (
     <div
       className="video-stage-shell"
-      data-self-pip={alone ? "off" : "on"}
+      data-self-pip={showPip ? "on" : "off"}
       data-layout={layout}
     >
       <div
@@ -99,7 +86,12 @@ function StageWithPip({
       >
         {children}
       </div>
-      {selfPip}
+      <LocalSelfPip
+        stream={self?.stream ?? null}
+        label={self?.label ?? "You"}
+        hasVideo={Boolean(self?.hasVideo)}
+        visible={showPip && Boolean(self)}
+      />
     </div>
   );
 }
@@ -116,26 +108,35 @@ function resolvePrimary(
   return candidates[0] ?? fallback;
 }
 
-/** Desktop: remote grid + floating self PiP (host and client). */
-export function GalleryGridStage({ layoutMode, tiles, maxPerPage = 25 }: CommonProps) {
+/**
+ * Equal participant grid.
+ * Host: self + remotes all in grid (classic gallery).
+ * Client desktop: remotes in grid + self PiP.
+ */
+export function GalleryGridStage({
+  layoutMode,
+  tiles,
+  maxPerPage = 25,
+  selfInGrid = false,
+}: CommonProps) {
   const self = findSelfTile(tiles);
   const remotes = othersOnly(tiles, self?.id);
-  const stageTiles =
-    remotes.length > 0
+
+  const stageTiles = selfInGrid
+    ? tiles.length > 0
+      ? tiles
+      : [{ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false }]
+    : remotes.length > 0
       ? remotes
       : self
         ? [self]
         : [{ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false }];
-  const alone = remotes.length === 0;
+
+  const showPip = !selfInGrid && remotes.length > 0;
   const count = galleryDataCount(stageTiles.length, maxPerPage);
 
   return (
-    <StageWithPip
-      layout="gallery"
-      alone={alone}
-      count={count}
-      selfPip={<SelfViewPip self={self} othersCount={remotes.length} layoutMode={layoutMode} />}
-    >
+    <StageWithPip layout="gallery" showPip={showPip} count={count} self={self}>
       {stageTiles.map((tile) => (
         <Tile key={tile.id} tile={tile} layoutMode={layoutMode} size="grid" />
       ))}
@@ -149,14 +150,10 @@ export function ActiveSpeakerStage({ layoutMode, primaryId, tiles }: CommonProps
   const remotes = othersOnly(tiles, self?.id);
   const primary = resolvePrimary(primaryId, remotes, self);
   const strip = remotes.filter((t) => t.id !== primary?.id);
-  const alone = remotes.length === 0;
+  const showPip = remotes.length > 0;
 
   return (
-    <StageWithPip
-      layout="active-speaker"
-      alone={alone}
-      selfPip={<SelfViewPip self={self} othersCount={remotes.length} layoutMode={layoutMode} />}
-    >
+    <StageWithPip layout="active-speaker" showPip={showPip} self={self}>
       <div className="video-spotlight">
         {primary && <Tile tile={primary} layoutMode={layoutMode} size="spotlight" />}
       </div>
@@ -178,14 +175,10 @@ export function LandscapeFocusStage({ layoutMode, primaryId, tiles }: CommonProp
   const self = findSelfTile(tiles);
   const remotes = othersOnly(tiles, self?.id);
   const primary = resolvePrimary(primaryId, remotes, self);
-  const alone = remotes.length === 0;
+  const showPip = remotes.length > 0;
 
   return (
-    <StageWithPip
-      layout="landscape-focus"
-      alone={alone}
-      selfPip={<SelfViewPip self={self} othersCount={remotes.length} layoutMode={layoutMode} />}
-    >
+    <StageWithPip layout="landscape-focus" showPip={showPip} self={self}>
       <div className="video-host-full video-landscape-primary">
         {primary && <Tile tile={primary} layoutMode={layoutMode} size="spotlight" />}
       </div>

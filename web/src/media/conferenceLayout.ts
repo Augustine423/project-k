@@ -8,7 +8,13 @@ export type StreamAspect = "portrait" | "landscape" | "square" | "unknown";
 /** How a tile should render a stream inside its cell. */
 export type TileFitMode = "cover" | "contain" | "contain-blur";
 
-export function resolveConferenceLayout(viewerMode: ViewerViewportMode): ConferenceLayoutMode {
+export function resolveConferenceLayout(
+  viewerMode: ViewerViewportMode,
+  opts?: { forceGallery?: boolean },
+): ConferenceLayoutMode {
+  // Hosts always get an equal participant grid, regardless of window size / touch.
+  if (opts?.forceGallery) return "gallery";
+
   switch (viewerMode) {
     case "mobile-portrait":
       return "active-speaker";
@@ -29,9 +35,8 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 }
 
 /**
- * Desktop grid: landscape streams fill 16:9 cells (cover).
- * Portrait phone streams: contain + blurred side padding (no stretch, no harsh letterbox).
- * Thumbnails always crop. Full-screen landscape focus prefers contain.
+ * Landscape streams may crop-to-fill cells.
+ * Portrait (9:16) phone streams always use contain (optionally with blur pad) — never stretch.
  */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
@@ -40,21 +45,18 @@ export function resolveTileFit(opts: {
 }): TileFitMode {
   const { streamAspect, layout, size } = opts;
 
+  // Never crop/stretch portrait camera into landscape boxes.
+  if (streamAspect === "portrait") {
+    return size === "strip" ? "contain" : "contain-blur";
+  }
+
   if (size === "strip") return "cover";
 
-  if (layout === "landscape-focus") {
-    return streamAspect === "portrait" ? "contain-blur" : "contain";
-  }
+  if (layout === "landscape-focus") return "contain";
 
-  if (layout === "active-speaker") {
-    if (size === "spotlight") {
-      return streamAspect === "portrait" ? "contain" : "cover";
-    }
-    return "cover";
-  }
+  if (layout === "active-speaker" && size === "spotlight") return "cover";
 
-  // Desktop gallery
-  if (streamAspect === "portrait") return "contain-blur";
+  // Desktop gallery landscape → fill cell
   return "cover";
 }
 

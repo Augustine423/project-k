@@ -31,7 +31,8 @@ function readViewport(): ViewerViewport {
   const coarse =
     typeof window.matchMedia === "function" &&
     window.matchMedia("(pointer: coarse)").matches;
-  const isMobile = width <= MOBILE_MAX_WIDTH || (coarse && width <= 1100);
+  // Width-first: don't treat touchscreen laptops as "mobile" or hosts lose the grid.
+  const isMobile = width <= MOBILE_MAX_WIDTH && (coarse || width <= 720);
 
   let isPortrait = height >= width;
   const type = window.screen?.orientation?.type;

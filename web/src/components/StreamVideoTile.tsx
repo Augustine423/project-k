@@ -1,9 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
 import { useVideoElementAspect } from "../hooks/useVideoStreamAspect";
 import {
+  classifyStreamAspect,
   resolveTileFit,
   type ConferenceLayoutMode,
+  type StreamAspect,
   type TileFitMode,
 } from "../media/conferenceLayout";
 
@@ -37,6 +39,16 @@ function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null
   }
 }
 
+function aspectFromTrack(stream: MediaStream | null | undefined): StreamAspect {
+  const track = stream?.getVideoTracks()[0];
+  if (!track) return "unknown";
+  const settings = track.getSettings?.() ?? {};
+  const w = Number(settings.width) || 0;
+  const h = Number(settings.height) || 0;
+  if (w > 0 && h > 0) return classifyStreamAspect(w, h);
+  return "unknown";
+}
+
 /** One video element per tile; optional blurred backdrop for portrait-in-landscape cells. */
 export function StreamVideoTile({
   stream,
@@ -63,7 +75,9 @@ export function StreamVideoTile({
   const videoTrackId = videoTrack?.id ?? "";
   const audioTrackId = audioTrack?.id ?? "";
 
-  const streamAspect = useVideoElementAspect(videoRef, stream, `${trackSignature}:${videoTrackId}`);
+  const liveAspect = useVideoElementAspect(videoRef, stream, `${trackSignature}:${videoTrackId}`);
+  const [bootAspect] = useState(() => aspectFromTrack(stream));
+  const streamAspect = liveAspect !== "unknown" ? liveAspect : bootAspect;
   const fit =
     fitOverride ??
     resolveTileFit({

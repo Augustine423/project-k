@@ -126,7 +126,10 @@ export function LiveKitConference({
   const [silenceNotice, setSilenceNotice] = useState<string | null>(null);
   const mediaAvailable = canAccessMediaDevices();
   const viewport = useViewerViewport();
-  const layoutMode = resolveConferenceLayout(viewport.mode);
+  const layoutMode = resolveConferenceLayout(viewport.mode, {
+    forceGallery: isHostRole,
+  });
+  const selfInGrid = isHostRole && layoutMode === "gallery";
 
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
@@ -629,6 +632,13 @@ export function LiveKitConference({
       id: "local",
       label: displayName,
       stream: localStream,
+      trackSignature: localStream
+        ? localStream
+            .getTracks()
+            .map((t) => `${t.id}:${t.kind}:${t.readyState}`)
+            .sort()
+            .join("|")
+        : "",
       mirror: true,
       hasVideo: videoEnabled || localScreenShare,
       isScreenShare: localScreenShare,
@@ -741,6 +751,7 @@ export function LiveKitConference({
         primaryId={primaryId}
         tiles={stageTiles}
         maxPerPage={galleryTier.videosPerPage}
+        selfInGrid={selfInGrid}
       />
       <div className="hide" aria-hidden>
         {sortedRemoteIds
