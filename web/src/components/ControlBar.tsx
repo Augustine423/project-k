@@ -54,14 +54,14 @@ export function ControlBar({
   const hasMedia = showAudioControl || showVideoControl || showScreenShare;
 
   return (
-    <div className="control-dock-wrap">
-      <div className="control-dock" role="toolbar" aria-label="Meeting controls">
+    <div className="meeting-v2-control-bar-wrap">
+      <div className="meeting-v2-control-bar" role="toolbar" aria-label="Meeting controls">
         {hasMedia && (
           <>
             {showAudioControl && (
               <button
                 type="button"
-                className={`dock-btn dock-btn-media ${audioEnabled ? "active" : "off"}`}
+                className={`meeting-v2-ctrl-btn ${audioEnabled ? "" : "is-off"}`}
                 onClick={onToggleAudio}
                 disabled={mediaBusy}
                 aria-pressed={audioEnabled}
@@ -74,7 +74,7 @@ export function ControlBar({
             {showVideoControl && (
               <button
                 type="button"
-                className={`dock-btn dock-btn-media ${videoEnabled ? "active" : "off"}`}
+                className={`meeting-v2-ctrl-btn ${videoEnabled ? "" : "is-off"}`}
                 onClick={onToggleVideo}
                 disabled={mediaBusy}
                 aria-pressed={videoEnabled}
@@ -87,7 +87,7 @@ export function ControlBar({
             {showScreenShare && (
               <button
                 type="button"
-                className="dock-btn dock-btn-media active"
+                className="meeting-v2-ctrl-btn"
                 onClick={onShareScreen}
                 disabled={mediaBusy}
                 aria-label="Share screen"
@@ -96,14 +96,14 @@ export function ControlBar({
               </button>
             )}
 
-            <span className="dock-divider" aria-hidden="true" />
+            <span className="meeting-v2-ctrl-divider" aria-hidden="true" />
           </>
         )}
 
         {showRaiseHand && onToggleRaiseHand && (
           <button
             type="button"
-            className={`dock-btn dock-btn-secondary ${handRaised ? "hand-raised" : ""}`}
+            className={`meeting-v2-ctrl-btn meeting-v2-ctrl-secondary ${handRaised ? "hand-raised" : ""}`}
             onClick={onToggleRaiseHand}
             aria-pressed={handRaised}
             aria-label={handRaised ? "Lower hand" : "Raise hand"}
@@ -115,7 +115,7 @@ export function ControlBar({
 
         <button
           type="button"
-          className="dock-btn dock-btn-secondary"
+          className="meeting-v2-ctrl-btn meeting-v2-ctrl-secondary"
           onClick={onFocusChat}
           aria-label="Open chat and people"
         >
@@ -127,15 +127,16 @@ export function ControlBar({
 
         <button
           type="button"
-          className="dock-btn dock-btn-secondary"
+          className="meeting-v2-ctrl-btn meeting-v2-ctrl-secondary"
           aria-label="Reactions (coming soon)"
           title="Reactions — coming soon"
         >
           <ReactionsIcon size={22} />
         </button>
 
-        <button type="button" className="dock-btn dock-btn-end" onClick={onLeave} aria-label="Leave meeting">
-          <EndCallIcon size={24} />
+        <button type="button" className="meeting-v2-ctrl-btn meeting-v2-ctrl-end" onClick={onLeave} aria-label="End call">
+          <EndCallIcon size={20} />
+          <span className="meeting-v2-end-label">End Call</span>
         </button>
       </div>
     </div>

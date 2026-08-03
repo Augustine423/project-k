@@ -48,6 +48,96 @@ function authHeader(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
+export interface AuthUserDto {
+  id: string;
+  email: string;
+  username: string | null;
+  fullName: string | null;
+  needsUsername: boolean;
+}
+
+export interface AuthSessionDto {
+  token: string;
+  user: AuthUserDto;
+}
+
+/** Normalize C# PascalCase or camelCase auth payloads. */
+function normalizeAuthUser(raw: Record<string, unknown>): AuthUserDto {
+  const id = String(raw.id ?? raw.Id ?? "");
+  const email = String(raw.email ?? raw.Email ?? "");
+  const usernameRaw = raw.username ?? raw.Username;
+  const fullNameRaw = raw.fullName ?? raw.FullName;
+  const username = usernameRaw == null || usernameRaw === "" ? null : String(usernameRaw);
+  const fullName = fullNameRaw == null || fullNameRaw === "" ? null : String(fullNameRaw);
+  const needs =
+    typeof raw.needsUsername === "boolean"
+      ? raw.needsUsername
+      : typeof raw.NeedsUsername === "boolean"
+        ? (raw.NeedsUsername as boolean)
+        : !username;
+  return { id, email, username, fullName, needsUsername: needs };
+}
+
+function normalizeAuthSession(raw: Record<string, unknown>): AuthSessionDto {
+  const token = String(raw.token ?? raw.Token ?? "");
+  const userRaw = (raw.user ?? raw.User ?? {}) as Record<string, unknown>;
+  return { token, user: normalizeAuthUser(userRaw) };
+}
+
+export function signUpAccount(input: {
+  email: string;
+  password: string;
+  fullName?: string;
+}): Promise<AuthSessionDto> {
+  return request<Record<string, unknown>>("/api/auth/signup", {
+    method: "POST",
+    body: JSON.stringify({
+      email: input.email,
+      password: input.password,
+      fullName: input.fullName,
+      displayName: input.fullName,
+    }),
+  }).then(normalizeAuthSession);
+}
+
+export function loginAccount(input: { email: string; password: string }): Promise<AuthSessionDto> {
+  return request<Record<string, unknown>>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify(input),
+  }).then(normalizeAuthSession);
+}
+
+export function fetchAuthMe(token: string): Promise<AuthUserDto> {
+  return request<Record<string, unknown>>("/api/auth/me", {
+    headers: authHeader(token),
+  }).then(normalizeAuthUser);
+}
+
+export function setAuthUsername(token: string, username: string): Promise<AuthUserDto> {
+  return request<Record<string, unknown>>("/api/auth/username", {
+    method: "POST",
+    headers: authHeader(token),
+    body: JSON.stringify({ username }),
+  }).then(normalizeAuthUser);
+}
+
+export function checkAuthAccountExists(email: string): Promise<{ email: string; found: boolean }> {
+  return request<Record<string, unknown>>("/api/auth/exists", {
+    method: "POST",
+    body: JSON.stringify({ email }),
+  }).then((raw) => ({
+    email: String(raw.email ?? raw.Email ?? email).toLowerCase(),
+    found: Boolean(raw.found ?? raw.Found),
+  }));
+}
+
+export function resetAuthPassword(email: string, newPassword: string): Promise<void> {
+  return request("/api/auth/reset-password", {
+    method: "POST",
+    body: JSON.stringify({ email, newPassword }),
+  });
+}
+
 export interface CreateRoomInput {
   displayName: string;
   maxUsers?: number;

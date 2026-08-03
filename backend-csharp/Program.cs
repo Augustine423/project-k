@@ -33,6 +33,7 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 builder.Services.AddSingleton<ControlPlaneStore>();
 builder.Services.AddSingleton<RoomWsPresenceStore>();
 builder.Services.AddSingleton<JwtTokenService>(_ => new JwtTokenService(config.JwtSigningSecret));
+builder.Services.AddSingleton<AuthTokenService>(_ => new AuthTokenService(config.JwtSigningSecret));
 builder.Services.AddSingleton<TurnCredentialService>(_ =>
     new TurnCredentialService(config.TurnSharedSecret, config.TurnHost, config.TurnPort, config.TurnTlsPort, config.TurnUseTls));
 
@@ -47,6 +48,7 @@ builder.Services.AddSingleton<RoomPresenceService>();
 
 builder.Services.AddSingleton<RoomPlanManager>();
 builder.Services.AddScoped<ISubscriptionService, SubscriptionService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
 
 var dbPath = Environment.GetEnvironmentVariable("KZYS_DB_PATH")
     ?? Path.Combine(AppContext.BaseDirectory, "data", "kzys.db");

@@ -2,40 +2,53 @@ interface BrandLogoProps {
   size?: number;
   showText?: boolean;
   className?: string;
+  variant?: "default" | "light";
 }
 
-/** Project-K mark from UI mockup — K in ring. */
-export function BrandLogo({ size = 36, showText = true, className = "" }: BrandLogoProps) {
+/** MeetingMax mark — blue square with M. */
+export function BrandLogo({
+  size = 36,
+  showText = true,
+  className = "",
+  variant = "default",
+}: BrandLogoProps) {
+  const isLight = variant === "light";
+  const iconSize = size;
+  const radius = Math.max(6, Math.round(iconSize * 0.22));
+
   return (
-    <div className={`brand-logo ${className}`.trim()} style={{ ["--logo-size" as string]: `${size}px` }}>
+    <div
+      className={`brand-logo ${isLight ? "brand-logo-light" : ""} ${className}`.trim()}
+      style={{ ["--logo-size" as string]: `${size}px` }}
+    >
       <svg
         className="brand-logo-mark"
         viewBox="0 0 48 48"
-        width={size}
-        height={size}
+        width={iconSize}
+        height={iconSize}
         aria-hidden="true"
       >
-        <circle cx="24" cy="24" r="22" fill="none" stroke="url(#pk-ring)" strokeWidth="3" />
-        <defs>
-          <linearGradient id="pk-ring" x1="0" y1="0" x2="48" y2="48">
-            <stop offset="0%" stopColor="#5eb8ff" />
-            <stop offset="100%" stopColor="#2d7dff" />
-          </linearGradient>
-        </defs>
-        <circle cx="24" cy="24" r="17" fill="#1e2430" />
+        <rect
+          x="4"
+          y="4"
+          width="40"
+          height="40"
+          rx={radius}
+          fill={isLight ? "#ffffff" : "#4a6cf7"}
+        />
         <text
           x="24"
-          y="31"
+          y="32"
           textAnchor="middle"
-          fill="#ffffff"
-          fontSize="22"
+          fill={isLight ? "#4a6cf7" : "#ffffff"}
+          fontSize="24"
           fontWeight="700"
-          fontFamily="Segoe UI, system-ui, sans-serif"
+          fontFamily="Inter, Segoe UI, system-ui, sans-serif"
         >
-          K
+          M
         </text>
       </svg>
-      {showText && <span className="brand-logo-text">Project-K</span>}
+      {showText && <span className="brand-logo-text">MeetingMax</span>}
     </div>
   );
 }

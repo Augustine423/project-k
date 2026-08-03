@@ -494,19 +494,18 @@ export function RoomPage() {
   const isLive = status === "connected";
 
   return (
-    <div className="page meeting-shell">
+    <div className="meeting-app meeting-v2">
       <MeetingHeader
         statusMessage={statusMessage}
         connected={isLive}
-        live={isLive}
-        viewerCount={Math.max(0, participantCount - 1)}
+        displayName={ticket.participant.displayName}
       />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
       {mediaWarning && <div className="banner warn">{mediaWarning}</div>}
       {status === "ended" && (
         <div className="banner info">
-          Meeting ended. <Link to="/">Back home</Link>
+          Meeting ended. <Link to="/dashboard">Back to dashboard</Link>
         </div>
       )}
 

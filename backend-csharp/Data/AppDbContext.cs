@@ -7,12 +7,24 @@ public class AppDbContext : DbContext
 {
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
+    public DbSet<AppUser> Users => Set<AppUser>();
     public DbSet<RoomPlan> RoomPlans => Set<RoomPlan>();
     public DbSet<UserSubscription> UserSubscriptions => Set<UserSubscription>();
     public DbSet<RoomPurchase> RoomPurchases => Set<RoomPurchase>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<AppUser>(e =>
+        {
+            e.HasKey(u => u.Id);
+            e.HasIndex(u => u.Email).IsUnique();
+            e.HasIndex(u => u.Username);
+            e.Property(u => u.Email).HasMaxLength(320).IsRequired();
+            e.Property(u => u.PasswordHash).IsRequired();
+            e.Property(u => u.Username).HasMaxLength(64);
+            e.Property(u => u.FullName).HasMaxLength(120);
+        });
+
         modelBuilder.Entity<RoomPlan>(e =>
         {
             e.HasKey(p => p.PlanId);
