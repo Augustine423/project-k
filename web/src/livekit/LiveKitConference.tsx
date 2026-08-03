@@ -13,7 +13,6 @@ import { ControlBar } from "../components/ControlBar";
 import { GalleryPagination } from "../components/GalleryPagination";
 import { ConferenceVideoStage } from "../components/conference/VideoStageLayouts";
 import { StreamVideoTile } from "../components/StreamVideoTile";
-import { useViewerViewport } from "../hooks/useViewerViewport";
 import {
   pickPrimaryTileId,
   resolveConferenceLayout,
@@ -126,11 +125,8 @@ export function LiveKitConference({
   const [canPublishVideo, setCanPublishVideo] = useState(() => isHostRole || roomMode !== "webinar");
   const [silenceNotice, setSilenceNotice] = useState<string | null>(null);
   const mediaAvailable = canAccessMediaDevices();
-  const viewport = useViewerViewport();
-  const layoutMode = resolveConferenceLayout(viewport.mode, {
-    forceGallery: isHostRole,
-  });
-  const selfInGrid = isHostRole && layoutMode === "gallery";
+  const layoutMode = resolveConferenceLayout();
+  // Viewport only used for data attributes / future chrome — stage is always gallery.
 
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
@@ -729,7 +725,6 @@ export function LiveKitConference({
   return (
     <div
       className={`conference-root is-${layoutMode}`}
-      data-viewer={viewport.mode}
       data-layout={layoutMode}
     >
       {!mediaAvailable && (
@@ -758,7 +753,6 @@ export function LiveKitConference({
         primaryId={primaryId}
         tiles={stageTiles}
         maxPerPage={galleryTier.videosPerPage}
-        selfInGrid={selfInGrid}
       />
       <div className="hide" aria-hidden>
         {sortedRemoteIds

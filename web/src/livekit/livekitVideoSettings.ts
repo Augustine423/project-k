@@ -13,9 +13,13 @@ import {
   type GalleryVideoTier,
 } from "../media/galleryVideoPolicy";
 
-/** High-layer publish budget (~720p30). */
-export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h720.encoding.maxBitrate;
-export const LIVEKIT_MAX_FRAMERATE = VideoPresets.h720.encoding.maxFramerate ?? 30;
+/** Prefer device max quality — do not cap to 720p. Viewers adapt via simulcast. */
+export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h1080.encoding.maxBitrate;
+export const LIVEKIT_MAX_FRAMERATE = VideoPresets.h1080.encoding.maxFramerate ?? 30;
+
+/** Ideal capture targets — browser picks the best mode the camera supports. */
+const CAPTURE_LONG_EDGE = 1920;
+const CAPTURE_SHORT_EDGE = 1080;
 
 /** Prefer portrait capture on phones held upright; landscape otherwise (laptop / sideways phone). */
 export function isPortraitCapturePreferred(): boolean {
@@ -32,17 +36,16 @@ export function isPortraitCapturePreferred(): boolean {
 }
 
 /**
- * Capture near 720p without forcing a laptop landscape crop on phones.
- * Portrait phones request 720×1280 (+ aspectRatio) so the published frame matches the native camera FOV.
+ * Request the device's best camera quality for the current orientation.
+ * No hard max — `ideal` lets the browser choose the highest supported mode.
+ * Downstream viewers receive lower simulcast layers when bandwidth is limited.
  */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {
   const portrait = isPortraitCapturePreferred();
-  const longEdge = VideoPresets.h720.width; // 1280
-  const shortEdge = VideoPresets.h720.height; // 720
   return {
     resolution: {
-      width: portrait ? shortEdge : longEdge,
-      height: portrait ? longEdge : shortEdge,
+      width: portrait ? CAPTURE_SHORT_EDGE : CAPTURE_LONG_EDGE,
+      height: portrait ? CAPTURE_LONG_EDGE : CAPTURE_SHORT_EDGE,
       frameRate: LIVEKIT_MAX_FRAMERATE,
       aspectRatio: portrait ? 9 / 16 : 16 / 9,
     },
@@ -50,34 +53,31 @@ export function cameraEnableCaptureOptions(): VideoCaptureOptions {
   };
 }
 
-/** After LiveKit enables the camera, tighten native track constraints (Android often ignores ideal size). */
+/** Re-assert orientation + high ideal resolution after enable / rotate. */
 export async function applyOrientationCaptureConstraints(
   track: MediaStreamTrack | undefined | null,
 ): Promise<void> {
   if (!track || track.kind !== "video") return;
   const portrait = isPortraitCapturePreferred();
-  const longEdge = VideoPresets.h720.width;
-  const shortEdge = VideoPresets.h720.height;
   try {
     await track.applyConstraints({
-      width: { ideal: portrait ? shortEdge : longEdge },
-      height: { ideal: portrait ? longEdge : shortEdge },
+      width: { ideal: portrait ? CAPTURE_SHORT_EDGE : CAPTURE_LONG_EDGE },
+      height: { ideal: portrait ? CAPTURE_LONG_EDGE : CAPTURE_SHORT_EDGE },
       aspectRatio: { ideal: portrait ? 9 / 16 : 16 / 9 },
       frameRate: { ideal: LIVEKIT_MAX_FRAMERATE },
     });
   } catch {
-    // Browser may reject; keep whatever LiveKit negotiated.
+    // Browser may reject; keep whatever was negotiated.
   }
 }
 
 /**
- * Publishers send HD + simulcast ladders; viewers adapt via adaptiveStream +
- * gallery quality caps (server still lowers layers when the network cannot keep up).
+ * Publishers send high quality + simulcast ladders.
+ * Each viewer only downloads the layer their bandwidth / tile size can sustain.
  */
 export function createLiveKitRoomOptions(): RoomOptions {
   return {
     adaptiveStream: {
-      // Prefer crisp tiles on HiDPI screens instead of locking to CSS box size.
       pixelDensity: "screen",
     },
     dynacast: true,
@@ -86,11 +86,10 @@ export function createLiveKitRoomOptions(): RoomOptions {
     publishDefaults: {
       simulcast: true,
       videoCodec: "vp9",
-      backupCodec: { codec: "vp8", encoding: VideoPresets.h720.encoding },
+      backupCodec: { codec: "vp8", encoding: VideoPresets.h1080.encoding },
       stopMicTrackOnMute: false,
-      // High layer = 720p; lower layers for weak viewers.
-      videoEncoding: VideoPresets.h720.encoding,
-      videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360],
+      videoEncoding: VideoPresets.h1080.encoding,
+      videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360, VideoPresets.h720],
       degradationPreference: "maintain-resolution",
     },
   };
@@ -100,6 +99,7 @@ const LAYER_DIMS = [
   VideoPresets.h180.resolution,
   VideoPresets.h360.resolution,
   VideoPresets.h720.resolution,
+  VideoPresets.h1080.resolution,
 ] as const;
 
 /**
@@ -121,7 +121,7 @@ export function applyRemoteSimulcastPreferences(
     const pub = cameraPublication(participant);
     if (!pub) continue;
 
-    const layer = substreamForVideoSlot(slot, tier);
+    const layer = Math.min(substreamForVideoSlot(slot, tier), LAYER_DIMS.length - 1);
     slot += 1;
     // Prefer HD for small rooms (gallery HD slots); medium/low for large galleries.
     pub.setVideoDimensions(LAYER_DIMS[layer]);

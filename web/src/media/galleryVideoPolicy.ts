@@ -102,11 +102,11 @@ export function resolveGalleryTier(participantCount: number): GalleryVideoTier {
   return GALLERY_VIDEO_TIERS[GALLERY_VIDEO_TIERS.length - 1];
 }
 
-/** Simulcast substream index: 0=low, 1=medium, 2=high. */
+/** Layer preference index into LAYER_DIMS: 0=180, 1=360, 2=720, 3=1080. */
 export function substreamForVideoSlot(slotIndex: number, tier: GalleryVideoTier): number {
-  if (slotIndex < tier.hdSlots) return 2;
-  if (slotIndex < tier.hdSlots + tier.mediumSlots) return 1;
-  return 0;
+  if (slotIndex < tier.hdSlots) return 3; // best quality when bandwidth allows
+  if (slotIndex < tier.hdSlots + tier.mediumSlots) return 2;
+  return 1;
 }
 
 export function galleryPageCount(remotePublisherCount: number, tier: GalleryVideoTier): number {

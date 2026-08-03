@@ -553,7 +553,7 @@ export function RoomPage() {
         autoHideChrome && !chromeVisible ? "chrome-hidden" : "",
         isHost ? "is-host-view" : "is-client-view",
         `viewport-${viewport.mode}`,
-        `layout-${viewport.mode === "desktop" ? "gallery" : viewport.mode === "mobile-portrait" ? "active-speaker" : "landscape-focus"}`,
+        "layout-gallery",
       ]
         .filter(Boolean)
         .join(" ")}
