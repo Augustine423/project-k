@@ -118,8 +118,13 @@ function cameraPublication(participant: RemoteParticipant): RemoteTrackPublicati
   return pub as RemoteTrackPublication;
 }
 
-/** Local preview — camera only. Never put the mic in a playback stream (echo). */
+/** Local preview — screen share preferred, else camera. Never put the mic in a playback stream (echo). */
 export function buildLocalParticipantStream(participant: LocalParticipant): MediaStream | null {
+  const screen = participant.getTrackPublication(Track.Source.ScreenShare);
+  const screenTrack = screen?.track?.mediaStreamTrack;
+  if (participant.isScreenShareEnabled && screenTrack) {
+    return new MediaStream([screenTrack]);
+  }
   if (!participant.isCameraEnabled) return null;
   const cam = participant.getTrackPublication(Track.Source.Camera);
   const track = cam?.track?.mediaStreamTrack;
@@ -141,7 +146,23 @@ export function syncMediaStreamTracks(stream: MediaStream, desired: MediaStreamT
 
 export function collectRemoteMediaTracks(participant: {
   trackPublications: Map<string, { track?: { mediaStreamTrack: MediaStreamTrack } | null }>;
+  getTrackPublication?: (source: Track.Source) => { track?: { mediaStreamTrack: MediaStreamTrack } | null; isMuted?: boolean } | undefined;
 }): MediaStreamTrack[] {
+  // Prefer screen share over camera so active-speaker / primary tiles show the share.
+  if (typeof participant.getTrackPublication === "function") {
+    const tracks: MediaStreamTrack[] = [];
+    const screen = participant.getTrackPublication(Track.Source.ScreenShare);
+    const cam = participant.getTrackPublication(Track.Source.Camera);
+    const mic = participant.getTrackPublication(Track.Source.Microphone);
+    const screenTrack = screen && !screen.isMuted ? screen.track?.mediaStreamTrack : undefined;
+    const camTrack = cam && !cam.isMuted ? cam.track?.mediaStreamTrack : undefined;
+    const micTrack = mic?.track?.mediaStreamTrack;
+    if (screenTrack) tracks.push(screenTrack);
+    else if (camTrack) tracks.push(camTrack);
+    if (micTrack) tracks.push(micTrack);
+    if (tracks.length) return tracks;
+  }
+
   const tracks: MediaStreamTrack[] = [];
   for (const pub of participant.trackPublications.values()) {
     const track = pub.track?.mediaStreamTrack;

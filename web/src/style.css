@@ -4041,18 +4041,110 @@ html:has(.auth-page) body {
 
 /* Zoom-style client spotlight + contain fit + chrome auto-hide */
 .video-stage .video-tile .video-feed,
-.video-stage .video-tile video {
+.video-stage .video-tile video.video-feed {
+  object-position: center;
+  background: transparent;
+}
+
+/* Desktop-to-desktop landscape: crop to fill 16:9 grid cell */
+.video-tile[data-fit="cover"] .video-feed {
+  object-fit: cover !important;
+}
+
+/* Letterbox without harsh black bars — soft pad */
+.video-tile[data-fit="contain"] .video-feed {
   object-fit: contain !important;
   background: #0b0f14;
 }
 
-.video-stage[data-layout="spotlight-zoom"] {
+/* Portrait phone → desktop cell: centered feed + blurred side padding */
+.video-tile[data-fit="contain-blur"] {
+  background: #0b0f14;
+}
+
+.video-tile[data-fit="contain-blur"] .video-blur-bg {
+  position: absolute;
+  inset: -8%;
+  width: 116%;
+  height: 116%;
+  object-fit: cover;
+  filter: blur(28px) saturate(1.15) brightness(0.55);
+  transform: scale(1.12);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.video-tile[data-fit="contain-blur"] .video-blur-bg.mirror {
+  transform: scaleX(-1) scale(1.12);
+}
+
+.video-tile[data-fit="contain-blur"] .video-feed {
+  object-fit: contain !important;
+  z-index: 1;
+  background: transparent;
+}
+
+.video-stage[data-layout="spotlight-zoom"],
+.video-stage[data-layout="landscape-focus"] {
   display: grid;
   grid-template: 1fr / 1fr;
   padding: 0;
   gap: 0;
   position: relative;
   background: #0b0f14;
+}
+
+.video-stage[data-layout="landscape-focus"] {
+  /* True landscape camera plane — 16:9 container when possible */
+  aspect-ratio: auto;
+  min-height: 100%;
+}
+
+.video-stage[data-layout="active-speaker"] {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px 8px 5.5rem;
+  background: #0b0f14;
+}
+
+.video-stage[data-layout="active-speaker"] .video-spotlight {
+  min-height: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.video-stage[data-layout="active-speaker"] .video-spotlight .video-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+}
+
+.video-stage[data-layout="active-speaker"] .video-filmstrip {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 8px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+
+.video-filmstrip-item {
+  flex: 0 0 auto;
+  width: clamp(112px, 28vw, 168px);
+  aspect-ratio: 9 / 16;
+  max-height: 28vh;
+  scroll-snap-align: start;
+}
+
+.video-filmstrip-item .video-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 14px;
 }
 
 .video-host-full {
@@ -4071,28 +4163,90 @@ html:has(.auth-page) body {
   background: #0b0f14;
 }
 
+.video-stage-shell {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.video-stage-shell > .video-stage {
+  flex: 1;
+  min-height: 0;
+}
+
 .video-self-pip {
   position: absolute;
   top: 1rem;
   right: 1rem;
-  width: min(220px, 28vw);
-  max-height: min(40vh, 280px);
-  aspect-ratio: auto;
-  z-index: 4;
+  width: min(200px, 26vw);
+  aspect-ratio: 16 / 10;
+  max-height: min(32vh, 220px);
+  z-index: 6;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  border: 2px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 0 0 2px rgba(255, 255, 255, 0.55);
   background: #0b0f14;
+  animation: pip-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: none;
 }
 
-.video-self-pip .video-tile {
+@keyframes pip-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.video-self-pip .video-tile,
+.video-self-pip .video-self-pip-tile {
   width: 100%;
-  height: auto;
-  min-height: 120px;
-  max-height: min(40vh, 280px);
+  height: 100%;
+  min-height: 0;
+  max-height: none;
   aspect-ratio: auto;
   border-radius: 12px;
+  border: none;
+  box-shadow: none;
+}
+
+.video-stage.has-self-pip {
+  position: relative;
+}
+
+/* Portrait phones: taller self PiP so your camera isn't letterboxed harshly */
+.viewport-mobile-portrait .video-self-pip,
+.video-stage-shell[data-layout="active-speaker"] .video-self-pip {
+  width: min(132px, 34vw);
+  aspect-ratio: 9 / 14;
+  max-height: min(28vh, 240px);
+  top: auto;
+  bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
+  right: 0.75rem;
+}
+
+.video-stage-shell[data-layout="active-speaker"][data-self-pip="on"] .video-filmstrip {
+  padding-right: min(148px, 38vw);
+}
+
+.meeting-app.is-host-view .video-stage-shell[data-layout="gallery"] .video-self-pip {
+  top: 0.85rem;
+  right: 0.85rem;
+}
+
+.meeting-app.chrome-hidden .video-self-pip {
+  /* Keep self-view visible when chrome fades */
+  opacity: 1;
+  pointer-events: none;
+  transform: none;
 }
 
 /* Let portrait phone streams size the tile; landscape stays wide. */
@@ -4100,15 +4254,16 @@ html:has(.auth-page) body {
   aspect-ratio: auto;
 }
 
-.video-host-full .video-tile.has-video .video-feed {
-  object-fit: contain !important;
+.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="portrait"] {
+  /* Center portrait streams in landscape grid cells */
+  place-self: stretch;
 }
 
-.meeting-app.is-client-view.chrome-hidden .meeting-v2-header,
-.meeting-app.is-client-view.chrome-hidden .meeting-rail,
-.meeting-app.is-client-view.chrome-hidden .meeting-v2-control-bar-wrap,
-.meeting-app.is-client-view.chrome-hidden .meeting-sidebar:not(.open),
-.meeting-app.is-client-view.chrome-hidden .join-banner {
+.meeting-app.chrome-hidden .meeting-v2-header,
+.meeting-app.chrome-hidden .meeting-rail,
+.meeting-app.chrome-hidden .meeting-v2-control-bar-wrap,
+.meeting-app.chrome-hidden .meeting-sidebar:not(.open),
+.meeting-app.chrome-hidden .join-banner {
   opacity: 0;
   pointer-events: none;
   transform: translateY(-8px);
@@ -4118,33 +4273,60 @@ html:has(.auth-page) body {
 .meeting-app.is-client-view .meeting-v2-header,
 .meeting-app.is-client-view .meeting-rail,
 .meeting-app.is-client-view .meeting-v2-control-bar-wrap,
-.meeting-app.is-client-view .join-banner {
+.meeting-app.is-client-view .join-banner,
+.meeting-app.viewport-mobile-landscape .meeting-v2-header,
+.meeting-app.viewport-mobile-landscape .meeting-rail,
+.meeting-app.viewport-mobile-landscape .meeting-v2-control-bar-wrap,
+.meeting-app.viewport-mobile-landscape .join-banner {
   transition: opacity 220ms ease, transform 220ms ease;
 }
 
-.meeting-app.is-client-view.chrome-hidden .meeting-v2-control-bar-wrap {
+.meeting-app.chrome-hidden .meeting-v2-control-bar-wrap {
   transform: translate(-50%, 12px);
 }
 
-.meeting-app.is-client-view .meeting-body {
+.meeting-app.is-client-view .meeting-body,
+.meeting-app.viewport-mobile-landscape .meeting-body {
   grid-template-columns: minmax(0, 1fr) auto;
   padding: 0;
   gap: 0;
 }
 
-.meeting-app.is-client-view .meeting-stage {
+.meeting-app.is-client-view .meeting-stage,
+.meeting-app.viewport-mobile-landscape .meeting-stage {
   border-radius: 0;
   border: none;
 }
 
-.meeting-app.is-client-view .conference-root {
+.meeting-app.is-client-view .conference-root,
+.meeting-app.viewport-mobile-landscape .conference-root {
   padding-bottom: 0;
 }
 
-.meeting-app.is-client-view .video-stage {
+.meeting-app.is-client-view .video-stage,
+.meeting-app.viewport-mobile-landscape .video-stage {
   padding-bottom: 0;
 }
 
-.meeting-app.is-host-view .video-stage[data-layout="gallery"] {
+.meeting-app.viewport-mobile-portrait .video-stage[data-layout="active-speaker"] {
+  padding-bottom: 5.5rem;
+}
+
+.meeting-app.is-host-view:not(.viewport-mobile-landscape) .video-stage[data-layout="gallery"] {
   padding: 10px 10px 5.75rem;
+}
+
+@media (orientation: landscape) and (max-height: 520px) {
+  .video-self-pip {
+    width: min(148px, 22vw);
+    aspect-ratio: 16 / 10;
+    max-height: min(36vh, 160px);
+    top: 0.65rem;
+    right: 0.65rem;
+    bottom: auto;
+  }
+
+  .video-stage[data-layout="landscape-focus"] {
+    padding: 0;
+  }
 }

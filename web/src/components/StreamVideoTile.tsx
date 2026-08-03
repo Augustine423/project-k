@@ -1,5 +1,11 @@
 import { useEffect, useRef } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
+import { useVideoElementAspect } from "../hooks/useVideoStreamAspect";
+import {
+  resolveTileFit,
+  type ConferenceLayoutMode,
+  type TileFitMode,
+} from "../media/conferenceLayout";
 
 interface StreamVideoTileProps {
   stream: MediaStream | null;
@@ -15,6 +21,11 @@ interface StreamVideoTileProps {
   showStats?: boolean;
   roleBadge?: string;
   size?: "grid" | "spotlight" | "strip";
+  /** Current conference stage layout — drives portrait/landscape fit policy. */
+  layoutMode?: ConferenceLayoutMode;
+  /** Override automatic fit (cover / contain / contain-blur). */
+  fit?: TileFitMode;
+  className?: string;
 }
 
 function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null) {
@@ -26,7 +37,7 @@ function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null
   }
 }
 
-/** One video element per tile; hidden audio for remote sound. */
+/** One video element per tile; optional blurred backdrop for portrait-in-landscape cells. */
 export function StreamVideoTile({
   stream,
   trackSignature = "",
@@ -38,8 +49,12 @@ export function StreamVideoTile({
   showStats = import.meta.env.DEV,
   roleBadge,
   size = "grid",
+  layoutMode = "gallery",
+  fit: fitOverride,
+  className = "",
 }: StreamVideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const blurRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const statsRef = useRef<HTMLSpanElement>(null);
 
@@ -48,22 +63,42 @@ export function StreamVideoTile({
   const videoTrackId = videoTrack?.id ?? "";
   const audioTrackId = audioTrack?.id ?? "";
 
+  const streamAspect = useVideoElementAspect(videoRef, stream, `${trackSignature}:${videoTrackId}`);
+  const fit =
+    fitOverride ??
+    resolveTileFit({
+      streamAspect,
+      layout: layoutMode,
+      size,
+    });
+  const useBlurBg = fit === "contain-blur";
+
   // Video bind — independent of audio so quality/layer changes don't restart sound.
   useEffect(() => {
     const videoEl = videoRef.current;
+    const blurEl = blurRef.current;
     if (!videoEl) return;
 
     const videoStream = videoTrack ? new MediaStream([videoTrack]) : null;
     attachMediaStream(videoEl, videoStream);
     if (videoStream) void videoEl.play().catch(() => undefined);
 
-    const onEnded = () => attachMediaStream(videoEl, null);
+    if (blurEl) {
+      attachMediaStream(blurEl, useBlurBg ? videoStream : null);
+      if (useBlurBg && videoStream) void blurEl.play().catch(() => undefined);
+    }
+
+    const onEnded = () => {
+      attachMediaStream(videoEl, null);
+      if (blurEl) attachMediaStream(blurEl, null);
+    };
     videoTrack?.addEventListener("ended", onEnded);
     return () => {
       videoTrack?.removeEventListener("ended", onEnded);
       attachMediaStream(videoEl, null);
+      if (blurEl) attachMediaStream(blurEl, null);
     };
-  }, [videoTrack, videoTrackId, trackSignature]);
+  }, [videoTrack, videoTrackId, trackSignature, useBlurBg]);
 
   // Audio bind — local tile is muted so mic never plays into speakers (echo).
   useEffect(() => {
@@ -121,10 +156,23 @@ export function StreamVideoTile({
         `is-${size}`,
         isSpeaking ? "is-speaking" : "",
         showVideo ? "has-video" : "no-video",
+        className,
       ]
         .filter(Boolean)
         .join(" ")}
+      data-fit={fit}
+      data-stream-aspect={streamAspect}
     >
+      {useBlurBg && showVideo && (
+        <video
+          ref={blurRef}
+          autoPlay
+          playsInline
+          muted
+          aria-hidden
+          className={["video-blur-bg", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
+        />
+      )}
       <video
         ref={videoRef}
         autoPlay

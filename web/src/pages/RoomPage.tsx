@@ -23,6 +23,7 @@ import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { MediaConference } from "../media/MediaConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
 import { mediaUnavailableReason } from "../media/secureContext";
+import { useViewerViewport } from "../hooks/useViewerViewport";
 
 const SMALL_ROOM_LIVE_LIST = 200;
 
@@ -70,6 +71,9 @@ export function RoomPage() {
   const token = ticket?.participantToken ?? "";
   const selfId = ticket?.participant.id ?? "";
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
+  const viewport = useViewerViewport();
+  /** Auto-hide chrome on client views and whenever the phone is in landscape fullscreen mode. */
+  const autoHideChrome = !isHost || viewport.mode === "mobile-landscape";
   const unreadRoomChat = Math.max(0, chatMessages.length - roomChatReadCount);
   const unreadDmTotal = Object.values(dmUnreadByPeer).reduce((a, b) => a + b, 0);
   const unreadChat = unreadRoomChat + unreadDmTotal;
@@ -140,16 +144,16 @@ export function RoomPage() {
 
   const revealChrome = useCallback(() => {
     setChromeVisible(true);
-    if (!isHost) {
+    if (autoHideChrome) {
       if (chromeHideTimer.current) window.clearTimeout(chromeHideTimer.current);
       chromeHideTimer.current = window.setTimeout(() => {
         if (!sidePanelOpenRef.current) setChromeVisible(false);
       }, 3200);
     }
-  }, [isHost]);
+  }, [autoHideChrome]);
 
   useEffect(() => {
-    if (isHost) {
+    if (!autoHideChrome) {
       setChromeVisible(true);
       if (chromeHideTimer.current) window.clearTimeout(chromeHideTimer.current);
       return;
@@ -158,7 +162,7 @@ export function RoomPage() {
     return () => {
       if (chromeHideTimer.current) window.clearTimeout(chromeHideTimer.current);
     };
-  }, [isHost, revealChrome]);
+  }, [autoHideChrome, revealChrome]);
 
   useEffect(() => {
     if (sidePanelOpen) setChromeVisible(true);
@@ -544,7 +548,15 @@ export function RoomPage() {
 
   return (
     <div
-      className={`meeting-app meeting-v2 meeting-light ${!isHost && !chromeVisible ? "chrome-hidden" : ""} ${!isHost ? "is-client-view" : "is-host-view"}`}
+      className={[
+        "meeting-app meeting-v2 meeting-light",
+        autoHideChrome && !chromeVisible ? "chrome-hidden" : "",
+        isHost ? "is-host-view" : "is-client-view",
+        `viewport-${viewport.mode}`,
+        `layout-${viewport.mode === "desktop" ? "gallery" : viewport.mode === "mobile-portrait" ? "active-speaker" : "landscape-focus"}`,
+      ]
+        .filter(Boolean)
+        .join(" ")}
       onPointerDown={revealChrome}
       onKeyDown={revealChrome}
     >
