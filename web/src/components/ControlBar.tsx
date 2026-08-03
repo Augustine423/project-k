@@ -117,7 +117,7 @@ export function ControlBar({
           type="button"
           className="meeting-v2-ctrl-btn meeting-v2-ctrl-secondary"
           onClick={onFocusChat}
-          aria-label="Open chat and people"
+          aria-label="Open chat and participants"
         >
           <ChatIcon size={22} />
           {chatBadge !== undefined && chatBadge !== 0 && (

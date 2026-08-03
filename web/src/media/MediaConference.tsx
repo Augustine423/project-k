@@ -16,6 +16,7 @@ export interface MediaConferenceProps {
   onFocusChat?: () => void;
   roomMode?: string;
   participantRole?: string;
+  hostParticipantId?: string;
   showRaiseHand?: boolean;
   handRaised?: boolean;
   onToggleRaiseHand?: () => void;

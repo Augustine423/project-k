@@ -11,19 +11,19 @@ export interface ChatMessage {
   toDisplayName?: string;
 }
 
-/** Soft ink-desk avatar fills (graphite / slate / ink — not neon). */
+/** Soft MeetingMax avatar fills (teal / slate — not neon). */
 export function avatarTone(seed: string): string {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) | 0;
   const tones = [
-    "#3d4a5c",
-    "#4a3f38",
-    "#2f4a48",
-    "#453c55",
-    "#3a4550",
-    "#4b4034",
-    "#334851",
-    "#4a3842",
+    "#1a6b5f",
+    "#245a72",
+    "#2f4f6b",
+    "#3a5568",
+    "#1f5f54",
+    "#2a4a5c",
+    "#355060",
+    "#1e4d58",
   ];
   return tones[Math.abs(hash) % tones.length];
 }

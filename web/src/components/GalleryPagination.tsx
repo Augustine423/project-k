@@ -29,19 +29,19 @@ export function GalleryPagination({
       <span className="gallery-page-meta">
         {totalPages > 1 ? (
           <>
-            Page {page} / {totalPages}
+            <strong>
+              {page}/{totalPages}
+            </strong>
             {totalParticipants != null && totalParticipants > 1 ? (
-              <> · {totalParticipants} in room</>
+              <> · {totalParticipants} participants</>
             ) : null}
           </>
         ) : (
           <>
-            {totalParticipants != null ? `${totalParticipants} in room` : "Gallery"}
+            {totalParticipants != null ? `${totalParticipants} participants` : "Gallery"}
           </>
         )}
-        {offPageCount > 0 ? (
-          <> · {offPageCount} more on other pages (you still hear them)</>
-        ) : null}
+        {offPageCount > 0 ? <> · {offPageCount} more (audio continues)</> : null}
       </span>
       <button
         type="button"

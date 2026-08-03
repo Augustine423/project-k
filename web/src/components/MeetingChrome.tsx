@@ -8,6 +8,8 @@ interface MeetingHeaderProps {
   statusMessage: string;
   connected?: boolean;
   displayName?: string;
+  participantCount?: number;
+  roomMode?: string;
 }
 
 function useClock() {
@@ -27,20 +29,30 @@ export function MeetingHeader({
   statusMessage,
   connected = true,
   displayName = "Guest",
+  participantCount,
+  roomMode,
 }: MeetingHeaderProps) {
   const clock = useClock();
 
   return (
     <header className="meeting-v2-header">
       <div className="meeting-v2-header-left">
-        <Link to="/dashboard" className="meeting-v2-brand">
-          <BrandLogo size={32} variant="light" />
+        <Link to="/dashboard" className="meeting-v2-brand" aria-label="Back to dashboard">
+          <BrandLogo size={30} variant="light" />
         </Link>
-        <span className="meeting-v2-clock">{clock}</span>
-        <span
-          className={`meeting-v2-status-dot ${connected ? "online" : "offline"}`}
-          title={statusMessage}
-        />
+        <div className="meeting-v2-meta">
+          <span className="meeting-v2-clock">{clock}</span>
+          <span
+            className={`meeting-v2-status-dot ${connected ? "online" : "offline"}`}
+            title={statusMessage}
+          />
+          {roomMode && (
+            <span className="meeting-v2-mode">{roomMode === "webinar" ? "Webinar" : "Meeting"}</span>
+          )}
+          {participantCount != null && (
+            <span className="meeting-v2-count">{participantCount} in room</span>
+          )}
+        </div>
       </div>
 
       <div className="meeting-v2-header-right">

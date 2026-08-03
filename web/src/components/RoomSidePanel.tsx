@@ -5,9 +5,9 @@ import type { ChatMessage } from "./chatTypes";
 import { avatarInitials, avatarTone, formatChatTime } from "./chatTypes";
 import { ChatIcon, MicMutedSmall, ParticipantsIcon, RaiseHandIcon } from "./MediaIcons";
 
-export type SidePanelTab = "chat" | "people";
+export type SidePanelTab = "chat" | "participants";
 
-const PEOPLE_PAGE_SIZE = 50;
+const PARTICIPANTS_PAGE_SIZE = 50;
 
 export type RaisedHandInfo = {
   participantId: string;
@@ -91,7 +91,7 @@ export function RoomSidePanel({
   const [pageItems, setPageItems] = useState<Participant[]>([]);
   const [pageOffset, setPageOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
-  const [peopleLoading, setPeopleLoading] = useState(false);
+  const [participantsLoading, setParticipantsLoading] = useState(false);
   const messagesRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -101,14 +101,14 @@ export function RoomSidePanel({
 
   const useLiveList = Boolean(liveParticipants && participantCount <= 200 && !debouncedQuery);
 
-  const loadPeople = useCallback(
+  const loadParticipants = useCallback(
     async (offset: number, append: boolean) => {
       if (!roomId) return;
-      setPeopleLoading(true);
+      setParticipantsLoading(true);
       try {
         const page = await listParticipantsPage(roomId, {
           offset,
-          limit: PEOPLE_PAGE_SIZE,
+          limit: PARTICIPANTS_PAGE_SIZE,
           q: debouncedQuery || undefined,
         });
         setPageOffset(offset);
@@ -117,16 +117,16 @@ export function RoomSidePanel({
       } catch {
         if (!append) setPageItems([]);
       } finally {
-        setPeopleLoading(false);
+        setParticipantsLoading(false);
       }
     },
     [roomId, debouncedQuery],
   );
 
   useEffect(() => {
-    if (activeTab !== "people" || useLiveList) return;
-    void loadPeople(0, false);
-  }, [activeTab, useLiveList, loadPeople]);
+    if (activeTab !== "participants" || useLiveList) return;
+    void loadParticipants(0, false);
+  }, [activeTab, useLiveList, loadParticipants]);
 
   const visibleMessages = dmPeer ? (dmThreads[dmPeer.participantId] ?? []) : messages;
 
@@ -143,7 +143,7 @@ export function RoomSidePanel({
     setDraft("");
   }, [dmPeer?.participantId]);
 
-  const displayedPeople = useMemo(() => {
+  const displayedParticipants = useMemo(() => {
     if (useLiveList && liveParticipants) {
       const q = debouncedQuery.toLowerCase();
       return q
@@ -200,7 +200,7 @@ export function RoomSidePanel({
   return (
     <section className="rsp">
       <header className="rsp-head">
-        <div className="rsp-tabs" role="tablist" aria-label="Chat and people">
+        <div className="rsp-tabs" role="tablist" aria-label="Chat and participants">
           <button
             type="button"
             role="tab"
@@ -216,14 +216,14 @@ export function RoomSidePanel({
           <button
             type="button"
             role="tab"
-            id="tab-people"
-            aria-selected={activeTab === "people"}
-            aria-controls="panel-people"
-            className={`rsp-tab ${activeTab === "people" ? "is-active" : ""}`}
-            onClick={() => onTabChange("people")}
+            id="tab-participants"
+            aria-selected={activeTab === "participants"}
+            aria-controls="panel-participants"
+            className={`rsp-tab ${activeTab === "participants" ? "is-active" : ""}`}
+            onClick={() => onTabChange("participants")}
           >
             <ParticipantsIcon size={15} />
-            <span>People</span>
+            <span>Participants</span>
             <span className="rsp-tab-count">{participantCount}</span>
           </button>
         </div>
@@ -295,7 +295,7 @@ export function RoomSidePanel({
                 <p>
                   {dmPeer
                     ? `Start a private note with ${dmPeer.displayName}.`
-                    : "The room is quiet. Leave the first note."}
+                    : "Say hello — your message appears here."}
                 </p>
               </div>
             )}
@@ -365,17 +365,17 @@ export function RoomSidePanel({
         </div>
       ) : (
         <div
-          className="rsp-body rsp-people"
+          className="rsp-body rsp-participants"
           role="tabpanel"
-          id="panel-people"
-          aria-labelledby="tab-people"
+          id="panel-participants"
+          aria-labelledby="tab-participants"
         >
           <div className="rsp-people-tools">
             <label className="rsp-search">
               <span className="sr-only">Search participants</span>
               <input
                 type="search"
-                placeholder="Find someone…"
+                placeholder="Find a participant…"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 autoComplete="off"
@@ -419,8 +419,8 @@ export function RoomSidePanel({
 
           <p className="rsp-people-sum">
             {query.trim()
-              ? `${displayedPeople.length} match · ${participantCount} total`
-              : `${participantCount} here · tap a name to message`}
+              ? `${displayedParticipants.length} match · ${participantCount} total`
+              : `${participantCount} participants · tap a name to message`}
             {isHost && modePinned ? " · mode pinned" : ""}
           </p>
 
@@ -448,13 +448,13 @@ export function RoomSidePanel({
           )}
 
           <ul className="rsp-dir" role="list">
-            {peopleLoading && displayedPeople.length === 0 && (
-              <li className="rsp-dir-empty">Loading people…</li>
+            {participantsLoading && displayedParticipants.length === 0 && (
+              <li className="rsp-dir-empty">Loading participants…</li>
             )}
-            {!peopleLoading && displayedPeople.length === 0 && (
+            {!participantsLoading && displayedParticipants.length === 0 && (
               <li className="rsp-dir-empty">No matches.</li>
             )}
-            {displayedPeople.map((p) => {
+            {displayedParticipants.map((p) => {
               const isSelf = Boolean(selfId && p.id === selfId);
               const role = roleLabel(p.role);
               return (
@@ -514,10 +514,10 @@ export function RoomSidePanel({
             <button
               type="button"
               className="rsp-more"
-              disabled={peopleLoading}
-              onClick={() => void loadPeople(pageOffset + PEOPLE_PAGE_SIZE, true)}
+              disabled={participantsLoading}
+              onClick={() => void loadParticipants(pageOffset + PARTICIPANTS_PAGE_SIZE, true)}
             >
-              {peopleLoading ? "Loading…" : "Load more"}
+              {participantsLoading ? "Loading…" : "Load more"}
             </button>
           )}
         </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { avatarInitials, avatarTone } from "./chatTypes";
 
 interface StreamVideoTileProps {
   stream: MediaStream | null;
@@ -12,6 +13,8 @@ interface StreamVideoTileProps {
   hasVideo?: boolean;
   /** Show decoded WxH badge (dev/quality check). */
   showStats?: boolean;
+  roleBadge?: string;
+  size?: "grid" | "spotlight" | "strip";
 }
 
 function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null) {
@@ -33,6 +36,8 @@ export function StreamVideoTile({
   isSpeaking = false,
   hasVideo,
   showStats = import.meta.env.DEV,
+  roleBadge,
+  size = "grid",
 }: StreamVideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -106,25 +111,43 @@ export function StreamVideoTile({
     };
   }, [videoTrackId, showStats]);
 
+  const tone = avatarTone(label);
+  const initials = avatarInitials(label);
+
   return (
-    <div className={`video-tile relative${isSpeaking ? " is-speaking" : ""}`}>
+    <div
+      className={[
+        "video-tile",
+        `is-${size}`,
+        isSpeaking ? "is-speaking" : "",
+        showVideo ? "has-video" : "no-video",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+    >
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className={["video-feed rounded centered", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
+        className={["video-feed", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
       />
       {!muted && (
         <audio ref={audioRef} className="hide" autoPlay playsInline aria-hidden />
       )}
       {!showVideo && (
-        <div className="no-video-container">
+        <div className="no-video-container" style={{ ["--tile-tone" as string]: tone }}>
+          <span className="video-avatar" aria-hidden="true">
+            {initials}
+          </span>
           <span className="no-video-text">{label}</span>
         </div>
       )}
       {showStats && <span ref={statsRef} className="video-res-badge hide" aria-hidden />}
-      <span className="video-label">{label}</span>
+      <div className="video-chrome">
+        {roleBadge && <span className="video-role">{roleBadge}</span>}
+        <span className="video-label">{label}</span>
+      </div>
     </div>
   );
 }

@@ -499,6 +499,8 @@ export function RoomPage() {
         statusMessage={statusMessage}
         connected={isLive}
         displayName={ticket.participant.displayName}
+        participantCount={participantCount}
+        roomMode={ticket.room.mode}
       />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
@@ -527,6 +529,7 @@ export function RoomPage() {
               onFocusChat={() => focusSidePanel("chat")}
               roomMode={ticket.room.mode}
               participantRole={ticket.participant.role}
+              hostParticipantId={ticket.room.hostParticipantId}
               showRaiseHand={isWebinar}
               handRaised={selfHandRaised}
               onToggleRaiseHand={toggleRaiseHand}
@@ -585,7 +588,7 @@ export function RoomPage() {
         type="button"
         className="mobile-sidebar-toggle"
         onClick={() => setMobileSidebarOpen((v) => !v)}
-        aria-label="Toggle chat and people"
+        aria-label="Toggle chat and participants"
       >
         ☰
       </button>

@@ -37,20 +37,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
     const message = extractApiErrorMessage(body, res.status);
-    // #region agent log
-    fetch("http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c10931" },
-      body: JSON.stringify({
-        sessionId: "c10931",
-        hypothesisId: "F1",
-        location: "client.ts:request",
-        message: "API error response",
-        data: { path, status: res.status, message },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {});
-    // #endregion
     throw new ApiRequestError(res.status, message);
   }
   if (res.status === 204) {
