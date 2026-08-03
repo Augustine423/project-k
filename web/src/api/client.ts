@@ -1,4 +1,4 @@
-import type { ApiError, JoinTicket, Participant, Room, TurnInfo } from "./types";
+import type { JoinTicket, Participant, Room, TurnInfo } from "./types";
 
 /** Same-origin in dev (Vite proxy) so phones on the LAN hit the PC, not phone-localhost. */
 function apiBase(): string {
@@ -35,13 +35,43 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as Partial<ApiError>;
-    throw new ApiRequestError(res.status, body.error ?? `request failed (${res.status})`);
+    const body = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+    const message = extractApiErrorMessage(body, res.status);
+    // #region agent log
+    fetch("http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c10931" },
+      body: JSON.stringify({
+        sessionId: "c10931",
+        hypothesisId: "F1",
+        location: "client.ts:request",
+        message: "API error response",
+        data: { path, status: res.status, message },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {});
+    // #endregion
+    throw new ApiRequestError(res.status, message);
   }
   if (res.status === 204) {
     return undefined as T;
   }
   return (await res.json()) as T;
+}
+
+function extractApiErrorMessage(body: Record<string, unknown>, status: number): string {
+  if (typeof body.error === "string" && body.error.trim()) return body.error;
+  if (typeof body.title === "string" && body.title.trim() && !body.errors) return body.title;
+  const errors = body.errors;
+  if (errors && typeof errors === "object") {
+    const parts: string[] = [];
+    for (const value of Object.values(errors as Record<string, unknown>)) {
+      if (Array.isArray(value)) parts.push(...value.map(String));
+      else if (typeof value === "string") parts.push(value);
+    }
+    if (parts.length) return parts.join(" ");
+  }
+  return `request failed (${status})`;
 }
 
 function authHeader(token: string): Record<string, string> {

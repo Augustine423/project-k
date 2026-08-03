@@ -121,21 +121,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return authUser;
   }, []);
 
-  const signUp = useCallback(
-    async (email: string, password: string, fullName: string) => {
-      try {
-        const session = await signUpAccount({
-          email,
-          password,
-          fullName: fullName.trim() || undefined,
-        });
-        return applySession(session);
-      } catch (err) {
-        throw new Error(err instanceof ApiRequestError ? err.message : "Unable to create account.");
-      }
-    },
-    [applySession],
-  );
+  const signUp = useCallback(async (email: string, password: string, fullName: string) => {
+    try {
+      // Create account in DB but do not auto-login — user must sign in next.
+      const session = await signUpAccount({
+        email,
+        password,
+        fullName: fullName.trim() || undefined,
+      });
+      // #region agent log
+      fetch("http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c10931" },
+        body: JSON.stringify({
+          sessionId: "c10931",
+          hypothesisId: "F2",
+          location: "useAuth.tsx:signUp",
+          message: "Signup succeeded without auto-session",
+          data: { email: session.user.email, needsUsername: session.user.needsUsername },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      return toAuthUser(session.user);
+    } catch (err) {
+      // #region agent log
+      fetch("http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "c10931" },
+        body: JSON.stringify({
+          sessionId: "c10931",
+          hypothesisId: "F2",
+          location: "useAuth.tsx:signUp",
+          message: "Signup failed",
+          data: { error: err instanceof Error ? err.message : String(err) },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {});
+      // #endregion
+      throw new Error(err instanceof ApiRequestError ? err.message : "Unable to create account.");
+    }
+  }, []);
 
   const signIn = useCallback(
     async (email: string, password: string) => {

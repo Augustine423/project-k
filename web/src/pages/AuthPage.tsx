@@ -29,6 +29,7 @@ export function AuthPage() {
   );
   const [resetEmail, setResetEmail] = useState("");
   const [resetDone, setResetDone] = useState(false);
+  const [signupDone, setSignupDone] = useState(false);
   const [socialNotice, setSocialNotice] = useState("");
 
   function goAfterAuth(needsUsernameSetup: boolean) {
@@ -44,6 +45,7 @@ export function AuthPage() {
 
   function switchView(next: AuthView) {
     setSocialNotice("");
+    if (next !== "signin") setSignupDone(false);
     setView(next);
   }
 
@@ -97,6 +99,12 @@ export function AuthPage() {
         <div className="auth-shell">
           {socialNotice && <p className="auth-banner auth-banner--info">{socialNotice}</p>}
 
+          {signupDone && view === "signin" && (
+            <p className="auth-banner auth-banner--success">
+              Signup successful. Please login with your username and password.
+            </p>
+          )}
+
           {resetDone && view === "signin" && (
             <p className="auth-banner auth-banner--success">
               Password updated. Sign in with your new password.
@@ -109,6 +117,7 @@ export function AuthPage() {
                 onSwitchSignUp={() => switchView("signup")}
                 onForgotPassword={() => {
                   setResetDone(false);
+                  setSignupDone(false);
                   switchView("forgot-request");
                 }}
                 onSuccess={goAfterAuth}
@@ -119,7 +128,12 @@ export function AuthPage() {
             {view === "signup" && (
               <SignUpForm
                 onSwitchSignIn={() => switchView("signin")}
-                onSuccess={goAfterAuth}
+                onSuccess={() => {
+                  setSignupDone(true);
+                  setResetDone(false);
+                  setView("signin");
+                  navigate("/login", { replace: true });
+                }}
                 onSocial={onSocial}
               />
             )}

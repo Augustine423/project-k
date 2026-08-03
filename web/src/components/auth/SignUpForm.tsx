@@ -9,7 +9,7 @@ import {
 
 interface SignUpFormProps {
   onSwitchSignIn: () => void;
-  onSuccess: (needsUsername: boolean) => void;
+  onSuccess: () => void;
   onSocial?: (provider: "google" | "slack") => void;
 }
 
@@ -41,8 +41,8 @@ export function SignUpForm({ onSwitchSignIn, onSuccess, onSocial }: SignUpFormPr
 
     setLoading(true);
     try {
-      const sessionUser = await signUp(email, password, displayName);
-      onSuccess(sessionUser.needsUsername);
+      await signUp(email, password, displayName);
+      onSuccess();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Unable to create account.");
     } finally {
