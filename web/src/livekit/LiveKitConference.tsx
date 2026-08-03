@@ -466,6 +466,41 @@ export function LiveKitConference({
     return () => window.clearTimeout(t);
   }, [silenceNotice]);
 
+  // Phones: re-apply capture constraints when rotating so portrait/landscape FOV isn't cropped.
+  useEffect(() => {
+    if (!connected || !videoEnabled || !canPublishVideo) return;
+
+    let busy = false;
+    const restartForOrientation = () => {
+      const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+      if (!room || busy || mediaBusyRef.current) return;
+      const lp = room.localParticipant;
+      if (!lp.isCameraEnabled) return;
+      busy = true;
+      void (async () => {
+        try {
+          await lp.setCameraEnabled(false);
+          await lp.setCameraEnabled(true, cameraEnableCaptureOptions());
+          await waitForLocalTrack(lp, Track.Source.Camera);
+          applyLocalStateRef.current(room);
+        } catch {
+          // keep previous track if restart fails
+        } finally {
+          busy = false;
+        }
+      })();
+    };
+
+    const mq = window.matchMedia("(orientation: portrait)");
+    const onChange = () => restartForOrientation();
+    mq.addEventListener?.("change", onChange);
+    window.addEventListener("orientationchange", onChange);
+    return () => {
+      mq.removeEventListener?.("change", onChange);
+      window.removeEventListener("orientationchange", onChange);
+    };
+  }, [canPublishVideo, connected, sessionKey, videoEnabled]);
+
   const runMediaToggle = useCallback(
     async (kind: "audio" | "video") => {
       const room = roomRef.current ?? getLiveKitRoom(sessionKey);

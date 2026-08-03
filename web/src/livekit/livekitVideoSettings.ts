@@ -17,12 +17,29 @@ import {
 export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h720.encoding.maxBitrate;
 export const LIVEKIT_MAX_FRAMERATE = VideoPresets.h720.encoding.maxFramerate ?? 30;
 
-/** Capture at 1280×720; phones may rotate but still target HD. */
+/** Prefer portrait capture on phones held upright; landscape otherwise (laptop / sideways phone). */
+export function isPortraitCapturePreferred(): boolean {
+  if (typeof window === "undefined") return false;
+  const type = window.screen?.orientation?.type;
+  if (typeof type === "string") {
+    if (type.startsWith("portrait")) return true;
+    if (type.startsWith("landscape")) return false;
+  }
+  return window.matchMedia("(orientation: portrait)").matches;
+}
+
+/**
+ * Capture near 720p without forcing a laptop landscape crop on phones.
+ * Portrait devices request 720×1280 so the full camera frame can letterbox with object-fit:contain.
+ */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {
+  const portrait = isPortraitCapturePreferred();
+  const longEdge = VideoPresets.h720.width;
+  const shortEdge = VideoPresets.h720.height;
   return {
     resolution: {
-      width: VideoPresets.h720.width,
-      height: VideoPresets.h720.height,
+      width: portrait ? shortEdge : longEdge,
+      height: portrait ? longEdge : shortEdge,
       frameRate: LIVEKIT_MAX_FRAMERATE,
     },
     facingMode: "user",

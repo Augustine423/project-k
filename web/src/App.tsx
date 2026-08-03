@@ -34,30 +34,10 @@ export default function App() {
           </RequireAuth>
         }
       />
-      <Route
-        path="/join"
-        element={
-          <RequireAuth>
-            <JoinRoomPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/join/:roomId"
-        element={
-          <RequireAuth>
-            <JoinRoomPage />
-          </RequireAuth>
-        }
-      />
-      <Route
-        path="/room/:roomId"
-        element={
-          <RequireAuth>
-            <RoomPage />
-          </RequireAuth>
-        }
-      />
+      {/* Guests can join via invite link without an account */}
+      <Route path="/join" element={<JoinRoomPage />} />
+      <Route path="/join/:roomId" element={<JoinRoomPage />} />
+      <Route path="/room/:roomId" element={<RoomPage />} />
       <Route path="/watch/*" element={<Navigate to="/" replace />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
