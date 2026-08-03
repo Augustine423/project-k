@@ -1,6 +1,7 @@
 using Kzys.Backend.Configuration;
 using Kzys.Backend.Data;
 using Kzys.Backend.Services;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace Kzys.Backend.Controllers;
