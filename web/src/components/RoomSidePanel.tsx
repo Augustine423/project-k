@@ -211,7 +211,7 @@ export function RoomSidePanel({
             onClick={() => onTabChange("chat")}
           >
             <ChatIcon size={15} />
-            <span>Chat</span>
+            <span>Your Chat</span>
           </button>
           <button
             type="button"

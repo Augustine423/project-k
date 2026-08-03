@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "./BrandLogo";
 import { getInitials } from "../hooks/useAuth";
-import { MoreIcon } from "./MediaIcons";
 
 interface MeetingHeaderProps {
   statusMessage: string;
@@ -10,6 +9,7 @@ interface MeetingHeaderProps {
   displayName?: string;
   participantCount?: number;
   roomMode?: string;
+  onShare?: () => void;
 }
 
 function useClock() {
@@ -31,6 +31,7 @@ export function MeetingHeader({
   displayName = "Guest",
   participantCount,
   roomMode,
+  onShare,
 }: MeetingHeaderProps) {
   const clock = useClock();
 
@@ -38,7 +39,7 @@ export function MeetingHeader({
     <header className="meeting-v2-header">
       <div className="meeting-v2-header-left">
         <Link to="/dashboard" className="meeting-v2-brand" aria-label="Back to dashboard">
-          <BrandLogo size={30} variant="light" />
+          <BrandLogo size={28} />
         </Link>
         <div className="meeting-v2-meta">
           <span className="meeting-v2-clock">{clock}</span>
@@ -50,16 +51,25 @@ export function MeetingHeader({
             <span className="meeting-v2-mode">{roomMode === "webinar" ? "Webinar" : "Meeting"}</span>
           )}
           {participantCount != null && (
-            <span className="meeting-v2-count">{participantCount} in room</span>
+            <span className="meeting-v2-count">{participantCount}</span>
           )}
         </div>
       </div>
 
       <div className="meeting-v2-header-right">
-        <span className="meeting-v2-status-text">{statusMessage}</span>
-        <button type="button" className="meeting-v2-icon-btn" aria-label="More options">
-          <MoreIcon size={20} />
-        </button>
+        <label className="meeting-v2-search">
+          <span className="sr-only">Search</span>
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none">
+            <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2" />
+            <path d="M16 16l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+          <input type="search" placeholder="Search" disabled title="Coming soon" />
+        </label>
+        {onShare && (
+          <button type="button" className="meeting-v2-share" onClick={onShare}>
+            Share
+          </button>
+        )}
         <span className="meeting-v2-user-name">{displayName}</span>
         <div className="meeting-v2-avatar" aria-hidden="true">
           {getInitials(displayName)}

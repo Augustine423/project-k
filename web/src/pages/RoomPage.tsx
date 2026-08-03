@@ -15,8 +15,10 @@ import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant, Room } from "../api/types";
 import type { ChatMessage } from "../components/chatTypes";
 import { MeetingHeader } from "../components/MeetingChrome";
+import { MeetingRail } from "../components/MeetingRail";
 import { InviteLinkBar } from "../components/InviteLinkBar";
 import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
+import { copyInviteLink } from "../api/inviteLink";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { MediaConference } from "../media/MediaConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
@@ -54,7 +56,7 @@ export function RoomPage() {
   const [hostBusy, setHostBusy] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
   const [inviteCollapsed, setInviteCollapsed] = useState(true);
-  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
   const [dmPeer, setDmPeer] = useState<DmPeer | null>(null);
@@ -118,7 +120,7 @@ export function RoomPage() {
   const focusSidePanel = useCallback(
     (tab: SidePanelTab = "chat") => {
       setSideTab(tab);
-      setMobileSidebarOpen(true);
+      setSidePanelOpen(true);
       if (tab === "chat") {
         setRoomChatReadCount(chatMessages.length);
         if (dmPeer) {
@@ -130,13 +132,21 @@ export function RoomPage() {
     [chatMessages.length, dmPeer],
   );
 
+  const closeSidePanel = useCallback(() => setSidePanelOpen(false), []);
+
+  const shareInvite = useCallback(() => {
+    void copyInviteLink(roomId);
+    setInviteCollapsed(false);
+    focusSidePanel("participants");
+  }, [focusSidePanel, roomId]);
+
   const openDm = useCallback((peer: DmPeer) => {
     setOpenDmPeers((prev) =>
       prev.some((p) => p.participantId === peer.participantId) ? prev : [...prev, peer],
     );
     setDmPeer(peer);
     setSideTab("chat");
-    setMobileSidebarOpen(true);
+    setSidePanelOpen(true);
     setDmUnreadByPeer((prev) => ({ ...prev, [peer.participantId]: 0 }));
   }, []);
 
@@ -319,14 +329,14 @@ export function RoomPage() {
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);
 
   useEffect(() => {
-    if (sideTab === "chat" && mobileSidebarOpen) {
+    if (sideTab === "chat" && sidePanelOpen) {
       if (dmPeer) {
         setDmUnreadByPeer((prev) => ({ ...prev, [dmPeer.participantId]: 0 }));
       } else {
         setRoomChatReadCount(chatMessages.length);
       }
     }
-  }, [sideTab, mobileSidebarOpen, chatMessages.length, dmPeer]);
+  }, [sideTab, sidePanelOpen, chatMessages.length, dmPeer]);
 
   useEffect(() => {
     if (sideTab !== "chat") return;
@@ -494,13 +504,14 @@ export function RoomPage() {
   const isLive = status === "connected";
 
   return (
-    <div className="meeting-app meeting-v2">
+    <div className="meeting-app meeting-v2 meeting-light">
       <MeetingHeader
         statusMessage={statusMessage}
         connected={isLive}
         displayName={ticket.participant.displayName}
         participantCount={participantCount}
         roomMode={ticket.room.mode}
+        onShare={shareInvite}
       />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
@@ -527,6 +538,7 @@ export function RoomPage() {
               participantCount={participantCount}
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
               onFocusChat={() => focusSidePanel("chat")}
+              onFocusParticipants={() => focusSidePanel("participants")}
               roomMode={ticket.room.mode}
               participantRole={ticket.participant.role}
               hostParticipantId={ticket.room.hostParticipantId}
@@ -537,8 +549,12 @@ export function RoomPage() {
           )}
         </main>
 
-        <aside className={`meeting-sidebar ${mobileSidebarOpen ? "open" : ""}`}>
-          <div ref={sidePanelRef} className="room-side-panel-wrap">
+        <aside
+          ref={sidePanelRef}
+          className={`meeting-sidebar ${sidePanelOpen ? "open" : ""}`}
+          aria-hidden={!sidePanelOpen}
+        >
+          <div className="room-side-panel-wrap">
             <RoomSidePanel
               roomId={roomId}
               participantCount={participantCount}
@@ -582,16 +598,17 @@ export function RoomPage() {
             </div>
           )}
         </aside>
-      </div>
 
-      <button
-        type="button"
-        className="mobile-sidebar-toggle"
-        onClick={() => setMobileSidebarOpen((v) => !v)}
-        aria-label="Toggle chat and participants"
-      >
-        ☰
-      </button>
+        <MeetingRail
+          activeTab={sideTab}
+          panelOpen={sidePanelOpen}
+          chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
+          participantCount={participantCount}
+          onOpenChat={() => focusSidePanel("chat")}
+          onOpenParticipants={() => focusSidePanel("participants")}
+          onClosePanel={closeSidePanel}
+        />
+      </div>
     </div>
   );
 }

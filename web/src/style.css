@@ -2124,7 +2124,7 @@ html:has(.auth-page) body {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: clamp(1.25rem, 3vh, 2.5rem) clamp(1.25rem, 4vw, 3.5rem);
+  padding: clamp(1.1rem, 2.8vh, 2.25rem) clamp(1.25rem, 4vw, 3.4rem);
   min-height: 100dvh;
   overflow: auto;
 }
@@ -2163,7 +2163,7 @@ html:has(.auth-page) body {
 .auth-view {
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
+  gap: 1.05rem;
 }
 
 .auth-header {
@@ -2171,16 +2171,16 @@ html:has(.auth-page) body {
   flex-direction: column;
   align-items: center;
   text-align: center;
-  gap: 1.15rem;
-  margin-bottom: 0.15rem;
+  gap: 0.95rem;
+  margin-bottom: 0;
 }
 
 .auth-brand-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.35em;
-  line-height: 1.35;
+  gap: 0.9em;
+  line-height: 1.3;
   animation: auth-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.05s both;
 }
 
@@ -2190,10 +2190,10 @@ html:has(.auth-page) body {
 
 .auth-brand-logo .brand-logo-text {
   font-family: "Sora", "Outfit", sans-serif;
-  font-size: clamp(1.85rem, 3.8vw, 2.45rem);
+  font-size: clamp(1.8rem, 3.4vw, 2.25rem);
   font-weight: 700;
   letter-spacing: -0.04em;
-  line-height: 1.35;
+  line-height: 1.25;
   color: var(--auth-ink);
 }
 
@@ -2201,10 +2201,10 @@ html:has(.auth-page) body {
   margin: 0;
   max-width: 22rem;
   font-family: "Sora", "Outfit", sans-serif;
-  font-size: clamp(0.98rem, 1.8vw, 1.12rem);
+  font-size: clamp(0.95rem, 1.7vw, 1.08rem);
   font-weight: 600;
   letter-spacing: -0.02em;
-  line-height: 1.35;
+  line-height: 1.3;
   color: var(--auth-ink);
   text-align: center;
 }
@@ -2212,7 +2212,7 @@ html:has(.auth-page) body {
 .auth-title {
   margin: 0;
   font-family: "Sora", "Outfit", sans-serif;
-  font-size: clamp(1.2rem, 2.2vw, 1.45rem);
+  font-size: clamp(1.2rem, 2.2vw, 1.4rem);
   font-weight: 600;
   letter-spacing: -0.03em;
   line-height: 1.2;
@@ -2225,9 +2225,9 @@ html:has(.auth-page) body {
   margin: 0;
   max-width: 22rem;
   color: var(--auth-muted);
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 400;
-  line-height: 1.5;
+  line-height: 1.45;
   text-align: center;
   animation: auth-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.18s both;
 }
@@ -2245,7 +2245,8 @@ html:has(.auth-page) body {
 
 .auth-social {
   display: grid;
-  gap: 0.65rem;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
   animation: auth-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
 }
 
@@ -2253,19 +2254,19 @@ html:has(.auth-page) body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.7rem;
+  gap: 0.55rem;
   width: 100%;
-  min-height: 48px;
-  padding: 0.7rem 1rem;
-  border: 1.5px solid var(--auth-ink);
+  min-height: 46px;
+  padding: 0.65rem 0.75rem;
+  border: 1.5px solid var(--auth-line);
   border-radius: 10px;
-  background: transparent;
+  background: #fff;
   color: var(--auth-ink);
   font-family: inherit;
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 
 .auth-social-btn:hover {
@@ -2280,10 +2281,12 @@ html:has(.auth-page) body {
 .auth-or {
   display: flex;
   align-items: center;
-  gap: 0.85rem;
-  margin: 0.15rem 0 0.05rem;
+  gap: 0.65rem;
+  margin: 0;
   color: var(--auth-muted);
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  grid-column: 1 / -1;
 }
 
 .auth-or::before,
@@ -2296,13 +2299,13 @@ html:has(.auth-page) body {
 
 .auth-form {
   display: grid;
-  gap: 0.85rem;
+  gap: 0.8rem;
   animation: auth-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
 }
 
 .auth-field {
   display: grid;
-  gap: 0.35rem;
+  gap: 0.32rem;
 }
 
 .auth-field-label {
@@ -2314,14 +2317,14 @@ html:has(.auth-page) body {
 
 .auth-field input {
   width: 100%;
-  min-height: 48px;
-  padding: 0.75rem 0.95rem;
+  min-height: 46px;
+  padding: 0.7rem 0.95rem;
   border: 1.5px solid var(--auth-line);
   border-radius: 10px;
   background: #fff;
   color: var(--auth-ink);
   font-family: inherit;
-  font-size: 0.98rem;
+  font-size: 0.96rem;
   line-height: 1.25;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
 }
@@ -2374,7 +2377,7 @@ html:has(.auth-page) body {
 
 .auth-password-toggle {
   position: absolute;
-  top: 2rem;
+  top: 1.95rem;
   right: 0.45rem;
   display: inline-flex;
   align-items: center;
@@ -2405,15 +2408,15 @@ html:has(.auth-page) body {
   position: relative;
   overflow: hidden;
   width: 100%;
-  min-height: 50px;
+  min-height: 48px;
   margin-top: 0.15rem;
-  padding: 0.8rem 1rem;
+  padding: 0.75rem 1rem;
   border: none;
   border-radius: 10px;
   background: var(--auth-accent);
   color: #fff;
   font-family: inherit;
-  font-size: 1.02rem;
+  font-size: 1rem;
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
@@ -2448,11 +2451,11 @@ html:has(.auth-page) body {
 }
 
 .auth-banner {
-  margin: 0 0 0.75rem;
-  padding: 0.7rem 0.85rem;
+  margin: 0 0 0.55rem;
+  padding: 0.55rem 0.75rem;
   border-radius: 10px;
-  font-size: 0.84rem;
-  line-height: 1.45;
+  font-size: 0.82rem;
+  line-height: 1.4;
   animation: auth-rise 0.4s ease both;
 }
 
@@ -2482,10 +2485,10 @@ html:has(.auth-page) body {
 
 .auth-switch {
   margin: 0;
-  padding-top: 0.15rem;
+  padding-top: 0.1rem;
   text-align: center;
   color: var(--auth-muted);
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   animation: auth-rise 0.65s cubic-bezier(0.22, 1, 0.36, 1) 0.36s both;
 }
 
@@ -2707,25 +2710,60 @@ html:has(.auth-page) body {
   .auth-social-btn,
   .auth-field input,
   .auth-cta {
-    min-height: 46px;
+    min-height: 42px;
+  }
+
+  .auth-social {
+    grid-template-columns: 1fr;
   }
 }
 
-@media (max-height: 720px) and (min-width: 901px) {
-  .auth-subtitle {
-    font-size: 0.9rem;
+@media (max-height: 900px) and (min-width: 901px) {
+  .auth-panel {
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
   }
 
   .auth-view {
     gap: 0.9rem;
   }
 
+  .auth-header {
+    gap: 0.75rem;
+  }
+
+  .auth-brand-block {
+    gap: 0.7em;
+  }
+
+  .auth-brand-logo .brand-logo-text {
+    font-size: 1.85rem;
+  }
+
+  .auth-tagline {
+    font-size: 0.96rem;
+  }
+
+  .auth-title {
+    font-size: 1.22rem;
+  }
+
+  .auth-subtitle {
+    font-size: 0.88rem;
+  }
+
   .auth-form {
-    gap: 0.65rem;
+    gap: 0.7rem;
   }
 
   .auth-field-hint {
-    display: none;
+    font-size: 0.74rem;
+  }
+
+  .auth-social-btn,
+  .auth-field input,
+  .auth-cta {
+    min-height: 44px;
   }
 }
 
@@ -3552,5 +3590,414 @@ html:has(.auth-page) body {
 
   .insights-stats {
     grid-template-columns: 1fr;
+  }
+}
+
+/* -- MeetingMax light room (video-ui.mp4 reference) -- */
+.meeting-app.meeting-light {
+  --mm-blue: #3b66f5;
+  --mm-blue-soft: rgba(59, 102, 245, 0.12);
+  --mm-bg: #eef1f6;
+  --mm-surface: rgba(255, 255, 255, 0.82);
+  --mm-ink: #1e293b;
+  --mm-ink-dim: #64748b;
+  background:
+    radial-gradient(ellipse 70% 50% at 20% 0%, rgba(59, 102, 245, 0.08), transparent 55%),
+    linear-gradient(180deg, #f7f8fb 0%, var(--mm-bg) 100%);
+  color: var(--mm-ink);
+  font-family: "Outfit", "Segoe UI", sans-serif;
+}
+
+.meeting-app.meeting-light .meeting-v2-header {
+  background: rgba(255, 255, 255, 0.88);
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  color: var(--mm-ink);
+  backdrop-filter: blur(16px);
+}
+
+.meeting-app.meeting-light .meeting-v2-clock,
+.meeting-app.meeting-light .meeting-v2-user-name,
+.meeting-app.meeting-light .meeting-v2-status-text {
+  color: var(--mm-ink);
+  opacity: 1;
+}
+
+.meeting-app.meeting-light .meeting-v2-mode,
+.meeting-app.meeting-light .meeting-v2-count {
+  background: var(--mm-blue-soft);
+  border-color: rgba(59, 102, 245, 0.2);
+  color: var(--mm-blue);
+}
+
+.meeting-app.meeting-light .meeting-v2-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  color: var(--mm-ink-dim);
+}
+
+.meeting-app.meeting-light .meeting-v2-search input {
+  border: none;
+  background: transparent;
+  outline: none;
+  width: 7rem;
+  font-family: inherit;
+  font-size: 0.86rem;
+  color: var(--mm-ink);
+}
+
+.meeting-app.meeting-light .meeting-v2-share {
+  border: none;
+  border-radius: 999px;
+  background: var(--mm-blue);
+  color: #fff;
+  font-family: "Sora", "Outfit", sans-serif;
+  font-weight: 700;
+  font-size: 0.84rem;
+  padding: 0.45rem 1rem;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(59, 102, 245, 0.28);
+}
+
+.meeting-app.meeting-light .meeting-v2-share:hover {
+  filter: brightness(1.05);
+}
+
+.meeting-app.meeting-light .meeting-v2-avatar {
+  background: linear-gradient(145deg, #3b66f5, #5b82f7);
+}
+
+.meeting-app.meeting-light .meeting-v2-icon-btn {
+  color: var(--mm-ink-dim);
+}
+
+.meeting-app.meeting-light .meeting-body {
+  grid-template-columns: minmax(0, 1fr) auto;
+  position: relative;
+  padding: 0.65rem 0.65rem 0.65rem 0.85rem;
+  gap: 0.65rem;
+}
+
+.meeting-app.meeting-light .meeting-stage {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 20px;
+}
+
+.meeting-app.meeting-light .video-stage {
+  background: transparent;
+  padding: 8px 8px 6.5rem;
+  gap: 12px;
+}
+
+.meeting-app.meeting-light .video-stage .video-tile {
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+.meeting-app.meeting-light .video-stage .video-tile.is-speaking,
+.meeting-app.meeting-light .video-featured .video-tile {
+  border-color: var(--mm-blue);
+  box-shadow: 0 0 0 2px rgba(59, 102, 245, 0.35), 0 14px 32px rgba(59, 102, 245, 0.12);
+}
+
+.meeting-app.meeting-light .video-stage .video-label {
+  background: rgba(15, 23, 42, 0.55);
+}
+
+.meeting-app.meeting-light .video-stage .video-role {
+  background: rgba(59, 102, 245, 0.16);
+  border-color: rgba(59, 102, 245, 0.35);
+  color: var(--mm-blue);
+}
+
+.meeting-app.meeting-light .video-stage .no-video-container {
+  background: linear-gradient(160deg, #f8fafc, #eef2ff);
+}
+
+.meeting-app.meeting-light .video-stage .no-video-text {
+  color: var(--mm-ink-dim);
+}
+
+/* Featured host surround layout (client view) */
+.video-stage[data-layout="featured"] {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(0, 2.4fr) minmax(120px, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(110px, 0.9fr) auto;
+  grid-template-areas:
+    "s1 feat s3"
+    "s2 feat s4"
+    "s5 s6 s7"
+    "pager pager pager";
+  gap: 12px;
+}
+
+.video-featured {
+  grid-area: feat;
+  min-height: 0;
+}
+
+.video-featured .video-tile {
+  width: 100%;
+  height: 100%;
+}
+
+.video-sat { min-width: 0; min-height: 0; }
+.video-sat .video-tile { width: 100%; height: 100%; }
+.video-sat-1 { grid-area: s1; }
+.video-sat-2 { grid-area: s2; }
+.video-sat-3 { grid-area: s3; }
+.video-sat-4 { grid-area: s4; }
+.video-sat-5 { grid-area: s5; }
+.video-sat-6 { grid-area: s6; }
+.video-sat-7 { grid-area: s7; }
+.video-sat-8 { grid-area: s7; display: none; }
+
+.video-featured-pager {
+  grid-area: pager;
+  display: flex;
+  justify-content: center;
+}
+
+.meeting-app.meeting-light .gallery-pagination {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(15, 23, 42, 0.08);
+  color: var(--mm-ink);
+}
+
+.meeting-app.meeting-light .gallery-page-meta {
+  color: var(--mm-ink);
+}
+
+.meeting-app.meeting-light .gallery-page-btn {
+  color: var(--mm-ink);
+  background: #f8fafc;
+  border-color: rgba(15, 23, 42, 0.1);
+}
+
+/* Floating white control dock */
+.meeting-app.meeting-light .meeting-v2-control-bar {
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.14);
+  gap: 0.25rem;
+  padding: 0.45rem 0.7rem;
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-btn {
+  width: auto;
+  min-width: 64px;
+  height: auto;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 14px;
+  background: transparent;
+  color: var(--mm-ink);
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-label {
+  font-size: 0.68rem;
+  font-weight: 650;
+  color: var(--mm-ink-dim);
+  white-space: nowrap;
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-btn.is-on {
+  background: rgba(61, 214, 140, 0.16);
+  color: #15965a;
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-btn.is-off {
+  background: rgba(229, 57, 69, 0.1);
+  color: #e53945;
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-btn.hand-raised {
+  background: var(--mm-blue-soft);
+  color: var(--mm-blue);
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-end {
+  width: 52px;
+  height: 52px;
+  min-width: 52px;
+  border-radius: 50%;
+  background: #e53945;
+  color: #fff;
+  padding: 0;
+}
+
+.meeting-app.meeting-light .meeting-v2-ctrl-end .meeting-v2-ctrl-label {
+  display: none;
+}
+
+/* Right icon rail */
+.meeting-rail {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 0.45rem;
+  align-self: center;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 18px;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+  z-index: 4;
+}
+
+.meeting-rail-btn {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 14px;
+  background: #f1f5f9;
+  color: var(--mm-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 150ms ease, background 150ms ease;
+}
+
+.meeting-rail-btn:hover {
+  transform: translateY(-1px);
+}
+
+.meeting-rail-btn.is-chat { background: #fff4cc; color: #b45309; }
+.meeting-rail-btn.is-participants { background: #ffe4ef; color: #db2777; }
+.meeting-rail-btn.is-reactions { background: #ffe4e6; color: #e11d48; }
+.meeting-rail-btn.is-settings { background: #eef2ff; color: #475569; }
+.meeting-rail-btn.is-active {
+  outline: 2px solid var(--mm-blue);
+  outline-offset: 1px;
+}
+
+.meeting-rail-badge,
+.meeting-rail-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 1.05rem;
+  height: 1.05rem;
+  padding: 0 0.25rem;
+  border-radius: 999px;
+  background: #e53945;
+  color: #fff;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.meeting-rail-count {
+  background: var(--mm-blue);
+}
+
+/* Overlay side panel */
+.meeting-app.meeting-light .meeting-sidebar {
+  position: absolute;
+  top: 0.65rem;
+  right: 4.5rem;
+  bottom: 5.5rem;
+  width: min(360px, calc(100vw - 6rem));
+  display: none;
+  z-index: 5;
+  max-height: none;
+  height: auto;
+}
+
+.meeting-app.meeting-light .meeting-sidebar.open {
+  display: flex;
+  animation: stage-in 280ms ease both;
+}
+
+.meeting-app.meeting-light .rsp {
+  --rsp-ink: #1e293b;
+  --rsp-ink-dim: #64748b;
+  --rsp-paper: rgba(255, 255, 255, 0.92);
+  --rsp-paper-2: rgba(248, 250, 252, 0.96);
+  --rsp-line: rgba(15, 23, 42, 0.08);
+  --rsp-line-strong: rgba(15, 23, 42, 0.14);
+  --rsp-accent: #3b66f5;
+  --rsp-accent-soft: rgba(59, 102, 245, 0.12);
+  --rsp-self: #e2e8f0;
+  --rsp-font: "Outfit", "Segoe UI", sans-serif;
+  --rsp-display: "Sora", "Outfit", sans-serif;
+  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
+}
+
+.meeting-app.meeting-light .rsp-msg.is-self .rsp-msg-body {
+  background: linear-gradient(135deg, #3b66f5, #5b82f7);
+  border-color: transparent;
+  color: #fff;
+}
+
+.meeting-app.meeting-light .rsp-composer button {
+  background: var(--mm-blue);
+  color: #fff;
+  border: none;
+}
+
+.meeting-app.meeting-light .join-banner.info {
+  background: rgba(59, 102, 245, 0.1);
+  border-color: rgba(59, 102, 245, 0.22);
+  color: var(--mm-blue);
+}
+
+.meeting-app.meeting-light .mobile-sidebar-toggle {
+  display: none;
+}
+
+@media (max-width: 960px) {
+  .video-stage[data-layout="featured"] {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1.6fr) repeat(3, minmax(90px, 0.7fr)) auto;
+    grid-template-areas:
+      "feat feat"
+      "s1 s2"
+      "s3 s4"
+      "s5 s6"
+      "pager pager";
+  }
+
+  .meeting-app.meeting-light .meeting-sidebar {
+    right: 0.65rem;
+    left: 0.65rem;
+    width: auto;
+  }
+
+  .meeting-rail {
+    position: absolute;
+    right: 0.65rem;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+}
+
+@media (max-width: 768px) {
+  .meeting-app.meeting-light .meeting-v2-search,
+  .meeting-app.meeting-light .meeting-v2-user-name {
+    display: none;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-ctrl-label {
+    display: none;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-ctrl-btn {
+    min-width: 46px;
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
   }
 }

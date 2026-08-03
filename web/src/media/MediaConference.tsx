@@ -14,6 +14,7 @@ export interface MediaConferenceProps {
   participantCount?: number;
   chatBadge?: number | string;
   onFocusChat?: () => void;
+  onFocusParticipants?: () => void;
   roomMode?: string;
   participantRole?: string;
   hostParticipantId?: string;

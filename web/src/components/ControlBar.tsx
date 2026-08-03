@@ -3,6 +3,7 @@ import {
   ChatIcon,
   EndCallIcon,
   MicIcon,
+  ParticipantsIcon,
   RaiseHandIcon,
   ReactionsIcon,
   ShareScreenIcon,
@@ -16,18 +17,15 @@ interface ControlBarProps {
   onShareScreen: () => void;
   onLeave: () => void;
   showScreenShare?: boolean;
-  /** Show mic control (webinar attendees may unmute; interactive capacity may hide). */
   showAudioControl?: boolean;
-  /** Show camera control (host/co-host in webinar; all publishers in interactive). */
   showVideoControl?: boolean;
-  /** Webinar raise-hand signal (does not gate the mic). */
   showRaiseHand?: boolean;
   handRaised?: boolean;
   onToggleRaiseHand?: () => void;
   chatBadge?: number | string;
-  /** Disable mic/camera/screen while a device toggle is in progress. */
   mediaBusy?: boolean;
   onFocusChat?: () => void;
+  onFocusParticipants?: () => void;
 }
 
 function Badge({ value }: { value: number | string }) {
@@ -50,93 +48,105 @@ export function ControlBar({
   chatBadge,
   mediaBusy = false,
   onFocusChat,
+  onFocusParticipants,
 }: ControlBarProps) {
-  const hasMedia = showAudioControl || showVideoControl || showScreenShare;
-
   return (
     <div className="meeting-v2-control-bar-wrap">
       <div className="meeting-v2-control-bar" role="toolbar" aria-label="Meeting controls">
-        {hasMedia && (
-          <>
-            {showAudioControl && (
-              <button
-                type="button"
-                className={`meeting-v2-ctrl-btn ${audioEnabled ? "" : "is-off"}`}
-                onClick={onToggleAudio}
-                disabled={mediaBusy}
-                aria-pressed={audioEnabled}
-                aria-label={audioEnabled ? "Mute microphone" : "Unmute microphone"}
-              >
-                <MicIcon muted={!audioEnabled} size={22} />
-              </button>
-            )}
-
-            {showVideoControl && (
-              <button
-                type="button"
-                className={`meeting-v2-ctrl-btn ${videoEnabled ? "" : "is-off"}`}
-                onClick={onToggleVideo}
-                disabled={mediaBusy}
-                aria-pressed={videoEnabled}
-                aria-label={videoEnabled ? "Turn camera off" : "Turn camera on"}
-              >
-                <CameraIcon off={!videoEnabled} size={22} />
-              </button>
-            )}
-
-            {showScreenShare && (
-              <button
-                type="button"
-                className="meeting-v2-ctrl-btn"
-                onClick={onShareScreen}
-                disabled={mediaBusy}
-                aria-label="Share screen"
-              >
-                <ShareScreenIcon size={22} />
-              </button>
-            )}
-
-            <span className="meeting-v2-ctrl-divider" aria-hidden="true" />
-          </>
+        {showAudioControl && (
+          <button
+            type="button"
+            className={`meeting-v2-ctrl-btn ${audioEnabled ? "" : "is-off"}`}
+            onClick={onToggleAudio}
+            disabled={mediaBusy}
+            aria-pressed={audioEnabled}
+            aria-label={audioEnabled ? "Mute" : "Unmute"}
+          >
+            <MicIcon muted={!audioEnabled} size={22} />
+            <span className="meeting-v2-ctrl-label">{audioEnabled ? "Mute" : "Unmute"}</span>
+          </button>
         )}
+
+        {showVideoControl && (
+          <button
+            type="button"
+            className={`meeting-v2-ctrl-btn ${videoEnabled ? "is-on" : "is-off"}`}
+            onClick={onToggleVideo}
+            disabled={mediaBusy}
+            aria-pressed={videoEnabled}
+            aria-label={videoEnabled ? "Stop video" : "Start video"}
+          >
+            <CameraIcon off={!videoEnabled} size={22} />
+            <span className="meeting-v2-ctrl-label">{videoEnabled ? "Stop Video" : "Start Video"}</span>
+          </button>
+        )}
+
+        {showScreenShare && (
+          <button
+            type="button"
+            className="meeting-v2-ctrl-btn"
+            onClick={onShareScreen}
+            disabled={mediaBusy}
+            aria-label="Share screen"
+          >
+            <ShareScreenIcon size={22} />
+            <span className="meeting-v2-ctrl-label">Share Screen</span>
+          </button>
+        )}
+
+        <button type="button" className="meeting-v2-ctrl-btn meeting-v2-ctrl-end" onClick={onLeave} aria-label="End call">
+          <EndCallIcon size={20} />
+          <span className="meeting-v2-ctrl-label meeting-v2-end-label">End Call</span>
+        </button>
 
         {showRaiseHand && onToggleRaiseHand && (
           <button
             type="button"
-            className={`meeting-v2-ctrl-btn meeting-v2-ctrl-secondary ${handRaised ? "hand-raised" : ""}`}
+            className={`meeting-v2-ctrl-btn ${handRaised ? "hand-raised" : ""}`}
             onClick={onToggleRaiseHand}
             aria-pressed={handRaised}
             aria-label={handRaised ? "Lower hand" : "Raise hand"}
-            title={handRaised ? "Lower hand" : "Raise hand"}
           >
             <RaiseHandIcon size={22} />
+            <span className="meeting-v2-ctrl-label">Raise Hand</span>
+          </button>
+        )}
+
+        {onFocusParticipants && (
+          <button
+            type="button"
+            className="meeting-v2-ctrl-btn"
+            onClick={onFocusParticipants}
+            aria-label="Open participants"
+          >
+            <ParticipantsIcon size={22} />
+            <span className="meeting-v2-ctrl-label">Participants</span>
+          </button>
+        )}
+
+        {onFocusChat && (
+          <button
+            type="button"
+            className="meeting-v2-ctrl-btn"
+            onClick={onFocusChat}
+            aria-label="Open chat"
+          >
+            <ChatIcon size={22} />
+            {chatBadge !== undefined && chatBadge !== 0 && (
+              <Badge value={typeof chatBadge === "number" && chatBadge > 9 ? "9+" : chatBadge} />
+            )}
+            <span className="meeting-v2-ctrl-label">Chat</span>
           </button>
         )}
 
         <button
           type="button"
-          className="meeting-v2-ctrl-btn meeting-v2-ctrl-secondary"
-          onClick={onFocusChat}
-          aria-label="Open chat and participants"
-        >
-          <ChatIcon size={22} />
-          {chatBadge !== undefined && chatBadge !== 0 && (
-            <Badge value={typeof chatBadge === "number" && chatBadge > 9 ? "9+" : chatBadge} />
-          )}
-        </button>
-
-        <button
-          type="button"
-          className="meeting-v2-ctrl-btn meeting-v2-ctrl-secondary"
-          aria-label="Reactions (coming soon)"
-          title="Reactions — coming soon"
+          className="meeting-v2-ctrl-btn"
+          aria-label="More options"
+          title="More — coming soon"
         >
           <ReactionsIcon size={22} />
-        </button>
-
-        <button type="button" className="meeting-v2-ctrl-btn meeting-v2-ctrl-end" onClick={onLeave} aria-label="End call">
-          <EndCallIcon size={20} />
-          <span className="meeting-v2-end-label">End Call</span>
+          <span className="meeting-v2-ctrl-label">More</span>
         </button>
       </div>
     </div>

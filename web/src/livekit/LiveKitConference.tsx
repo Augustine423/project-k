@@ -51,6 +51,7 @@ interface LiveKitConferenceProps {
   participantCount?: number;
   chatBadge?: number | string;
   onFocusChat?: () => void;
+  onFocusParticipants?: () => void;
   roomMode?: string;
   /** host | cohost | participant — drives webinar camera rights while media API syncs. */
   participantRole?: string;
@@ -98,6 +99,7 @@ export function LiveKitConference({
   participantCount = 1,
   chatBadge,
   onFocusChat,
+  onFocusParticipants,
   roomMode,
   participantRole = "participant",
   hostParticipantId,
@@ -574,8 +576,8 @@ export function LiveKitConference({
     if (galleryPage > totalGalleryPages) setGalleryPage(totalGalleryPages);
   }, [galleryPage, totalGalleryPages]);
 
-  /** Hosts see equal gallery grid; attendees spotlight the host larger than self. */
-  const layoutMode = isHostRole ? "gallery" : "spotlight";
+  /** Hosts see equal gallery grid; attendees get featured host + surround tiles. */
+  const layoutMode = isHostRole ? "gallery" : "featured";
 
   const localTile = useMemo<StageTile>(
     () => ({
@@ -614,8 +616,8 @@ export function LiveKitConference({
     return result;
   }, [hostParticipantId, localStream, localTile, paginatedRemoteIds, remoteFeeds, visibleRemoteIds]);
 
-  const spotlightHostTile = useMemo<StageTile | null>(() => {
-    if (layoutMode !== "spotlight") return null;
+  const featuredHostTile = useMemo<StageTile | null>(() => {
+    if (layoutMode !== "featured") return null;
     if (hostParticipantId) {
       const feed = remoteFeeds.get(hostParticipantId);
       if (feed) {
@@ -640,8 +642,8 @@ export function LiveKitConference({
     };
   }, [hostParticipantId, layoutMode, remoteFeeds]);
 
-  const filmstripTiles = useMemo<StageTile[]>(() => {
-    if (layoutMode !== "spotlight") return [];
+  const surroundTiles = useMemo<StageTile[]>(() => {
+    if (layoutMode !== "featured") return [];
     const strip: StageTile[] = [{ ...localTile, roleBadge: "You" }];
     for (const id of paginatedRemoteIds) {
       if (!visibleRemoteIds.has(id)) continue;
@@ -700,23 +702,22 @@ export function LiveKitConference({
           ))}
         </div>
       ) : (
-        <div className="video-stage" data-layout="spotlight">
-          {spotlightHostTile && (
-            <div className="video-spotlight">
+        <div className="video-stage" data-layout="featured" data-sats={String(Math.min(surroundTiles.length, 8))}>
+          {featuredHostTile && (
+            <div className="video-featured">
               <StreamVideoTile
-                stream={spotlightHostTile.stream}
-                trackSignature={spotlightHostTile.trackSignature}
-                label={spotlightHostTile.label}
-                hasVideo={spotlightHostTile.hasVideo}
-                roleBadge={spotlightHostTile.roleBadge}
+                stream={featuredHostTile.stream}
+                trackSignature={featuredHostTile.trackSignature}
+                label={featuredHostTile.label}
+                hasVideo={featuredHostTile.hasVideo}
+                roleBadge={featuredHostTile.roleBadge}
                 size="spotlight"
               />
             </div>
           )}
-          <div className="video-filmstrip" aria-label="Participants">
-            {filmstripTiles.map((tile) => (
+          {surroundTiles.slice(0, 8).map((tile, index) => (
+            <div key={tile.id} className={`video-sat video-sat-${index + 1}`}>
               <StreamVideoTile
-                key={tile.id}
                 stream={tile.stream}
                 trackSignature={tile.trackSignature}
                 label={tile.label}
@@ -726,16 +727,18 @@ export function LiveKitConference({
                 roleBadge={tile.roleBadge}
                 size="strip"
               />
-            ))}
-          </div>
+            </div>
+          ))}
           {totalGalleryPages > 1 && (
-            <GalleryPagination
-              page={galleryPage}
-              totalPages={totalGalleryPages}
-              onPageChange={setGalleryPage}
-              totalParticipants={participantCount}
-              offPageCount={offPageCount}
-            />
+            <div className="video-featured-pager">
+              <GalleryPagination
+                page={galleryPage}
+                totalPages={totalGalleryPages}
+                onPageChange={setGalleryPage}
+                totalParticipants={participantCount}
+                offPageCount={offPageCount}
+              />
+            </div>
           )}
         </div>
       )}
@@ -743,7 +746,7 @@ export function LiveKitConference({
         {sortedRemoteIds
           .filter((id) => {
             if (visibleRemoteIds.has(id)) return false;
-            if (layoutMode === "spotlight" && hostParticipantId && id === hostParticipantId) {
+            if (layoutMode === "featured" && hostParticipantId && id === hostParticipantId) {
               return false;
             }
             return true;
@@ -779,6 +782,7 @@ export function LiveKitConference({
         chatBadge={chatBadge}
         mediaBusy={mediaBusy}
         onFocusChat={onFocusChat}
+        onFocusParticipants={onFocusParticipants}
       />
     </div>
   );

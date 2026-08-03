@@ -10,11 +10,11 @@ export function AuthSocialButtons({ onSocial }: AuthSocialButtonsProps) {
     <div className="auth-social">
       <button type="button" className="auth-social-btn" onClick={() => onSocial?.("google")}>
         <GoogleIcon />
-        <span>Continue with Google</span>
+        <span>Google</span>
       </button>
       <button type="button" className="auth-social-btn" onClick={() => onSocial?.("slack")}>
         <SlackIcon />
-        <span>Continue with Slack</span>
+        <span>Slack</span>
       </button>
       <div className="auth-or" role="separator" aria-label="or">
         <span>or continue with email</span>
@@ -50,7 +50,7 @@ export function AuthHeader({ title, subtitle }: { title?: string; subtitle: stri
   return (
     <header className="auth-header">
       <div className="auth-brand-block">
-        <BrandLogo size={44} className="auth-brand-logo" />
+        <BrandLogo size={42} className="auth-brand-logo" />
         <p className="auth-tagline">Meeting with all your team Max</p>
       </div>
       {title ? <h1 className="auth-title">{title}</h1> : null}
