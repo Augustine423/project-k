@@ -165,7 +165,7 @@ public sealed class RoomService
             participant.DisplayName,
             signalingUrl,
             caps.CanPublishAnything,
-            canSubscribe: true,
+            true,
             publishSources));
 
         return new JoinTicketDto
