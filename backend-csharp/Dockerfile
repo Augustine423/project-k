@@ -1,4 +1,4 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:8.0-alpine AS build
 WORKDIR /src
 COPY ["backend-csharp/backend-csharp.csproj", "backend-csharp/"]
 RUN dotnet restore "backend-csharp/backend-csharp.csproj"
@@ -6,11 +6,12 @@ COPY backend-csharp/ backend-csharp/
 WORKDIR /src/backend-csharp
 RUN dotnet publish "backend-csharp.csproj" -c Release -o /app/publish
 
-FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
+FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
 WORKDIR /app
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
-  && rm -rf /var/lib/apt/lists/*
+RUN apk add --no-cache curl && rm -rf /var/cache/apk/*
 COPY --from=build /app/publish .
+# Remove unnecessary files to reduce image size
+RUN rm -rf /app/*.dbg /app/createdump 2>/dev/null || true
 EXPOSE 4000
 ENV ASPNETCORE_URLS=http://+:4000
 HEALTHCHECK --interval=10s --timeout=3s --retries=3 --start-period=15s \
