@@ -544,12 +544,24 @@ h1, h2, h3, h4 {
   scroll-snap-align: start;
 }
 
+.video-filmstrip-item:has(.video-tile[data-stream-aspect="portrait"]),
+.video-filmstrip-item:has(.video-tile[data-stream-aspect="square"]) {
+  width: clamp(96px, 11vw, 140px);
+}
+
 .video-filmstrip .video-tile,
 .video-filmstrip-item .video-tile {
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   height: auto;
   border-radius: 16px;
+}
+
+.video-filmstrip .video-tile[data-stream-aspect="portrait"],
+.video-filmstrip .video-tile[data-stream-aspect="square"],
+.video-filmstrip-item .video-tile[data-stream-aspect="portrait"],
+.video-filmstrip-item .video-tile[data-stream-aspect="square"] {
+  aspect-ratio: 9 / 16;
 }
 
 /* Mobile client stack — primary on top, 2-col grid below (client-view-for-mobile.png) */
@@ -569,14 +581,23 @@ h1, h2, h3, h4 {
   min-height: 0;
   width: 100%;
   display: flex;
+  justify-content: center;
 }
 
 .video-stack-primary .video-tile {
   width: 100%;
-  height: 100%;
-  min-height: min(42vh, 360px);
-  aspect-ratio: auto;
+  height: auto;
+  max-height: min(48vh, 420px);
+  min-height: min(28vh, 240px);
+  aspect-ratio: 16 / 9;
   border-radius: 24px;
+}
+
+.video-stack-primary .video-tile[data-stream-aspect="portrait"],
+.video-stack-primary .video-tile[data-stream-aspect="square"] {
+  width: min(100%, calc(min(48vh, 420px) * 9 / 16));
+  max-height: min(52vh, 480px);
+  aspect-ratio: 9 / 16;
 }
 
 .video-stack-grid {
@@ -585,6 +606,7 @@ h1, h2, h3, h4 {
   gap: 12px;
   flex: 0 0 auto;
   width: 100%;
+  align-items: start;
 }
 
 .video-stack-cell {
@@ -593,9 +615,18 @@ h1, h2, h3, h4 {
 
 .video-stack-cell .video-tile {
   width: 100%;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   height: auto;
   border-radius: 24px;
+}
+
+.video-stack-cell .video-tile[data-stream-aspect="portrait"],
+.video-stack-cell .video-tile[data-stream-aspect="square"] {
+  aspect-ratio: 9 / 16;
+  max-height: min(42vh, 360px);
+  width: auto;
+  max-width: 100%;
+  margin-inline: auto;
 }
 
 .gallery-pagination {
@@ -674,7 +705,7 @@ h1, h2, h3, h4 {
 }
 
 
-/* Equal Meet-style cells — stream aspect letterboxed via object-fit: contain */
+/* Equal Meet-style cells — aspect follows each stream (phone portrait / tablet+laptop landscape) */
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile,
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .lk-participant-tile {
   width: 100%;
@@ -682,9 +713,17 @@ h1, h2, h3, h4 {
   min-width: 0;
   min-height: 0;
   aspect-ratio: 16 / 9;
-  align-self: stretch;
+  align-self: start;
   justify-self: stretch;
   box-sizing: border-box;
+}
+
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .lk-participant-tile[data-stream-aspect="portrait"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .lk-participant-tile[data-stream-aspect="square"] {
+  aspect-ratio: 9 / 16;
+  max-height: min(70vh, 720px);
 }
 
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile,
@@ -702,6 +741,14 @@ h1, h2, h3, h4 {
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="square"] {
   width: min(100cqw, calc(100cqh * 9 / 16));
   aspect-ratio: 9 / 16;
+}
+
+.video-spotlight .video-tile[data-stream-aspect="portrait"],
+.video-spotlight .video-tile[data-stream-aspect="square"] {
+  width: min(100%, calc(100% * 9 / 16));
+  max-height: 100%;
+  aspect-ratio: 9 / 16;
+  margin-inline: auto;
 }
 
 .video-stage .video-tile,
@@ -2050,7 +2097,8 @@ button.rsp-person-name:hover {
   }
 
   .video-stack-primary .video-tile {
-    min-height: min(38vh, 320px);
+    min-height: min(28vh, 220px);
+    max-height: min(44vh, 380px);
     border-radius: 24px;
   }
 
@@ -2060,7 +2108,17 @@ button.rsp-person-name:hover {
 
   .video-stack-cell .video-tile {
     border-radius: 22px;
-    aspect-ratio: 4 / 3;
+  }
+
+  .video-stack-cell .video-tile[data-stream-aspect="landscape"],
+  .video-stack-cell .video-tile[data-stream-aspect="unknown"],
+  .video-stack-cell .video-tile.no-video {
+    aspect-ratio: 16 / 9;
+  }
+
+  .video-stack-cell .video-tile[data-stream-aspect="portrait"],
+  .video-stack-cell .video-tile[data-stream-aspect="square"] {
+    aspect-ratio: 9 / 16;
   }
 
   /* Fallback if gallery is shown on narrow screens */

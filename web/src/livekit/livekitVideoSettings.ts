@@ -97,14 +97,14 @@ export function receiveLayerCapForQuality(quality: ConnectionQuality): number {
   }
 }
 
-/** Prefer portrait capture on phones/tablets held upright; landscape on laptops. */
+/** Prefer portrait capture on phones only; tablets + laptops use landscape. */
 export function isPortraitCapturePreferred(): boolean {
   return resolveCaptureDimensions().portrait;
 }
 
 /**
  * Request device-appropriate camera resolution before / during enable:
- * mobile/tablet upright → 720×1280; laptop (and handheld landscape) → 1280×720.
+ * phone → 720×1280 portrait; tablet + laptop → 1280×720 landscape.
  * Downstream viewers adapt via simulcast; UI uses object-fit: contain (no crop).
  */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {

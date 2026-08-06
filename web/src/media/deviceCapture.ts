@@ -1,14 +1,15 @@
 /**
- * Detect capture device class before getUserMedia so we request
- * portrait (mobile/tablet) vs landscape (laptop) resolutions.
+ * Detect capture device class before getUserMedia so we request:
+ * - mobile phone → portrait 720×1280 (shown as portrait on every screen)
+ * - tablet + laptop → landscape 1280×720 (shown as landscape on every screen)
  */
 
 export type CaptureDeviceClass = "mobile" | "tablet" | "laptop";
 
-/** Mobile/tablet upright target — 720×1280 (9:16). */
+/** Phone upright target — 720×1280 (9:16). */
 export const PORTRAIT_CAPTURE = { width: 720, height: 1280 } as const;
 
-/** Laptop / landscape target — 1280×720 (16:9). */
+/** Tablet / laptop target — 1280×720 (16:9). */
 export const LANDSCAPE_CAPTURE = { width: 1280, height: 720 } as const;
 
 function hasCoarsePointer(): boolean {
@@ -41,7 +42,7 @@ function uaHints(): { mobile: boolean; tablet: boolean } {
 
 /**
  * Classify the local device for camera constraints.
- * Width + UA + coarse pointer — touchscreen laptops stay "laptop".
+ * Touchscreen laptops stay "laptop" (landscape).
  */
 export function detectCaptureDeviceClass(): CaptureDeviceClass {
   if (typeof window === "undefined") return "laptop";
@@ -52,35 +53,27 @@ export function detectCaptureDeviceClass(): CaptureDeviceClass {
 
   const width = window.innerWidth;
   const coarse = hasCoarsePointer();
-  // Small touch screens without clear UA → treat as phone/tablet.
-  if (coarse && width <= 900) {
-    return width <= 600 ? "mobile" : "tablet";
-  }
+  // Small phone-sized touch screens without clear UA → mobile.
+  if (coarse && width <= 600) return "mobile";
+  // Larger touch pads without phone UA → tablet (landscape capture).
+  if (coarse && width <= 1100) return "tablet";
   return "laptop";
 }
 
-export function isHandheldCaptureDevice(device = detectCaptureDeviceClass()): boolean {
-  return device === "mobile" || device === "tablet";
+/** Phones only — tablets are treated as landscape devices. */
+export function isMobilePhoneCaptureDevice(device = detectCaptureDeviceClass()): boolean {
+  return device === "mobile";
 }
 
-/** Current screen orientation (for handheld rotate). */
-export function isPortraitOrientation(): boolean {
-  if (typeof window === "undefined") return false;
-  const type = window.screen?.orientation?.type;
-  if (typeof type === "string") {
-    if (type.startsWith("portrait")) return true;
-    if (type.startsWith("landscape")) return false;
-  }
-  if (typeof window.matchMedia === "function") {
-    return window.matchMedia("(orientation: portrait)").matches;
-  }
-  return window.innerHeight >= window.innerWidth;
+/** @deprecated Prefer isMobilePhoneCaptureDevice — tablets are landscape now. */
+export function isHandheldCaptureDevice(device = detectCaptureDeviceClass()): boolean {
+  return device === "mobile";
 }
 
 /**
  * Capture size for this device:
- * - Laptop → always landscape 1280×720
- * - Mobile/tablet → portrait 720×1280 when upright; landscape 1280×720 when sideways
+ * - Mobile phone → always portrait 720×1280
+ * - Tablet + laptop → always landscape 1280×720
  */
 export function resolveCaptureDimensions(device = detectCaptureDeviceClass()): {
   width: number;
@@ -89,18 +82,7 @@ export function resolveCaptureDimensions(device = detectCaptureDeviceClass()): {
   aspectRatio: number;
   device: CaptureDeviceClass;
 } {
-  if (!isHandheldCaptureDevice(device)) {
-    return {
-      width: LANDSCAPE_CAPTURE.width,
-      height: LANDSCAPE_CAPTURE.height,
-      portrait: false,
-      aspectRatio: 16 / 9,
-      device,
-    };
-  }
-
-  const portrait = isPortraitOrientation();
-  if (portrait) {
+  if (device === "mobile") {
     return {
       width: PORTRAIT_CAPTURE.width,
       height: PORTRAIT_CAPTURE.height,
@@ -109,6 +91,7 @@ export function resolveCaptureDimensions(device = detectCaptureDeviceClass()): {
       device,
     };
   }
+
   return {
     width: LANDSCAPE_CAPTURE.width,
     height: LANDSCAPE_CAPTURE.height,
