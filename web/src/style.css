@@ -491,48 +491,16 @@ h1, h2, h3, h4 {
   container-name: single-stage;
 }
 
-.video-stage[data-layout="gallery"][data-count="2"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: minmax(0, 1fr);
-}
-
-.video-stage[data-layout="gallery"][data-count="3"],
-.video-stage[data-layout="gallery"][data-count="4"] {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-}
-
-.video-stage[data-layout="gallery"][data-count="5"],
-.video-stage[data-layout="gallery"][data-count="6"] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(2, minmax(0, 1fr));
-}
-
-.video-stage[data-layout="gallery"][data-count="7"],
-.video-stage[data-layout="gallery"][data-count="8"],
-.video-stage[data-layout="gallery"][data-count="9"] {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: repeat(3, minmax(0, 1fr));
-}
-
-.video-stage[data-layout="gallery"][data-count="10"],
-.video-stage[data-layout="gallery"][data-count="11"],
-.video-stage[data-layout="gallery"][data-count="12"],
-.video-stage[data-layout="gallery"][data-count="13"],
-.video-stage[data-layout="gallery"][data-count="14"],
-.video-stage[data-layout="gallery"][data-count="15"],
-.video-stage[data-layout="gallery"][data-count="16"],
-.video-stage[data-layout="gallery"][data-count="17"],
-.video-stage[data-layout="gallery"][data-count="18"],
-.video-stage[data-layout="gallery"][data-count="19"],
-.video-stage[data-layout="gallery"][data-count="20"],
-.video-stage[data-layout="gallery"][data-count="21"],
-.video-stage[data-layout="gallery"][data-count="22"],
-.video-stage[data-layout="gallery"][data-count="23"],
-.video-stage[data-layout="gallery"][data-count="24"],
-.video-stage[data-layout="gallery"][data-count="25"] {
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  grid-auto-rows: minmax(0, 1fr);
+/* Mixed portrait + landscape: 12-col dense grid.
+   Landscape spans 4, portrait spans 2 (= half width of a laptop tile). */
+.video-stage[data-layout="gallery"]:not([data-count="1"]) {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-auto-rows: minmax(140px, auto);
+  grid-auto-flow: dense;
+  align-content: center;
+  justify-items: stretch;
+  place-items: stretch;
 }
 
 .video-stage[data-layout="spotlight"] {
@@ -651,13 +619,30 @@ h1, h2, h3, h4 {
 }
 
 
-/* Multi-participant tiles fill grid cells */
+/* Multi-participant tiles — aspect-aware spans (portrait ≈ half of landscape) */
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile,
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .lk-participant-tile {
   width: 100%;
-  height: 100%;
   min-width: 0;
   min-height: 0;
+  height: auto;
+  max-height: 100%;
+}
+
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
+  grid-column: span 4;
+  aspect-ratio: 16 / 9;
+  align-self: center;
+}
+
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
+  grid-column: span 2;
+  aspect-ratio: 9 / 16;
+  align-self: center;
+  max-height: min(72vh, 100%);
 }
 
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile,
@@ -671,11 +656,18 @@ h1, h2, h3, h4 {
   aspect-ratio: 16 / 9;
 }
 
+.video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="portrait"],
+.video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="square"] {
+  width: min(100cqw, calc(100cqh * 9 / 16));
+  height: min(100cqh, calc(100cqw * 16 / 9));
+  aspect-ratio: 9 / 16;
+}
+
 .video-stage .video-tile,
 .video-stage .lk-participant-tile {
   position: relative;
-  background: linear-gradient(165deg, #141b24 0%, #0b1018 55%, #090d14 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #ffffff;
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 16px;
   overflow: hidden;
   transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.25s ease;
@@ -1969,28 +1961,27 @@ button.rsp-person-name:hover {
     max-height: calc(100dvh - 14rem);
   }
 
-  .video-stage[data-layout="gallery"][data-count="2"] {
-    grid-template-columns: 1fr;
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+  .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="portrait"],
+  .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="square"] {
+    width: min(100%, calc((100dvh - 14rem) * 9 / 16));
+    height: min(calc(100dvh - 14rem), calc(100vw * 16 / 9));
+    aspect-ratio: 9 / 16;
   }
 
-  .video-stage[data-layout="gallery"][data-count="3"],
-  .video-stage[data-layout="gallery"][data-count="4"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(2, minmax(0, 1fr));
+  /* Narrow viewer: landscape full row half-system, portrait half of that */
+  .video-stage[data-layout="gallery"]:not([data-count="1"]) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
-  .video-stage[data-layout="gallery"][data-count="5"],
-  .video-stage[data-layout="gallery"][data-count="6"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(3, minmax(0, 1fr));
+  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
+  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
+  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
+    grid-column: span 6;
   }
 
-  .video-stage[data-layout="gallery"][data-count="7"],
-  .video-stage[data-layout="gallery"][data-count="8"],
-  .video-stage[data-layout="gallery"][data-count="9"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-template-rows: repeat(3, minmax(0, 1fr));
+  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
+  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
+    grid-column: span 3;
   }
 }
 
@@ -3747,7 +3738,7 @@ html:has(.auth-page) body {
 }
 
 .meeting-app.meeting-light .video-stage .video-tile {
-  background: linear-gradient(165deg, #0f172a 0%, #111827 52%, #0b1220 100%);
+  background: #ffffff;
   border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 18px;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
@@ -3998,35 +3989,19 @@ html:has(.auth-page) body {
   background: transparent;
 }
 
-/* Soft letterbox pad behind every feed */
+/* Clean white letterbox pad — original aspect, no crop/zoom */
 .video-tile[data-fit="contain"],
 .video-tile[data-fit="cover"],
+.video-tile[data-fit="contain-blur"],
 .video-tile[data-stream-aspect="portrait"],
 .video-tile[data-stream-aspect="landscape"],
 .video-tile[data-stream-aspect="square"],
 .video-tile[data-stream-aspect="unknown"] {
-  background: linear-gradient(165deg, #141b24 0%, #0b1018 55%, #090d14 100%);
-}
-
-/* Portrait / mismatched cells: centered feed + blurred side padding */
-.video-tile[data-fit="contain-blur"] {
-  background: linear-gradient(165deg, #141b24 0%, #0b1018 55%, #090d14 100%);
+  background: #ffffff;
 }
 
 .video-tile[data-fit="contain-blur"] .video-blur-bg {
-  position: absolute;
-  inset: -8%;
-  width: 116%;
-  height: 116%;
-  object-fit: cover;
-  filter: blur(28px) saturate(1.15) brightness(0.55);
-  transform: scale(1.12);
-  z-index: 0;
-  pointer-events: none;
-}
-
-.video-tile[data-fit="contain-blur"] .video-blur-bg.mirror {
-  transform: scaleX(-1) scale(1.12);
+  display: none;
 }
 
 .video-tile[data-fit="contain-blur"] .video-feed {
@@ -4048,16 +4023,6 @@ html:has(.auth-page) body {
 .video-stage-shell > .video-stage {
   flex: 1;
   min-height: 0;
-}
-
-/* Grid cells keep native source aspect via contain — no stretch. */
-.video-stage[data-layout="gallery"] .video-tile.has-video {
-  aspect-ratio: auto;
-}
-
-.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="portrait"],
-.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="landscape"] {
-  place-self: stretch;
 }
 
 .video-stage[data-layout="gallery"] .video-tile .video-feed,
@@ -4323,8 +4288,7 @@ html:has(.auth-page) body {
   border-radius: 18px;
   border-color: rgba(15, 23, 42, 0.08);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-  /* Letterbox pad behind contain-fit feeds */
-  background: linear-gradient(165deg, #0f172a 0%, #111827 52%, #0b1220 100%);
+  background: #ffffff;
 }
 
 .meeting-app.meeting-light .video-stage .video-tile.is-speaking,

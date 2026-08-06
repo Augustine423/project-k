@@ -1,0 +1,206 @@
+================================================================================
+FUTURE DEVELOPMENT NOTES — MeetingMax
+================================================================================
+Status: PLAN ONLY — do not implement until explicitly requested.
+File: FUTURE-01-meeting-transcribe-interpreter.txt (holds #1 and #2)
+
+  #1  Meeting transcribe (STT) + audio interpreter
+  #2  Gesture / vision reactions (thumbs up, hand raise → host UI + in-chat)
+
+Created from product discussion (2026-08-06).
+
+================================================================================
+FUTURE DEVELOPMENT #1
+MeetingMax — Live transcription (STT) + audio interpreter
+================================================================================
+Stack idea: LiveKit Agents (STT + translate + optional TTS) on existing LiveKit SFU.
+
+--------------------------------------------------------------------------------
+1. GOAL
+--------------------------------------------------------------------------------
+Zoom-style meeting features for host and clients:
+
+  A) MEETING TRANSCRIBE (STT)
+     - User activates via UI.
+     - Choose desired language for captions / transcript.
+     - Speech → text (and optional text translation).
+     - Does NOT replace anyone's microphone audio by default.
+
+  B) AUDIO INTERPRETER
+     - Live spoken translation (STT → translate → TTS).
+     - Each listener chooses what THEY hear:
+         • Original voice only
+         • Translated voice only
+         • Both (original + quieter translated "background" / interpreter channel)
+     - Support pairs such as Myanmar ↔ English and other ↔ desired language
+       (quality depends on STT/TTS provider language coverage).
+
+--------------------------------------------------------------------------------
+2. UI CONTROLS (PER USER)
+--------------------------------------------------------------------------------
+Keep as TWO separate controls (do not merge into one confusing toggle):
+
+  [ Captions / Transcribe ]
+    - On / Off
+    - Transcript language (or auto-detect → translate to X)
+    - Shows live captions and/or transcript panel
+
+  [ Interpretation / Listen in… ]
+    - Listen mode: Original | Translated | Both
+    - Target listen language (e.g. English, Myanmar, …)
+    - Default: Original, interpreter off
+
+Host should not force every participant's ears; preferences are per listener.
+Optional later: host can enable/allow the feature for the room.
+
+--------------------------------------------------------------------------------
+3. LISTEN MODES (INTERPRETER)
+--------------------------------------------------------------------------------
+  Original   — current meeting audio only (today's behavior).
+  Translated — hear interpreter TTS only (duck/mute original for that listener).
+  Both       — original at normal/slightly lower volume + translated as secondary
+               "background" channel (client-side mix preferred for flexibility).
+
+"Background voice" = mix on the LISTENER client, not rewriting the speaker publish.
+
+--------------------------------------------------------------------------------
+4. BACKEND LOGIC (HIGH LEVEL)
+--------------------------------------------------------------------------------
+  - Meeting continues on existing LiveKit room (MeetingMax SFU path unchanged).
+  - Optional LiveKit Agent joins the room as a server-side participant.
+  - Agent subscribes selectively (active speaker / host — NOT all mics in large rooms).
+  - Pipeline:
+        mic audio → STT → (optional MT/LLM translate) → captions text
+                                      ↓
+                                 optional TTS → interpreter audio track(s)
+  - Captions/events can also go through control-plane WS if preferred.
+  - Large rooms: never STT every participant; use active speaker + host policy.
+
+--------------------------------------------------------------------------------
+5. LANGUAGE NOTES (MYANMAR)
+--------------------------------------------------------------------------------
+  - LiveKit Agents framework is open source; languages come from STT/TTS/LLM vendors.
+  - Myanmar (my): captions + text translate are more realistic first.
+  - Spoken Myanmar TTS is often the weak link — verify provider quality before v2.
+  - Cost: Agents framework free to self-host; STT/TTS/LLM APIs are pay-as-you-go
+    (or LiveKit Cloud Inference credits). LiveKit Cloud has a free Build tier then paid.
+
+--------------------------------------------------------------------------------
+6. SUGGESTED ROLLOUT
+--------------------------------------------------------------------------------
+  v1 — Transcribe + captions + language select (STT + text translate).
+  v2 — Audio interpreter: Original / Translated / Both + target language.
+  v3 — Multi-language interpreter floors (EN / MY / …) like Zoom interpretation.
+
+--------------------------------------------------------------------------------
+7. OPEN PRODUCT DECISIONS (RESOLVE BEFORE BUILD)
+--------------------------------------------------------------------------------
+  [ ] Interpreter per-listener only, or host can broadcast one language to all?
+  [ ] Both-mode: browser mix vs single server-mixed track?
+  [ ] Who can enable: host-only feature flag, or any participant?
+  [ ] Privacy banner when AI transcription/interpretation is on?
+  [ ] Which STT/TTS vendors for Myanmar (test before committing)?
+
+--------------------------------------------------------------------------------
+8. OUT OF SCOPE FOR #1
+--------------------------------------------------------------------------------
+  - No code changes until this item is explicitly scheduled.
+  - Not robotics / LiveKit Portal.
+  - Not replacing current MeetingMax control plane or LiveKit meeting path.
+  - Gesture / vision reactions are FUTURE #2 (below), not part of #1.
+
+================================================================================
+END — FUTURE #1
+================================================================================
+
+
+================================================================================
+FUTURE DEVELOPMENT #2
+MeetingMax — Gesture / vision reactions (thumbs up + hand raise)
+================================================================================
+Status: PLAN ONLY — do not implement until explicitly requested.
+Clarification: "chat" means in-app room chat (NOT phone SMS).
+
+--------------------------------------------------------------------------------
+1. GOAL
+--------------------------------------------------------------------------------
+Detect user camera gestures and surface them to the host and in chat:
+
+  A) THUMBS UP
+     - Detect thumbs-up gesture from participant camera.
+     - Show 👍 emoji on host view (e.g. overlay on that participant's tile).
+     - Post / show 👍 in room chat (in-app chat).
+
+  B) HAND RAISE
+     - Detect raised-hand gesture from participant camera.
+     - Show ✋ (or raised-hand) on host view / raised-hands queue.
+     - Notify in room chat (in-app), e.g. "Alice raised hand".
+     - Prefer reusing existing webinar Raise Hand list/events where possible.
+
+--------------------------------------------------------------------------------
+2. UI / PRODUCT BEHAVIOR
+--------------------------------------------------------------------------------
+  - Opt-in: "Gesture reactions" on/off (privacy + false positives).
+  - Debounce: e.g. one thumbs-up every few seconds; hand-raise sticky until lower.
+  - Host sees emoji on gallery tile + optional toast.
+  - Chat shows reaction/system line (same RoomSidePanel chat — not SMS).
+  - Can coexist with manual Raise Hand / React buttons.
+
+--------------------------------------------------------------------------------
+3. TECH OPTIONS (VISION LOGIC)
+--------------------------------------------------------------------------------
+Preferred for meetings (privacy + cost + scale):
+
+  CLIENT-SIDE VISION (recommended)
+    - Run gesture ML in the browser on LOCAL camera frames
+      (e.g. MediaPipe / TensorFlow.js hand gestures).
+    - On detect → emit event to control-plane WS
+      (e.g. reaction.thumbs_up / hand.raised).
+    - Host UI + chat subscribe to those events.
+    - LiveKit only carries video as today; Agent NOT required.
+
+  OPTIONAL: LIVEKIT AGENT / SERVER VISION
+    - Agent subscribes to participant video, runs vision model, emits events.
+    - Heavier (bandwidth, cost, privacy). Better for special cases, not default
+      for every gallery participant in large rooms.
+
+Recommendation: ship #2 with client-side detection first; Agent vision only if needed.
+
+--------------------------------------------------------------------------------
+4. EVENT FLOW (HIGH LEVEL)
+--------------------------------------------------------------------------------
+  Participant camera
+       → local gesture detector (opt-in)
+       → control-plane event (participantId, gesture, displayName)
+       → host tile overlay (👍 / ✋)
+       → room chat message / reaction line (in-app)
+       → optional: sync with existing raisedHands state for hand raise
+
+--------------------------------------------------------------------------------
+5. SUGGESTED ROLLOUT
+--------------------------------------------------------------------------------
+  v1 — Thumbs up → host tile emoji + in-chat reaction (client-side detect).
+  v2 — Hand raise gesture → host queue + in-chat notice (wire to existing raise hand).
+  v3 — More gestures (clap, heart, etc.) if product wants them.
+  Optional later — Agent vision path for server-side detect.
+
+--------------------------------------------------------------------------------
+6. OPEN PRODUCT DECISIONS (RESOLVE BEFORE BUILD)
+--------------------------------------------------------------------------------
+  [ ] Default on or off for gesture detection?
+  [ ] Who sees tile emoji: host only, or all participants?
+  [ ] Hand raise gesture auto-clears after N seconds or until user lowers / clicks?
+  [ ] Chat format: system line vs emoji-only reaction bubble?
+  [ ] Require camera on to enable gesture reactions?
+
+--------------------------------------------------------------------------------
+7. OUT OF SCOPE FOR #2
+--------------------------------------------------------------------------------
+  - No phone SMS.
+  - No code changes until explicitly scheduled.
+  - Not part of transcribe/interpreter (#1).
+  - Not robotics / LiveKit Portal.
+
+================================================================================
+END — FUTURE #2
+================================================================================

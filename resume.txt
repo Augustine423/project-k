@@ -1,2 +1,0 @@
-agent --resume=c1093173-cf60-4d4e-b784-7f91e8c2a132
-agy --conversation=ccffe6f0-ab44-4e21-a36d-af2d2f21a782

@@ -22,16 +22,13 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 
 /**
  * Always preserve the source camera aspect (mobile portrait + laptop landscape).
- * Never crop with cover — letterbox inside the grid cell instead.
+ * Solid white letterbox pad — never crop with cover.
  */
-export function resolveTileFit(opts: {
+export function resolveTileFit(_opts: {
   streamAspect: StreamAspect;
   layout: ConferenceLayoutMode;
   size: "grid" | "spotlight" | "strip";
 }): TileFitMode {
-  const { streamAspect } = opts;
-  // Soft blurred pad for mismatched cells; solid contain otherwise.
-  if (streamAspect === "portrait" || streamAspect === "square") return "contain-blur";
   return "contain";
 }
 

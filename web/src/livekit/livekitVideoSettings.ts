@@ -17,6 +17,7 @@ import {
   substreamForVideoSlot,
   type GalleryVideoTier,
 } from "../media/galleryVideoPolicy";
+import { resolveCaptureDimensions } from "../media/deviceCapture";
 
 /** Prefer device max quality — do not cap to 720p. Viewers adapt via simulcast. */
 export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h1080.encoding.maxBitrate;
@@ -96,53 +97,40 @@ export function receiveLayerCapForQuality(quality: ConnectionQuality): number {
   }
 }
 
-/** Ideal capture targets — browser picks the best mode the camera supports. */
-const CAPTURE_LONG_EDGE = 1920;
-const CAPTURE_SHORT_EDGE = 1080;
-
-/** Prefer portrait capture on phones held upright; landscape otherwise (laptop / sideways phone). */
+/** Prefer portrait capture on phones/tablets held upright; landscape on laptops. */
 export function isPortraitCapturePreferred(): boolean {
-  if (typeof window === "undefined") return false;
-  const type = window.screen?.orientation?.type;
-  if (typeof type === "string") {
-    if (type.startsWith("portrait")) return true;
-    if (type.startsWith("landscape")) return false;
-  }
-  if (typeof window.matchMedia === "function") {
-    return window.matchMedia("(orientation: portrait)").matches;
-  }
-  return window.innerHeight > window.innerWidth;
+  return resolveCaptureDimensions().portrait;
 }
 
 /**
- * Request the device's best camera quality for the current orientation.
- * No hard max — `ideal` lets the browser choose the highest supported mode.
- * Downstream viewers receive lower simulcast layers when bandwidth is limited.
+ * Request device-appropriate camera resolution before / during enable:
+ * mobile/tablet upright → 720×1280; laptop (and handheld landscape) → 1280×720.
+ * Downstream viewers adapt via simulcast; UI uses object-fit: contain (no crop).
  */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {
-  const portrait = isPortraitCapturePreferred();
+  const { width, height, aspectRatio } = resolveCaptureDimensions();
   return {
     resolution: {
-      width: portrait ? CAPTURE_SHORT_EDGE : CAPTURE_LONG_EDGE,
-      height: portrait ? CAPTURE_LONG_EDGE : CAPTURE_SHORT_EDGE,
+      width,
+      height,
       frameRate: LIVEKIT_MAX_FRAMERATE,
-      aspectRatio: portrait ? 9 / 16 : 16 / 9,
+      aspectRatio,
     },
     facingMode: "user",
   };
 }
 
-/** Re-assert orientation + high ideal resolution after enable / rotate. */
+/** Re-assert device + orientation capture targets after enable / rotate. */
 export async function applyOrientationCaptureConstraints(
   track: MediaStreamTrack | undefined | null,
 ): Promise<void> {
   if (!track || track.kind !== "video") return;
-  const portrait = isPortraitCapturePreferred();
+  const { width, height, aspectRatio } = resolveCaptureDimensions();
   try {
     await track.applyConstraints({
-      width: { ideal: portrait ? CAPTURE_SHORT_EDGE : CAPTURE_LONG_EDGE },
-      height: { ideal: portrait ? CAPTURE_LONG_EDGE : CAPTURE_SHORT_EDGE },
-      aspectRatio: { ideal: portrait ? 9 / 16 : 16 / 9 },
+      width: { ideal: width },
+      height: { ideal: height },
+      aspectRatio: { ideal: aspectRatio },
       frameRate: { ideal: LIVEKIT_MAX_FRAMERATE },
     });
   } catch {
