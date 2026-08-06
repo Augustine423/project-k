@@ -16,6 +16,7 @@ import { ControlBar } from "../components/ControlBar";
 import { GalleryPagination } from "../components/GalleryPagination";
 import { ConferenceVideoStage } from "../components/conference/VideoStageLayouts";
 import { StreamVideoTile } from "../components/StreamVideoTile";
+import { useViewerViewport } from "../hooks/useViewerViewport";
 import {
   pickPrimaryTileId,
   resolveConferenceLayout,
@@ -149,8 +150,8 @@ export function LiveKitConference({
   const [canPublishVideo, setCanPublishVideo] = useState(() => isHostRole || roomMode !== "webinar");
   const [silenceNotice, setSilenceNotice] = useState<string | null>(null);
   const mediaAvailable = canAccessMediaDevices();
-  const layoutMode = resolveConferenceLayout();
-  // Viewport only used for data attributes / future chrome — stage is always gallery.
+  const viewport = useViewerViewport();
+  const layoutMode = resolveConferenceLayout(viewport.mode);
 
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
@@ -836,9 +837,8 @@ export function LiveKitConference({
     return [localTile, ...remotes];
   }, [galleryPageParticipants, hostParticipantId, isMassRoom, localTile, paginatedRemoteIds, remoteFeeds, sortedRemoteIds, speakingSet]);
 
-  /** Gallery only downloads the current page of remotes (+ local). */
+  /** Visible page of remotes (+ local) for gallery / spotlight / mobile-stack. */
   const galleryTiles = useMemo<StageParticipantTile[]>(() => {
-    if (layoutMode !== "gallery") return allStageTiles;
     const result: StageParticipantTile[] = [localTile];
     for (const id of paginatedRemoteIds) {
       if (!visibleRemoteIds.has(id)) continue;
@@ -849,16 +849,9 @@ export function LiveKitConference({
       return [{ ...localTile, id: "placeholder", hasVideo: false, stream: null }];
     }
     return result;
-  }, [
-    allStageTiles,
-    layoutMode,
-    localStream,
-    localTile,
-    paginatedRemoteIds,
-    visibleRemoteIds,
-  ]);
+  }, [allStageTiles, localStream, localTile, paginatedRemoteIds, visibleRemoteIds]);
 
-  const stageTiles = layoutMode === "gallery" ? galleryTiles : allStageTiles;
+  const stageTiles = galleryTiles;
 
   const primaryId = useMemo(
     () =>
@@ -898,7 +891,13 @@ export function LiveKitConference({
       {silenceNotice && connected && (
         <div className="join-banner info">{silenceNotice}</div>
       )}
-      {layoutMode === "gallery" && (
+      <ConferenceVideoStage
+        layoutMode={layoutMode}
+        primaryId={primaryId}
+        tiles={stageTiles}
+        maxPerPage={galleryTier.videosPerPage}
+      />
+      {(layoutMode === "gallery" || layoutMode === "spotlight" || layoutMode === "mobile-stack") && (
         <GalleryPagination
           page={galleryPage}
           totalPages={totalGalleryPages}
@@ -907,19 +906,10 @@ export function LiveKitConference({
           offPageCount={offPageCount}
         />
       )}
-      <ConferenceVideoStage
-        layoutMode={layoutMode}
-        primaryId={primaryId}
-        tiles={stageTiles}
-        maxPerPage={galleryTier.videosPerPage}
-      />
       <div className="hide" aria-hidden>
         {sortedRemoteIds
           .filter((id) => {
-            if (layoutMode === "gallery") return !visibleRemoteIds.has(id);
-            // Spotlight layouts still need off-primary audio if tile isn't mounted with audio.
-            // Primary + strip/pip cover most tiles; keep safety net for any missed remote.
-            return !stageTiles.some((t) => t.id === id);
+            return !visibleRemoteIds.has(id) && !stageTiles.some((t) => t.id === id);
           })
           .map((id) => {
             const feed = remoteFeeds.get(id);

@@ -1,15 +1,23 @@
 import type { ViewerViewportMode } from "../hooks/useViewerViewport";
 
-/** Stage presentation — equal grid for every viewer (host and client). */
-export type ConferenceLayoutMode = "gallery";
+/**
+ * Stage presentation:
+ * - gallery — equal grid (solo / fallback)
+ * - spotlight — desktop Meet style: primary + bottom filmstrip
+ * - mobile-stack — mobile client: primary on top + 2-col grid below
+ */
+export type ConferenceLayoutMode = "gallery" | "spotlight" | "mobile-stack";
 
 export type StreamAspect = "portrait" | "landscape" | "square" | "unknown";
 
 /** How a tile should render a stream inside its cell. `cover` kept for API compat but unused. */
 export type TileFitMode = "cover" | "contain" | "contain-blur";
 
-export function resolveConferenceLayout(_viewerMode?: ViewerViewportMode): ConferenceLayoutMode {
-  return "gallery";
+export function resolveConferenceLayout(viewerMode?: ViewerViewportMode): ConferenceLayoutMode {
+  if (viewerMode === "mobile-portrait" || viewerMode === "mobile-landscape") {
+    return "mobile-stack";
+  }
+  return "spotlight";
 }
 
 export function classifyStreamAspect(width: number, height: number): StreamAspect {
@@ -21,8 +29,7 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 }
 
 /**
- * Always preserve the source camera aspect (mobile portrait + laptop landscape).
- * Solid white letterbox pad — never crop with cover.
+ * Preserve source camera aspect with dark letterbox — never crop.
  */
 export function resolveTileFit(_opts: {
   streamAspect: StreamAspect;
@@ -79,4 +86,17 @@ export function pickPrimaryTileId(opts: {
 /** CSS data-count for gallery: clamp to a sensible grid key (1–25). */
 export function galleryDataCount(tileCount: number, maxPerPage: number): number {
   return Math.min(Math.max(tileCount, 1), maxPerPage + 1, 25);
+}
+
+/** Split primary vs secondary tiles for spotlight / mobile-stack. */
+export function splitPrimaryAndRest(
+  tiles: StageParticipantTile[],
+  primaryId: string,
+): { primary: StageParticipantTile; rest: StageParticipantTile[] } {
+  const primary =
+    tiles.find((t) => t.id === primaryId) ??
+    tiles[0] ??
+    ({ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false } satisfies StageParticipantTile);
+  const rest = tiles.filter((t) => t.id !== primary.id);
+  return { primary, rest };
 }
