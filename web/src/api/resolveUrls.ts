@@ -49,7 +49,11 @@ export function resolveJoinTicketMedia(ticket: JoinTicket): MediaSession {
     const secure = window.location.protocol === "https:";
     const url = `${secure ? "wss" : "ws"}://${window.location.host}/livekit`;
     const turnHost = isLoopbackHost(host) ? "localhost" : host;
-    return { ...base, url, turn: rewriteTurn(ticket, turnHost) };
+    const resolved = { ...base, url, turn: rewriteTurn(ticket, turnHost) };
+    // #region agent log
+    fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'D',location:'resolveUrls.ts:same-origin',message:'Resolved media session (same-origin proxy)',data:{host,url:resolved.url,ticketUrl:base.url,turnUrls:resolved.turn.urls,secure},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
+    return resolved;
   }
 
   if (isLoopbackHost(host)) {

@@ -1,0 +1,105 @@
+# Coturn — 1 replica on a worker. LoadBalancer exposes TURN for phone/laptop NAT.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: coturn
+  labels:
+    app: coturn
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: kind-local
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: coturn
+  template:
+    metadata:
+      labels:
+        app: coturn
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+      containers:
+        - name: coturn
+          image: coturn/coturn:4.6.2
+          args:
+            - "-c"
+            - "/etc/coturn/turnserver.conf"
+            - "--realm=$(TURN_REALM)"
+            - "--static-auth-secret=$(TURN_SHARED_SECRET)"
+            - "--external-ip=$(TURN_HOST)"
+          env:
+            - name: TURN_REALM
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: TURN_REALM
+            - name: TURN_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: TURN_HOST
+            - name: TURN_SHARED_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: TURN_SHARED_SECRET
+          ports:
+            - name: turn-udp
+              containerPort: 3478
+              protocol: UDP
+            - name: turn-tcp
+              containerPort: 3478
+              protocol: TCP
+          readinessProbe:
+            tcpSocket:
+              port: 3478
+            periodSeconds: 10
+            initialDelaySeconds: 5
+          livenessProbe:
+            tcpSocket:
+              port: 3478
+            periodSeconds: 20
+            initialDelaySeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/coturn
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: coturn-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: coturn
+  labels:
+    app: coturn
+spec:
+  type: LoadBalancer
+  selector:
+    app: coturn
+  ports:
+    - name: turn-udp
+      port: 3478
+      targetPort: 3478
+      protocol: UDP
+    - name: turn-tcp
+      port: 3478
+      targetPort: 3478
+      protocol: TCP

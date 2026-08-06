@@ -1,0 +1,144 @@
+# LiveKit on both kind workers (2 replicas + anti-affinity).
+# --node-ip comes from ConfigMap LIVEKIT_NODE_IP (LAN IP for phone ICE), not docker hostIP.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  labels:
+    app: livekit
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: kind-local
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 0
+  selector:
+    matchLabels:
+      app: livekit
+  template:
+    metadata:
+      labels:
+        app: livekit
+    spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/control-plane
+                    operator: DoesNotExist
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: livekit
+              topologyKey: kubernetes.io/hostname
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      initContainers:
+        - name: wait-redis
+          image: redis:7-alpine
+          command:
+            - sh
+            - -c
+            - until redis-cli -h redis ping | grep -q PONG; do echo waiting-for-redis; sleep 2; done
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:v1.9.12
+          args:
+            - --config
+            - /etc/livekit/livekit.yaml
+            - --keys
+            - "$(LIVEKIT_API_KEY): $(LIVEKIT_API_SECRET)"
+            - --node-ip
+            - $(LIVEKIT_NODE_IP)
+          env:
+            - name: LIVEKIT_PORT
+              value: "7880"
+            - name: LIVEKIT_NODE_IP
+              valueFrom:
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: LIVEKIT_NODE_IP
+            - name: LIVEKIT_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: LIVEKIT_API_KEY
+            - name: LIVEKIT_API_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: kzys-secrets
+                  key: LIVEKIT_API_SECRET
+          ports:
+            - name: signal
+              containerPort: 7880
+              protocol: TCP
+            - name: rtc-tcp
+              containerPort: 7881
+              protocol: TCP
+          volumeMounts:
+            - name: config
+              mountPath: /etc/livekit
+              readOnly: true
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "2"
+              memory: 2Gi
+          readinessProbe:
+            tcpSocket:
+              port: 7880
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 7880
+            initialDelaySeconds: 15
+            periodSeconds: 20
+      volumes:
+        - name: config
+          configMap:
+            name: kzys-livekit-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-livekit
+  labels:
+    app: livekit
+spec:
+  selector:
+    app: livekit
+  ports:
+    - name: signal
+      port: 7880
+      targetPort: 7880
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-livekit-lb
+  labels:
+    app: livekit
+spec:
+  type: LoadBalancer
+  selector:
+    app: livekit
+  ports:
+    - name: signal
+      port: 7880
+      targetPort: 7880
+      protocol: TCP
+    - name: rtc-tcp
+      port: 7881
+      targetPort: 7881
+      protocol: TCP

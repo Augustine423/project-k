@@ -517,13 +517,19 @@ export function RoomPage() {
   }, [refreshCount]);
 
   const handleDisconnected = useCallback(() => {
+    // #region agent log
+    fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'C',location:'RoomPage.tsx:handleDisconnected',message:'UI marked disconnected from media server',data:{roomId,pageHost:typeof window!=='undefined'?window.location.host:null,mediaUrl:mediaConfig?.url??null,turnUrls:mediaConfig?.turn?.urls??[]},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     setStatus("error");
     setStatusMessage("Disconnected from media server");
-  }, []);
+  }, [mediaConfig?.turn?.urls, mediaConfig?.url, roomId]);
 
   const handleMediaError = useCallback((message: string) => {
+    // #region agent log
+    fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'E',location:'RoomPage.tsx:handleMediaError',message:'Media error surfaced to UI',data:{message,pageHost:typeof window!=='undefined'?window.location.host:null,mediaUrl:mediaConfig?.url??null},timestamp:Date.now()})}).catch(()=>{});
+    // #endregion
     setMediaWarning(message);
-  }, []);
+  }, [mediaConfig?.url]);
 
   if (!ticket || !mediaConfig) {
     return (

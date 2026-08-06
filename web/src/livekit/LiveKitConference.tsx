@@ -337,6 +337,9 @@ export function LiveKitConference({
     };
 
     const onDisconnected = () => {
+      // #region agent log
+      fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'C',location:'LiveKitConference.tsx:RoomEvent.Disconnected',message:'LiveKit room disconnected event',data:{roomState:room.state,liveKitUrl:liveKitUrlRef.current,turnUrls:turnRef.current?.urls??[]},timestamp:Date.now()})}).catch(()=>{});
+      // #endregion
       if (cancelled) return;
       setConnected(false);
       onDisconnectedRef.current();
@@ -431,12 +434,22 @@ export function LiveKitConference({
               }))
             : [{ urls: "stun:stun.l.google.com:19302" }];
 
+          // #region agent log
+          fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:connect-start',message:'LiveKit connect attempt',data:{liveKitUrl:liveKitUrlRef.current,pageHost:typeof window!=='undefined'?window.location.host:null,pageHref:typeof window!=='undefined'?window.location.href:null,turnUrls:t.urls,iceCount:iceServers.length,autoSubscribe:!isMassRoomRef.current,roomState:room.state},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
+
           await room.connect(liveKitUrlRef.current, liveKitTokenRef.current, {
             rtcConfig: { iceServers },
             autoSubscribe: !isMassRoomRef.current,
           });
+          // #region agent log
+          fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'B',location:'LiveKitConference.tsx:connect-ok',message:'LiveKit connect resolved',data:{roomState:room.state,serverUrl:liveKitUrlRef.current},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           if (!cancelled) finishConnected();
         } catch (err) {
+          // #region agent log
+          fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:connect-fail',message:'LiveKit connect threw',data:{error:err instanceof Error?err.message:String(err),name:err instanceof Error?err.name:typeof err,liveKitUrl:liveKitUrlRef.current,turnUrls:turnRef.current?.urls??[]},timestamp:Date.now()})}).catch(()=>{});
+          // #endregion
           if (!cancelled) {
             onErrorRef.current(err instanceof Error ? err.message : "Failed to join media room");
           }
