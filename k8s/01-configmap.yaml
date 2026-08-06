@@ -4,7 +4,10 @@
 # That patches PUBLIC_HOST / TURN_HOST / LIVEKIT_PUBLIC_URL to real IPs,
 # then restarts web + coturn + control-plane (self-signed cert SAN + TURN).
 #
-# UI: https://<WEB_LB_IP>/  (accept self-signed warning — needed for cam/mic)
+# Local laptop + phone (same Wi‑Fi): prefer overlay
+#   powershell -File k8s/local/deploy-local.ps1
+#
+# UI: https://<WEB_LB_IP or LAN_IP>/  (accept self-signed warning — needed for cam/mic)
 apiVersion: v1
 kind: ConfigMap
 metadata:
