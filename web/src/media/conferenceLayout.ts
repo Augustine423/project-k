@@ -52,15 +52,24 @@ export type StageParticipantTile = {
 };
 
 /**
- * Prefer screen share, then loudest active speaker, then host, then first remote, then local.
+ * Prefer screen share, then (for hosts) self large, then loudest active speaker,
+ * then room host feed, then first remote, then local.
  */
 export function pickPrimaryTileId(opts: {
   tiles: StageParticipantTile[];
   activeSpeakerIds: string[];
   hostParticipantId?: string;
   localId?: string;
+  /** Host/room-creator viewer: keep self as the large primary tile. */
+  preferLocalSelf?: boolean;
 }): string {
-  const { tiles, activeSpeakerIds, hostParticipantId, localId = "local" } = opts;
+  const {
+    tiles,
+    activeSpeakerIds,
+    hostParticipantId,
+    localId = "local",
+    preferLocalSelf = false,
+  } = opts;
   if (!tiles.length) return localId;
 
   const byId = new Map(tiles.map((t) => [t.id, t]));
@@ -70,6 +79,11 @@ export function pickPrimaryTileId(opts: {
     remotes.find((t) => t.isScreenShare && t.hasVideo) ??
     tiles.find((t) => t.isScreenShare && t.hasVideo);
   if (screen) return screen.id;
+
+  // Host UI: self stays large; clients sit in the filmstrip / 2-col grid.
+  if (preferLocalSelf && byId.has(localId)) {
+    return localId;
+  }
 
   for (const id of activeSpeakerIds) {
     if (id !== localId && byId.has(id)) return id;

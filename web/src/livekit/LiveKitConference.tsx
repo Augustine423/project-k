@@ -860,8 +860,9 @@ export function LiveKitConference({
         activeSpeakerIds,
         hostParticipantId,
         localId: "local",
+        preferLocalSelf: isHostRole,
       }),
-    [activeSpeakerIds, hostParticipantId, stageTiles],
+    [activeSpeakerIds, hostParticipantId, isHostRole, stageTiles],
   );
 
   const offPageCount = Math.max(
