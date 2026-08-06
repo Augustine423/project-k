@@ -1,7 +1,7 @@
-# syntax=docker/dockerfile:1
-
 # ---------------------------------------------------------------------------
 # Production image (CI / GKE / docker compose)
+# Note: no `# syntax=docker/dockerfile:1` — that forces a Docker Hub pull and
+# fails when auth.docker.io is unreachable (common on restricted networks).
 #
 # BUILD-TIME (baked into static assets by Vite):
 #   VITE_API_URL — leave empty for same-origin behind nginx (/api, /ws).
