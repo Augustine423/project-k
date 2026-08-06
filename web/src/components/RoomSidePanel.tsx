@@ -56,6 +56,9 @@ interface RoomSidePanelProps {
   openDmPeers: DmPeer[];
   dmUnreadByPeer?: Record<string, number>;
   onOpenDm: (peer: DmPeer) => void;
+  /** Shared with header search when provided. */
+  searchQuery?: string;
+  onSearchQueryChange?: (query: string) => void;
 }
 
 function roleLabel(role: string): string | null {
@@ -98,9 +101,14 @@ export function RoomSidePanel({
   openDmPeers,
   dmUnreadByPeer = {},
   onOpenDm,
+  searchQuery,
+  onSearchQueryChange,
 }: RoomSidePanelProps) {
   const [draft, setDraft] = useState("");
-  const [query, setQuery] = useState("");
+  const [internalQuery, setInternalQuery] = useState("");
+  const queryControlled = onSearchQueryChange != null;
+  const query = queryControlled ? (searchQuery ?? "") : internalQuery;
+  const setQuery = queryControlled ? onSearchQueryChange : setInternalQuery;
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [pageItems, setPageItems] = useState<Participant[]>([]);
   const [pageOffset, setPageOffset] = useState(0);
@@ -119,11 +127,21 @@ export function RoomSidePanel({
   }, [query]);
 
   useEffect(() => {
-    setQuery("");
-    setDebouncedQuery("");
     setSuggestionsOpen(false);
     setActiveSuggestion(0);
-  }, [activeTab]);
+    // Keep shared header search when switching tabs; only clear local search.
+    if (!queryControlled && activeTab !== "participants") {
+      setInternalQuery("");
+      setDebouncedQuery("");
+    }
+  }, [activeTab, queryControlled]);
+
+  useEffect(() => {
+    if (activeTab === "participants" && query.trim()) {
+      setSuggestionsOpen(true);
+      setActiveSuggestion(0);
+    }
+  }, [query, activeTab]);
 
   const useLiveList = Boolean(liveParticipants && participantCount <= 200 && !debouncedQuery);
 

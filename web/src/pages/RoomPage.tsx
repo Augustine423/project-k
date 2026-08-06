@@ -55,6 +55,7 @@ export function RoomPage() {
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
+  const [peopleSearch, setPeopleSearch] = useState("");
   const [chromeVisible, setChromeVisible] = useState(true);
   const chromeHideTimer = useRef<number | null>(null);
   const [raisedHands, setRaisedHands] = useState<RaisedHand[]>([]);
@@ -148,6 +149,18 @@ export function RoomPage() {
   );
 
   const closeSidePanel = useCallback(() => setSidePanelOpen(false), []);
+
+  const handlePeopleSearchChange = useCallback(
+    (q: string) => {
+      setPeopleSearch(q);
+      if (q.trim()) focusSidePanel("participants");
+    },
+    [focusSidePanel],
+  );
+
+  const handlePeopleSearchFocus = useCallback(() => {
+    focusSidePanel("participants");
+  }, [focusSidePanel]);
 
   const revealChrome = useCallback(() => {
     setChromeVisible(true);
@@ -563,6 +576,9 @@ export function RoomPage() {
         participantCount={participantCount}
         roomMode={ticket.room.mode}
         onShare={shareInvite}
+        searchValue={peopleSearch}
+        onSearchChange={handlePeopleSearchChange}
+        onSearchFocus={handlePeopleSearchFocus}
       />
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
@@ -636,6 +652,8 @@ export function RoomPage() {
               openDmPeers={openDmPeers}
               dmUnreadByPeer={dmUnreadByPeer}
               onOpenDm={openDm}
+              searchQuery={peopleSearch}
+              onSearchQueryChange={setPeopleSearch}
             />
           </div>
           {isHost && (

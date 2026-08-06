@@ -10,6 +10,9 @@ interface MeetingHeaderProps {
   participantCount?: number;
   roomMode?: string;
   onShare?: () => void;
+  searchValue?: string;
+  onSearchChange?: (query: string) => void;
+  onSearchFocus?: () => void;
 }
 
 function useClock() {
@@ -32,6 +35,9 @@ export function MeetingHeader({
   participantCount,
   roomMode,
   onShare,
+  searchValue = "",
+  onSearchChange,
+  onSearchFocus,
 }: MeetingHeaderProps) {
   const clock = useClock();
 
@@ -58,12 +64,27 @@ export function MeetingHeader({
 
       <div className="meeting-v2-header-right">
         <label className="meeting-v2-search">
-          <span className="sr-only">Search</span>
+          <span className="sr-only">Search participants</span>
           <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none">
             <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="2" />
             <path d="M16 16l4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
-          <input type="search" placeholder="Search" disabled title="Coming soon" />
+          <input
+            type="search"
+            placeholder="Search people…"
+            value={searchValue}
+            onChange={(e) => onSearchChange?.(e.target.value)}
+            onFocus={() => onSearchFocus?.()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                onSearchFocus?.();
+              }
+            }}
+            autoComplete="off"
+            spellCheck={false}
+            aria-label="Search people in this meeting"
+          />
         </label>
         {onShare && (
           <button type="button" className="meeting-v2-share" onClick={onShare}>
