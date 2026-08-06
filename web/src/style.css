@@ -4019,6 +4019,20 @@ html:has(.auth-page) body {
   object-fit: contain !important;
 }
 
+/* Reinforce span rules so later overrides cannot force equal square cells */
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
+  grid-column: span 6 !important;
+  aspect-ratio: 16 / 9 !important;
+}
+
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
+.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
+  grid-column: span 3 !important;
+  aspect-ratio: 9 / 16 !important;
+}
+
 .video-stage-shell {
   position: relative;
   flex: 1;
