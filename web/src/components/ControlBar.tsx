@@ -28,6 +28,8 @@ interface ControlBarProps {
   onToggleRaiseHand?: () => void;
   chatBadge?: number | string;
   participantCount?: number;
+  /** Guests only (excludes host). Falls back to participantCount. */
+  peopleBadgeCount?: number;
   mediaBusy?: boolean;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
@@ -73,12 +75,14 @@ export function ControlBar({
   onToggleRaiseHand,
   chatBadge,
   participantCount,
+  peopleBadgeCount,
   mediaBusy = false,
   onFocusChat,
   onFocusParticipants,
   onFocusInvite,
   activePanel = null,
 }: ControlBarProps) {
+  const peopleBadge = peopleBadgeCount ?? participantCount;
   return (
     <div className="meeting-v2-control-bar-wrap">
       <div className="meeting-v2-control-bar" role="toolbar" aria-label="Meeting controls">
@@ -151,8 +155,8 @@ export function ControlBar({
             aria-label={activePanel === "participants" ? "Hide participants" : "Show participants"}
           >
             <ParticipantsIcon size={22} />
-            {participantCount != null && participantCount > 0 && (
-              <Badge value={participantCount > 99 ? "99+" : participantCount} />
+            {peopleBadge != null && peopleBadge > 0 && (
+              <Badge value={peopleBadge > 99 ? "99+" : peopleBadge} />
             )}
             <span className="meeting-v2-ctrl-label">Participants</span>
           </button>

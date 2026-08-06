@@ -80,6 +80,22 @@ export function applyLocalUplinkVideoQuality(room: Room, quality: ConnectionQual
   track.setPublishingQuality(maxQuality);
 }
 
+/** Max simulcast layer index (0=h180 … 3=h1080) for the viewer's current downlink. */
+export function receiveLayerCapForQuality(quality: ConnectionQuality): number {
+  switch (quality) {
+    case ConnectionQuality.Lost:
+      return 0;
+    case ConnectionQuality.Poor:
+      return 1;
+    case ConnectionQuality.Good:
+      return 2;
+    case ConnectionQuality.Excellent:
+    case ConnectionQuality.Unknown:
+    default:
+      return 3;
+  }
+}
+
 /** Ideal capture targets — browser picks the best mode the camera supports. */
 const CAPTURE_LONG_EDGE = 1920;
 const CAPTURE_SHORT_EDGE = 1080;
@@ -176,12 +192,15 @@ const LAYER_DIMS = [
  * Ask LiveKit for the best simulcast layer per visible gallery slot.
  * Dimensions take precedence over adaptiveStream's CSS-tile estimate; the SFU
  * still steps down when bandwidth cannot sustain the request.
+ * `connectionQuality` further caps layers when the local link is congested.
  */
 export function applyRemoteSimulcastPreferences(
   room: Room,
   visibleOrderedIds: string[],
   tier: GalleryVideoTier,
+  connectionQuality: ConnectionQuality = ConnectionQuality.Unknown,
 ): void {
+  const qualityCap = receiveLayerCapForQuality(connectionQuality);
   const visible = new Set(visibleOrderedIds);
   let slot = 0;
 
@@ -191,7 +210,11 @@ export function applyRemoteSimulcastPreferences(
     const pub = cameraPublication(participant);
     if (!pub) continue;
 
-    const layer = Math.min(substreamForVideoSlot(slot, tier), LAYER_DIMS.length - 1);
+    const layer = Math.min(
+      substreamForVideoSlot(slot, tier),
+      LAYER_DIMS.length - 1,
+      qualityCap,
+    );
     slot += 1;
     // Prefer HD for small rooms (gallery HD slots); medium/low for large galleries.
     pub.setVideoDimensions(LAYER_DIMS[layer]);

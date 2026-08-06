@@ -31,6 +31,9 @@ export type DmPeer = {
 interface RoomSidePanelProps {
   roomId: string;
   participantCount: number;
+  /** Guests only (excludes host) — shown on the participants badge. */
+  guestCount?: number;
+  hostParticipantId?: string;
   messages: ChatMessage[];
   onSend: (message: string) => void;
   chatDisabled?: boolean;
@@ -76,6 +79,8 @@ function panelTitle(tab: SidePanelTab): string {
 export function RoomSidePanel({
   roomId,
   participantCount,
+  guestCount,
+  hostParticipantId,
   messages,
   onSend,
   chatDisabled,
@@ -199,14 +204,25 @@ export function RoomSidePanel({
   }, [suggestionsOpen]);
 
   const displayedParticipants = useMemo(() => {
+    let list: Participant[];
     if (useLiveList && liveParticipants) {
       const q = debouncedQuery.toLowerCase();
-      return q
+      list = q
         ? liveParticipants.filter((p) => p.displayName.toLowerCase().includes(q))
         : liveParticipants;
+    } else {
+      list = pageItems;
     }
-    return pageItems;
-  }, [useLiveList, liveParticipants, debouncedQuery, pageItems]);
+    // People panel lists guests only — host is not shown here.
+    if (hostParticipantId) {
+      list = list.filter((p) => p.id !== hostParticipantId && p.role !== "host");
+    } else {
+      list = list.filter((p) => p.role !== "host");
+    }
+    return list;
+  }, [useLiveList, liveParticipants, debouncedQuery, pageItems, hostParticipantId]);
+
+  const peopleCount = guestCount ?? Math.max(0, participantCount - (hostParticipantId ? 1 : 0));
 
   const suggestions = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -214,9 +230,13 @@ export function RoomSidePanel({
     const pool =
       liveParticipants && liveParticipants.length > 0 ? liveParticipants : displayedParticipants;
     return pool
-      .filter((p) => p.displayName.toLowerCase().includes(q))
+      .filter((p) => {
+        if (hostParticipantId && p.id === hostParticipantId) return false;
+        if (p.role === "host") return false;
+        return p.displayName.toLowerCase().includes(q);
+      })
       .slice(0, SUGGESTION_LIMIT);
-  }, [query, liveParticipants, displayedParticipants]);
+  }, [query, liveParticipants, displayedParticipants, hostParticipantId]);
 
   const raisedById = useMemo(() => {
     const map = new Map<string, RaisedHandInfo>();
@@ -309,7 +329,7 @@ export function RoomSidePanel({
           <TitleIcon size={16} />
           <h2>{panelTitle(activeTab)}</h2>
           {activeTab === "participants" && (
-            <span className="rsp-tab-count">{participantCount}</span>
+            <span className="rsp-tab-count">{peopleCount}</span>
           )}
         </div>
         {onClose && (
@@ -553,8 +573,8 @@ export function RoomSidePanel({
 
           <p className="rsp-people-sum">
             {query.trim()
-              ? `${displayedParticipants.length} match · ${participantCount} total`
-              : `${participantCount} participants · tap a name to message`}
+              ? `${displayedParticipants.length} match · ${peopleCount} people`
+              : `${peopleCount} people · tap a name to message`}
             {isHost && modePinned ? " · mode pinned" : ""}
           </p>
 

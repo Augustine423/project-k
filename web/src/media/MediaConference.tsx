@@ -13,6 +13,8 @@ export interface MediaConferenceProps {
   onStatus?: (message: string) => void;
   onLeave: () => void;
   participantCount?: number;
+  /** Guests-only count for the Participants dock badge (excludes host). */
+  peopleBadgeCount?: number;
   chatBadge?: number | string;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;

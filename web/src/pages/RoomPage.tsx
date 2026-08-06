@@ -323,7 +323,6 @@ export function RoomPage() {
         const joined = evt.data as Participant;
         if (joined?.id) {
           setParticipants((prev) => (prev.some((p) => p.id === joined.id) ? prev : [...prev, joined]));
-          setParticipantCount((c) => c + 1);
         }
         return;
       }
@@ -332,7 +331,6 @@ export function RoomPage() {
         if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
           setRaisedHands((prev) => prev.filter((h) => h.participantId !== data.participantId));
-          setParticipantCount((c) => Math.max(0, c - 1));
         }
         return;
       }
@@ -344,7 +342,6 @@ export function RoomPage() {
         } else if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
           setRaisedHands((prev) => prev.filter((h) => h.participantId !== data.participantId));
-          setParticipantCount((c) => Math.max(0, c - 1));
         }
       }
       if (evt.type === "room.ended") {
@@ -499,7 +496,7 @@ export function RoomPage() {
     try {
       await kickParticipant(roomId, ticket.participantToken, participantId);
       setParticipants((prev) => prev.filter((p) => p.id !== participantId));
-      setParticipantCount((c) => Math.max(0, c - 1));
+      // Headcount comes from room.participant_count — do not ±1 locally.
     } finally {
       setHostBusy(false);
     }
@@ -554,6 +551,12 @@ export function RoomPage() {
         ];
 
   const isLive = status === "connected";
+  const hostParticipantId = ticket.room.hostParticipantId;
+  /** Guests only (exclude host) — participants panel / people badge. */
+  const guestParticipantCount = Math.max(
+    0,
+    participantCount - (hostParticipantId ? 1 : 0),
+  );
 
   return (
     <div
@@ -611,6 +614,7 @@ export function RoomPage() {
               roomMode={ticket.room.mode}
               participantRole={ticket.participant.role}
               hostParticipantId={ticket.room.hostParticipantId}
+              peopleBadgeCount={guestParticipantCount}
               showRaiseHand={isWebinar}
               handRaised={selfHandRaised}
               onToggleRaiseHand={toggleRaiseHand}
@@ -627,6 +631,8 @@ export function RoomPage() {
             <RoomSidePanel
               roomId={roomId}
               participantCount={participantCount}
+              guestCount={guestParticipantCount}
+              hostParticipantId={hostParticipantId}
               messages={chatMessages}
               onSend={sendChat}
               chatDisabled={!chatReady}

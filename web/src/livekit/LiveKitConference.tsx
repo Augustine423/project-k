@@ -70,6 +70,8 @@ interface LiveKitConferenceProps {
   onStatus?: (message: string) => void;
   onLeave: () => void;
   participantCount?: number;
+  /** Guests-only count for the Participants dock badge (excludes host). */
+  peopleBadgeCount?: number;
   chatBadge?: number | string;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
@@ -110,6 +112,7 @@ export function LiveKitConference({
   onStatus,
   onLeave,
   participantCount = 1,
+  peopleBadgeCount,
   chatBadge,
   onFocusChat,
   onFocusParticipants,
@@ -134,6 +137,9 @@ export function LiveKitConference({
   const [connected, setConnected] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [galleryPage, setGalleryPage] = useState(1);
+  const [connectionQuality, setConnectionQuality] = useState<ConnectionQuality>(
+    ConnectionQuality.Unknown,
+  );
   const [activeSpeakerIds, setActiveSpeakerIds] = useState<string[]>([]);
   const [localScreenShare, setLocalScreenShare] = useState(false);
   const [localIdentity, setLocalIdentity] = useState("");
@@ -387,6 +393,7 @@ export function LiveKitConference({
 
     const onConnectionQualityChanged = (quality: ConnectionQuality, participant: Participant) => {
       if (cancelled || !participant.isLocal) return;
+      setConnectionQuality(quality);
       applyLocalUplinkVideoQuality(room, quality);
     };
 
@@ -396,6 +403,7 @@ export function LiveKitConference({
       applyLocalStateRef.current(room);
       refreshRemotes(room);
       applyLocalUplinkVideoQuality(room, room.localParticipant.connectionQuality);
+      setConnectionQuality(room.localParticipant.connectionQuality);
       onStatusRef.current?.("Connected — use the toolbar to turn on camera and mic");
       onConnectedRef.current();
     };
@@ -724,7 +732,7 @@ export function LiveKitConference({
     });
     subscriptionTargetsRef.current = targets;
     applySelectiveSubscriptions(room, targets);
-    applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier);
+    applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier, connectionQuality);
 
     for (const participant of room.remoteParticipants.values()) {
       if (!shouldTrackRemoteParticipant(participant, targets)) continue;
@@ -747,6 +755,7 @@ export function LiveKitConference({
   }, [
     activeSpeakerIds,
     connected,
+    connectionQuality,
     galleryTier,
     hostParticipantId,
     isMassRoom,
@@ -760,8 +769,8 @@ export function LiveKitConference({
     if (!connected || isMassRoom) return;
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
     if (!room) return;
-    applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier);
-  }, [connected, galleryTier, isMassRoom, remoteFeeds, sessionKey, visibleRemoteOrder]);
+    applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier, connectionQuality);
+  }, [connected, connectionQuality, galleryTier, isMassRoom, remoteFeeds, sessionKey, visibleRemoteOrder]);
 
   useEffect(() => {
     if (galleryPage > totalGalleryPages) setGalleryPage(totalGalleryPages);
@@ -944,6 +953,7 @@ export function LiveKitConference({
         chatBadge={chatBadge}
         mediaBusy={mediaBusy}
         participantCount={participantCount}
+        peopleBadgeCount={peopleBadgeCount}
         onFocusChat={onFocusChat}
         onFocusParticipants={onFocusParticipants}
         onFocusInvite={onFocusInvite}

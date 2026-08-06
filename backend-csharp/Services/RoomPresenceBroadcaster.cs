@@ -66,15 +66,15 @@ public sealed class RoomPresenceBroadcaster
     public async Task BroadcastJoinedAsync(string roomId, ParticipantRecord participant, CancellationToken ct = default)
     {
         var count = (int)await _store.GetParticipantCountAsync(roomId, ct);
-        if (count > _config.LargeRoomEventThreshold)
+        // Always publish authoritative headcount so clients never ±1 into drift.
+        _hub.Broadcast(roomId, new RoomEvent
         {
-            _hub.Broadcast(roomId, new RoomEvent
-            {
-                Type = "room.participant_count",
-                Data = new { count },
-            });
+            Type = "room.participant_count",
+            Data = new { count },
+        });
+
+        if (count > _config.LargeRoomEventThreshold)
             return;
-        }
 
         _hub.Broadcast(roomId, new RoomEvent { Type = "participant.joined", Data = participant });
     }
@@ -82,15 +82,14 @@ public sealed class RoomPresenceBroadcaster
     public async Task BroadcastLeftAsync(string roomId, string participantId, CancellationToken ct = default)
     {
         var count = (int)await _store.GetParticipantCountAsync(roomId, ct);
-        if (count > _config.LargeRoomEventThreshold)
+        _hub.Broadcast(roomId, new RoomEvent
         {
-            _hub.Broadcast(roomId, new RoomEvent
-            {
-                Type = "room.participant_count",
-                Data = new { count },
-            });
+            Type = "room.participant_count",
+            Data = new { count },
+        });
+
+        if (count > _config.LargeRoomEventThreshold)
             return;
-        }
 
         _hub.Broadcast(roomId, new RoomEvent
         {
