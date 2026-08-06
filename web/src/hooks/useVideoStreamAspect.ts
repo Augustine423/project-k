@@ -1,58 +1,83 @@
 import { useEffect, useState, type RefObject } from "react";
 import { classifyStreamAspect, type StreamAspect } from "../media/conferenceLayout";
 
-/** Observe decoded dimensions on a bound <video> (and track settings fallback). */
-export function useVideoElementAspect(
+export type StreamSize = {
+  aspect: StreamAspect;
+  width: number;
+  height: number;
+};
+
+const EMPTY: StreamSize = { aspect: "unknown", width: 0, height: 0 };
+
+function sizeFrom(w: number, h: number): StreamSize | null {
+  if (w <= 0 || h <= 0) return null;
+  return { aspect: classifyStreamAspect(w, h), width: w, height: h };
+}
+
+/** Observe decoded WxH on a bound <video> (track settings as fallback). */
+export function useVideoStreamSize(
   videoRef: RefObject<HTMLVideoElement | null>,
   stream: MediaStream | null | undefined,
   trackSignature = "",
-): StreamAspect {
-  const [aspect, setAspect] = useState<StreamAspect>("unknown");
+): StreamSize {
+  const [size, setSize] = useState<StreamSize>(EMPTY);
 
   useEffect(() => {
     const track = stream?.getVideoTracks()[0];
     if (!track) {
-      setAspect("unknown");
+      setSize(EMPTY);
       return;
     }
 
+    const apply = (next: StreamSize | null) => {
+      if (!next) return;
+      setSize((prev) =>
+        prev.width === next.width && prev.height === next.height && prev.aspect === next.aspect
+          ? prev
+          : next,
+      );
+    };
+
     const readFromSettings = () => {
       const settings = track.getSettings?.() ?? {};
-      const w = Number(settings.width) || 0;
-      const h = Number(settings.height) || 0;
-      if (w > 0 && h > 0) {
-        setAspect(classifyStreamAspect(w, h));
-        return true;
-      }
-      return false;
+      return sizeFrom(Number(settings.width) || 0, Number(settings.height) || 0);
     };
 
-    const updateFromElement = () => {
+    const update = () => {
       const video = videoRef.current;
       if (video && video.videoWidth > 0 && video.videoHeight > 0) {
-        setAspect(classifyStreamAspect(video.videoWidth, video.videoHeight));
+        apply(sizeFrom(video.videoWidth, video.videoHeight));
         return;
       }
-      readFromSettings();
+      apply(readFromSettings());
     };
 
-    readFromSettings();
+    apply(readFromSettings());
     const video = videoRef.current;
-    video?.addEventListener("loadedmetadata", updateFromElement);
-    video?.addEventListener("resize", updateFromElement);
-    const timer = window.setInterval(updateFromElement, 1500);
-    updateFromElement();
+    video?.addEventListener("loadedmetadata", update);
+    video?.addEventListener("resize", update);
+    const timer = window.setInterval(update, 800);
+    update();
 
-    const onEnded = () => setAspect("unknown");
+    const onEnded = () => setSize(EMPTY);
     track.addEventListener("ended", onEnded);
 
     return () => {
       window.clearInterval(timer);
       track.removeEventListener("ended", onEnded);
-      video?.removeEventListener("loadedmetadata", updateFromElement);
-      video?.removeEventListener("resize", updateFromElement);
+      video?.removeEventListener("loadedmetadata", update);
+      video?.removeEventListener("resize", update);
     };
   }, [stream, trackSignature, videoRef]);
 
-  return aspect;
+  return size;
+}
+
+/** @deprecated Prefer useVideoStreamSize — kept for call sites that only need aspect. */
+export function useVideoElementAspect(
+  videoRef: RefObject<HTMLVideoElement | null>,
+  stream: MediaStream | null | undefined,
+  trackSignature = "",
+): StreamAspect {
+  return useVideoStreamSize(videoRef, stream, trackSignature).aspect;
 }

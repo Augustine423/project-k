@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, type CSSProperties } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
-import { useVideoElementAspect } from "../hooks/useVideoStreamAspect";
+import { useVideoStreamSize } from "../hooks/useVideoStreamAspect";
 import {
   classifyStreamAspect,
   resolveTileFit,
@@ -39,17 +39,21 @@ function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null
   }
 }
 
-function aspectFromTrack(stream: MediaStream | null | undefined): StreamAspect {
+function aspectFromTrack(stream: MediaStream | null | undefined): {
+  aspect: StreamAspect;
+  width: number;
+  height: number;
+} {
   const track = stream?.getVideoTracks()[0];
-  if (!track) return "unknown";
+  if (!track) return { aspect: "unknown", width: 0, height: 0 };
   const settings = track.getSettings?.() ?? {};
   const w = Number(settings.width) || 0;
   const h = Number(settings.height) || 0;
-  if (w > 0 && h > 0) return classifyStreamAspect(w, h);
-  return "unknown";
+  if (w > 0 && h > 0) return { aspect: classifyStreamAspect(w, h), width: w, height: h };
+  return { aspect: "unknown", width: 0, height: 0 };
 }
 
-/** One video element per tile; optional blurred backdrop for portrait-in-landscape cells. */
+/** One video element per tile — contain-fit, aspect from real stream size (no crop). */
 export function StreamVideoTile({
   stream,
   trackSignature = "",
@@ -66,7 +70,6 @@ export function StreamVideoTile({
   className = "",
 }: StreamVideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const blurRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const statsRef = useRef<HTMLSpanElement>(null);
 
@@ -75,9 +78,12 @@ export function StreamVideoTile({
   const videoTrackId = videoTrack?.id ?? "";
   const audioTrackId = audioTrack?.id ?? "";
 
-  const liveAspect = useVideoElementAspect(videoRef, stream, `${trackSignature}:${videoTrackId}`);
-  const [bootAspect] = useState(() => aspectFromTrack(stream));
-  const streamAspect = liveAspect !== "unknown" ? liveAspect : bootAspect;
+  const liveSize = useVideoStreamSize(videoRef, stream, `${trackSignature}:${videoTrackId}`);
+  const boot = aspectFromTrack(stream);
+  const width = liveSize.width > 0 ? liveSize.width : boot.width;
+  const height = liveSize.height > 0 ? liveSize.height : boot.height;
+  const streamAspect =
+    liveSize.aspect !== "unknown" ? liveSize.aspect : boot.aspect;
   const fit =
     fitOverride ??
     resolveTileFit({
@@ -85,34 +91,23 @@ export function StreamVideoTile({
       layout: layoutMode,
       size,
     });
-  const useBlurBg = fit === "contain-blur";
 
   // Video bind — independent of audio so quality/layer changes don't restart sound.
   useEffect(() => {
     const videoEl = videoRef.current;
-    const blurEl = blurRef.current;
     if (!videoEl) return;
 
     const videoStream = videoTrack ? new MediaStream([videoTrack]) : null;
     attachMediaStream(videoEl, videoStream);
     if (videoStream) void videoEl.play().catch(() => undefined);
 
-    if (blurEl) {
-      attachMediaStream(blurEl, useBlurBg ? videoStream : null);
-      if (useBlurBg && videoStream) void blurEl.play().catch(() => undefined);
-    }
-
-    const onEnded = () => {
-      attachMediaStream(videoEl, null);
-      if (blurEl) attachMediaStream(blurEl, null);
-    };
+    const onEnded = () => attachMediaStream(videoEl, null);
     videoTrack?.addEventListener("ended", onEnded);
     return () => {
       videoTrack?.removeEventListener("ended", onEnded);
       attachMediaStream(videoEl, null);
-      if (blurEl) attachMediaStream(blurEl, null);
     };
-  }, [videoTrack, videoTrackId, trackSignature, useBlurBg]);
+  }, [videoTrack, videoTrackId, trackSignature]);
 
   // Audio bind — local tile is muted so mic never plays into speakers (echo).
   useEffect(() => {
@@ -162,6 +157,13 @@ export function StreamVideoTile({
 
   const tone = avatarTone(label);
   const initials = avatarInitials(label);
+  const aspectStyle =
+    width > 0 && height > 0
+      ? ({
+          aspectRatio: `${width} / ${height}`,
+          ["--tile-aspect" as string]: `${width} / ${height}`,
+        } satisfies CSSProperties)
+      : undefined;
 
   return (
     <div
@@ -176,17 +178,8 @@ export function StreamVideoTile({
         .join(" ")}
       data-fit={fit}
       data-stream-aspect={streamAspect}
+      style={aspectStyle}
     >
-      {useBlurBg && showVideo && (
-        <video
-          ref={blurRef}
-          autoPlay
-          playsInline
-          muted
-          aria-hidden
-          className={["video-blur-bg", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
-        />
-      )}
       <video
         ref={videoRef}
         autoPlay
