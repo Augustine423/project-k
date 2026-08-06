@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { ApiRequestError, joinRoom } from "../api/client";
-import { saveTicket } from "../api/ticketStore";
+import { getTicket, saveTicket } from "../api/ticketStore";
 import { BrandLogo } from "../components/BrandLogo";
 import { DashboardLayout } from "../components/DashboardLayout";
 import { useAuth } from "../hooks/useAuth";
@@ -55,6 +55,16 @@ export function JoinRoomPage() {
     setDisplayName(accountName || suggestGuestName());
     setNameReady(true);
   }, [ready, user?.username, user?.displayName]);
+
+  // Same tab already has a ticket — re-enter the room instead of minting another seat.
+  useEffect(() => {
+    const id = (routeRoomId ?? roomId).trim();
+    if (!id) return;
+    const existing = getTicket(id);
+    if (existing?.room?.id === id && existing.participantToken) {
+      navigate(`/room/${id}`, { replace: true });
+    }
+  }, [routeRoomId, roomId, navigate]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();

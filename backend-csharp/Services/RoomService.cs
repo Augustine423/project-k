@@ -77,7 +77,7 @@ public sealed class RoomService
         return BuildTicket(room, host, mediaHost, activePublishers: 0);
     }
 
-    public async Task<JoinTicketDto> JoinRoomAsync(
+    public async Task<(JoinTicketDto Ticket, IReadOnlyList<string> ReplacedParticipantIds)> JoinRoomAsync(
         string roomId,
         string displayName,
         string pin,
@@ -91,11 +91,27 @@ public sealed class RoomService
         if (!string.IsNullOrEmpty(room.Pin) && room.Pin != (pin ?? ""))
             throw new RoomServiceException(RoomError.BadPin, "incorrect pin");
 
+        var existing = await _store.ListParticipantsAsync(roomId, ct);
+        var name = displayName.Trim();
+
+        // Host re-opening the join link with the same name must reclaim the host seat
+        // (never mint a second "guest" copy of the host — that inflated counts to 3).
+        var host = existing.FirstOrDefault(p => p.Role == ParticipantRoles.Host);
+        if (host is not null &&
+            string.Equals(host.DisplayName.Trim(), name, StringComparison.OrdinalIgnoreCase))
+        {
+            var hostStats = await _store.GetMediaStatsAsync(roomId, ct);
+            return (BuildTicket(room, host, mediaHost, hostStats.Publishers), Array.Empty<string>());
+        }
+
+        // Re-join / second device with same guest name must not leave ghost seats in Redis.
+        var replaced = await ReplaceGuestSessionsByNameAsync(roomId, name, ct);
+
         var participant = new ParticipantRecord
         {
             Id = RandomId("p"),
             RoomId = room.Id,
-            DisplayName = displayName,
+            DisplayName = name,
             Role = ParticipantRoles.Participant,
             Approved = true,
             JoinedAt = DateTime.UtcNow,
@@ -105,7 +121,7 @@ public sealed class RoomService
             throw new RoomServiceException(RoomError.Full, "room is full");
 
         var stats = await _store.GetMediaStatsAsync(roomId, ct);
-        return BuildTicket(room, participant, mediaHost, stats.Publishers);
+        return (BuildTicket(room, participant, mediaHost, stats.Publishers), replaced);
     }
 
     public Task<RoomRecord?> GetRoomAsync(string roomId, CancellationToken ct = default)
@@ -120,6 +136,37 @@ public sealed class RoomService
         await _store.RemoveMediaPresenceAsync(roomId, participantId, ct);
         await _store.RemoveParticipantAsync(roomId, participantId, ct);
         await RoomWebSocketHandler.BroadcastRaisedHandsAsync(_hub, _store, roomId, ct);
+    }
+
+    /// <summary>
+    /// Drop prior guest sessions with the same display name so refresh/re-join
+    /// does not inflate the room headcount with ghost participants.
+    /// Never removes the room host.
+    /// </summary>
+    public async Task<IReadOnlyList<string>> ReplaceGuestSessionsByNameAsync(
+        string roomId,
+        string displayName,
+        CancellationToken ct = default)
+    {
+        var name = displayName.Trim();
+        if (string.IsNullOrEmpty(name)) return [];
+
+        var existing = await _store.ListParticipantsAsync(roomId, ct);
+        var removed = new List<string>();
+        foreach (var p in existing)
+        {
+            if (p.Role == ParticipantRoles.Host) continue;
+            if (!string.Equals(p.DisplayName.Trim(), name, StringComparison.OrdinalIgnoreCase))
+                continue;
+            await _store.RemoveMediaPresenceAsync(roomId, p.Id, ct);
+            await _store.RemoveParticipantAsync(roomId, p.Id, ct);
+            removed.Add(p.Id);
+        }
+
+        if (removed.Count > 0)
+            await RoomWebSocketHandler.BroadcastRaisedHandsAsync(_hub, _store, roomId, ct);
+
+        return removed;
     }
 
     public async Task KickParticipantAsync(string roomId, string participantId, CancellationToken ct = default)

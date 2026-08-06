@@ -112,6 +112,26 @@ export function RoomPage() {
     void refreshLiveParticipants();
   }, [roomId, refreshCount, refreshLiveParticipants]);
 
+  // Best-effort cleanup when the tab closes so Redis does not keep a ghost seat.
+  useEffect(() => {
+    if (!ticket?.participantToken || !roomId) return;
+    const token = ticket.participantToken;
+    const id = roomId;
+    const onPageHide = () => {
+      try {
+        void fetch(`/api/rooms/${encodeURIComponent(id)}/leave`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          keepalive: true,
+        });
+      } catch {
+        /* ignore */
+      }
+    };
+    window.addEventListener("pagehide", onPageHide);
+    return () => window.removeEventListener("pagehide", onPageHide);
+  }, [roomId, ticket?.participantToken]);
+
   useEffect(() => {
     if (!roomId) return;
     const stored = getTicket(roomId);
@@ -323,6 +343,7 @@ export function RoomPage() {
         const joined = evt.data as Participant;
         if (joined?.id) {
           setParticipants((prev) => (prev.some((p) => p.id === joined.id) ? prev : [...prev, joined]));
+          void refreshCount();
         }
         return;
       }
@@ -331,6 +352,7 @@ export function RoomPage() {
         if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
           setRaisedHands((prev) => prev.filter((h) => h.participantId !== data.participantId));
+          void refreshCount();
         }
         return;
       }
@@ -372,7 +394,7 @@ export function RoomPage() {
         );
       }
     },
-    [roomId, navigate, ticket?.participant.id, token, selfId],
+    [roomId, navigate, ticket?.participant.id, token, selfId, refreshCount],
   );
 
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);

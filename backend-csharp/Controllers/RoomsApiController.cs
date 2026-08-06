@@ -65,7 +65,15 @@ public sealed class RoomsApiController : ControllerBase
         try
         {
             var mediaHost = MediaHostHelper.FromRequest(Request, _config.TurnHost);
-            var ticket = await _rooms.JoinRoomAsync(roomId, body.DisplayName.Trim(), body.Pin ?? "", mediaHost, ct);
+            var (ticket, replacedIds) = await _rooms.JoinRoomAsync(roomId, body.DisplayName.Trim(), body.Pin ?? "", mediaHost, ct);
+            foreach (var oldId in replacedIds)
+            {
+                _hub.Broadcast(roomId, new RoomEvent
+                {
+                    Type = "participant.left",
+                    Data = new { participantId = oldId },
+                });
+            }
             await _presenceBroadcast.BroadcastJoinedAsync(roomId, ticket.Participant, ct);
             return Ok(ticket);
         }
