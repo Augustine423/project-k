@@ -4291,7 +4291,7 @@ html:has(.auth-page) body {
   border-radius: 18px;
   border-color: rgba(15, 23, 42, 0.08);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-  background: #ffffff;
+  background: #ffffff !important;
 }
 
 .meeting-app.meeting-light .video-stage .video-tile.is-speaking,
