@@ -1,3 +1,4 @@
+import type { MeetingPanel } from "../components/ControlBar";
 import { LiveKitConference } from "../livekit/LiveKitConference";
 import type { MediaSession } from "./normalizeJoinTicket";
 
@@ -15,6 +16,8 @@ export interface MediaConferenceProps {
   chatBadge?: number | string;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
+  onFocusInvite?: () => void;
+  activePanel?: MeetingPanel | null;
   roomMode?: string;
   participantRole?: string;
   hostParticipantId?: string;

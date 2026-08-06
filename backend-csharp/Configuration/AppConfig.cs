@@ -10,7 +10,7 @@ public sealed class AppConfig
     public int WebinarEnterListeners { get; init; } = 400;
     public double WebinarEnterRatio { get; init; } = 8.0;
     public int WebinarExitListeners { get; init; } = 50;
-    public int InteractiveMaxPublishers { get; init; } = 300;
+    public int InteractiveMaxPublishers { get; init; } = 10000;
     public int WebinarMaxPublishers { get; init; } = 50;
     /// <summary>Above this count, WS uses count-only events instead of per-join fanout.</summary>
     public int LargeRoomEventThreshold { get; init; } = 500;
@@ -38,14 +38,14 @@ public sealed class AppConfig
             JwtSigningSecret = Env("JWT_SIGNING_SECRET", "dev-jwt-signing-secret"),
             CorsOrigin = Env("CORS_ORIGIN", "*"),
             MaxRoomParticipants = int.TryParse(Env("MAX_ROOM_PARTICIPANTS", "10000"), out var max) ? max : 10000,
-            WebinarEnterListeners = int.TryParse(Env("WEBINAR_ENTER_LISTENERS", "400"), out var wel) ? wel : 400,
+            WebinarEnterListeners = int.TryParse(Env("WEBINAR_ENTER_LISTENERS", "10000"), out var wel) ? wel : 10000,
             WebinarEnterRatio = double.TryParse(Env("WEBINAR_ENTER_RATIO", "8.0"), out var wer) ? wer : 8.0,
             WebinarExitListeners = int.TryParse(Env("WEBINAR_EXIT_LISTENERS", "50"), out var wex) ? wex : 50,
-            InteractiveMaxPublishers = int.TryParse(Env("INTERACTIVE_MAX_PUBLISHERS", "300"), out var imp) ? imp : 300,
+            InteractiveMaxPublishers = int.TryParse(Env("INTERACTIVE_MAX_PUBLISHERS", "10000"), out var imp) ? imp : 10000,
             WebinarMaxPublishers = int.TryParse(Env("WEBINAR_MAX_PUBLISHERS", "50"), out var wmp) ? wmp : 50,
             LargeRoomEventThreshold = int.TryParse(Env("LARGE_ROOM_EVENT_THRESHOLD", "500"), out var lrt) ? lrt : 500,
             ParticipantsPageSizeDefault = int.TryParse(Env("PARTICIPANTS_PAGE_SIZE", "50"), out var pps) ? pps : 50,
-            ParticipantsSearchScanCap = int.TryParse(Env("PARTICIPANTS_SEARCH_SCAN_CAP", "3000"), out var psc) ? psc : 3000,
+            ParticipantsSearchScanCap = int.TryParse(Env("PARTICIPANTS_SEARCH_SCAN_CAP", "10000"), out var psc) ? psc : 10000,
             TurnSharedSecret = Env("TURN_SHARED_SECRET", "dev-turn-shared-secret"),
             TurnHost = Env("TURN_HOST", "localhost"),
             TurnPort = int.TryParse(Env("TURN_PORT", "3478"), out var tp) ? tp : 3478,

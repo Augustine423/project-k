@@ -8,6 +8,9 @@ import {
   ReactionsIcon,
   ShareScreenIcon,
 } from "./MediaIcons";
+import type { SidePanelTab } from "./RoomSidePanel";
+
+export type MeetingPanel = SidePanelTab;
 
 interface ControlBarProps {
   audioEnabled: boolean;
@@ -26,6 +29,8 @@ interface ControlBarProps {
   mediaBusy?: boolean;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
+  onFocusInvite?: () => void;
+  activePanel?: MeetingPanel | null;
 }
 
 function Badge({ value }: { value: number | string }) {
@@ -49,6 +54,8 @@ export function ControlBar({
   mediaBusy = false,
   onFocusChat,
   onFocusParticipants,
+  onFocusInvite,
+  activePanel = null,
 }: ControlBarProps) {
   return (
     <div className="meeting-v2-control-bar-wrap">
@@ -102,7 +109,7 @@ export function ControlBar({
         {showRaiseHand && onToggleRaiseHand && (
           <button
             type="button"
-            className={`meeting-v2-ctrl-btn ${handRaised ? "hand-raised" : ""}`}
+            className={`meeting-v2-ctrl-btn ${handRaised ? "hand-raised is-active" : ""}`}
             onClick={onToggleRaiseHand}
             aria-pressed={handRaised}
             aria-label={handRaised ? "Lower hand" : "Raise hand"}
@@ -115,9 +122,11 @@ export function ControlBar({
         {onFocusParticipants && (
           <button
             type="button"
-            className="meeting-v2-ctrl-btn"
+            data-panel-toggle="participants"
+            className={`meeting-v2-ctrl-btn ${activePanel === "participants" ? "is-active" : ""}`}
             onClick={onFocusParticipants}
-            aria-label="Open participants"
+            aria-pressed={activePanel === "participants"}
+            aria-label={activePanel === "participants" ? "Hide participants" : "Show participants"}
           >
             <ParticipantsIcon size={22} />
             <span className="meeting-v2-ctrl-label">Participants</span>
@@ -127,15 +136,31 @@ export function ControlBar({
         {onFocusChat && (
           <button
             type="button"
-            className="meeting-v2-ctrl-btn"
+            data-panel-toggle="chat"
+            className={`meeting-v2-ctrl-btn ${activePanel === "chat" ? "is-active" : ""}`}
             onClick={onFocusChat}
-            aria-label="Open chat"
+            aria-pressed={activePanel === "chat"}
+            aria-label={activePanel === "chat" ? "Hide chat" : "Show chat"}
           >
             <ChatIcon size={22} />
             {chatBadge !== undefined && chatBadge !== 0 && (
               <Badge value={typeof chatBadge === "number" && chatBadge > 9 ? "9+" : chatBadge} />
             )}
             <span className="meeting-v2-ctrl-label">Chat</span>
+          </button>
+        )}
+
+        {onFocusInvite && (
+          <button
+            type="button"
+            data-panel-toggle="invite"
+            className={`meeting-v2-ctrl-btn ${activePanel === "invite" ? "is-active" : ""}`}
+            onClick={onFocusInvite}
+            aria-pressed={activePanel === "invite"}
+            aria-label={activePanel === "invite" ? "Hide share" : "Share invite"}
+          >
+            <ShareScreenIcon size={22} />
+            <span className="meeting-v2-ctrl-label">Share</span>
           </button>
         )}
 

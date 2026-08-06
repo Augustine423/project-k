@@ -10,8 +10,8 @@ import {
   type RemoteParticipant,
   type TrackPublication,
 } from "livekit-client";
-import type { TurnInfo } from "../api/types";
-import { reportMediaPresence, refreshTurnCredentials } from "../api/client";
+import type { Participant as RoomParticipant, TurnInfo } from "../api/types";
+import { listParticipantsPage, reportMediaPresence, refreshTurnCredentials } from "../api/client";
 import { ControlBar } from "../components/ControlBar";
 import { GalleryPagination } from "../components/GalleryPagination";
 import { ConferenceVideoStage } from "../components/conference/VideoStageLayouts";
@@ -24,10 +24,17 @@ import {
 import { canAccessMediaDevices, mediaUnavailableReason } from "../media/secureContext";
 import {
   galleryPageCount,
+  MASS_ROOM_THRESHOLD,
   resolveGalleryTier,
   sliceGalleryPage,
 } from "../media/galleryVideoPolicy";
-import { attachOpenSourceNoiseFilter } from "./livekitAudioProcessor";
+import {
+  applyParticipantSubscriptions,
+  applySelectiveSubscriptions,
+  buildSubscriptionTargets,
+  shouldTrackRemoteParticipant,
+  type SubscriptionTargets,
+} from "./selectiveSubscription";
 import {
   applyAudioProcessingConstraints,
   applyLocalUplinkVideoQuality,
@@ -66,6 +73,8 @@ interface LiveKitConferenceProps {
   chatBadge?: number | string;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
+  onFocusInvite?: () => void;
+  activePanel?: "chat" | "participants" | "invite" | null;
   roomMode?: string;
   /** host | cohost | participant — drives webinar camera rights while media API syncs. */
   participantRole?: string;
@@ -104,6 +113,8 @@ export function LiveKitConference({
   chatBadge,
   onFocusChat,
   onFocusParticipants,
+  onFocusInvite,
+  activePanel = null,
   roomMode,
   participantRole = "participant",
   hostParticipantId,
@@ -150,15 +161,20 @@ export function LiveKitConference({
   liveKitTokenRef.current = liveKitToken;
   turnRef.current = turn;
 
-  const isLargeRoom = participantCount > 200;
+  const isMassRoom = participantCount > MASS_ROOM_THRESHOLD;
+  const isMassRoomRef = useRef(isMassRoom);
+  isMassRoomRef.current = isMassRoom;
 
-  const shouldTrackRemote = useCallback(
-    (participant: RemoteParticipant): boolean => {
-      if (!isLargeRoom) return true;
-      return participant.trackPublications.size > 0;
-    },
-    [isLargeRoom],
-  );
+  const [galleryPageParticipants, setGalleryPageParticipants] = useState<RoomParticipant[]>([]);
+  const subscriptionTargetsRef = useRef<SubscriptionTargets>({
+    video: new Set<string>(),
+    audio: new Set<string>(),
+  });
+
+  const shouldTrackRemote = useCallback((participant: RemoteParticipant): boolean => {
+    if (!isMassRoomRef.current) return true;
+    return shouldTrackRemoteParticipant(participant, subscriptionTargetsRef.current);
+  }, []);
 
   const syncRemoteFeed = useCallback((participant: RemoteParticipant): RemoteFeed => {
     let stream = remoteStreamsRef.current.get(participant.identity);
@@ -299,15 +315,25 @@ export function LiveKitConference({
       if (!cancelled) applyLocalStateRef.current(room);
     };
 
-    const onLocalTrackPublished = (pub: LocalTrackPublication) => {
+    const onLocalTrackPublished = (_pub: LocalTrackPublication) => {
       onLocalMediaChange();
-      if (pub.source === Track.Source.Microphone) {
-        void attachOpenSourceNoiseFilter(pub);
-      }
     };
 
     const onRemoteMediaChange = () => {
-      if (!cancelled) refreshRemotes(room);
+      if (cancelled) return;
+      if (isMassRoomRef.current) {
+        const targets = subscriptionTargetsRef.current;
+        for (const p of room.remoteParticipants.values()) {
+          applyParticipantSubscriptions(
+            p,
+            targets.video.has(p.identity),
+            targets.audio.has(p.identity),
+          );
+          if (shouldTrackRemoteParticipant(p, targets)) upsertRemote(p);
+        }
+        return;
+      }
+      refreshRemotes(room);
     };
 
     const onDisconnected = () => {
@@ -327,7 +353,18 @@ export function LiveKitConference({
     };
 
     const onParticipantConnected = (p: RemoteParticipant) => {
-      if (!cancelled && shouldTrackRemote(p)) upsertRemote(p);
+      if (cancelled) return;
+      if (isMassRoomRef.current) {
+        const targets = subscriptionTargetsRef.current;
+        applyParticipantSubscriptions(
+          p,
+          targets.video.has(p.identity),
+          targets.audio.has(p.identity),
+        );
+        if (shouldTrackRemoteParticipant(p, targets)) upsertRemote(p);
+        return;
+      }
+      if (shouldTrackRemote(p)) upsertRemote(p);
     };
 
     const onParticipantDisconnected = (p: RemoteParticipant) => {
@@ -396,6 +433,7 @@ export function LiveKitConference({
 
           await room.connect(liveKitUrlRef.current, liveKitTokenRef.current, {
             rtcConfig: { iceServers },
+            autoSubscribe: !isMassRoomRef.current,
           });
           if (!cancelled) finishConnected();
         } catch (err) {
@@ -565,10 +603,8 @@ export function LiveKitConference({
           await lp.setMicrophoneEnabled(enabling, enabling ? microphoneEnableCaptureOptions() : undefined);
           if (enabling) {
             await waitForLocalTrack(lp, Track.Source.Microphone);
-            const micPub = lp.getTrackPublication(Track.Source.Microphone);
-            const mic = micPub?.track?.mediaStreamTrack;
+            const mic = lp.getTrackPublication(Track.Source.Microphone)?.track?.mediaStreamTrack;
             await applyAudioProcessingConstraints(mic);
-            if (micPub) await attachOpenSourceNoiseFilter(micPub as LocalTrackPublication);
           }
         } else {
           await lp.setCameraEnabled(enabling, cameraEnableCaptureOptions());
@@ -619,39 +655,104 @@ export function LiveKitConference({
   }, [onLeave, sessionKey]);
 
   const galleryTier = useMemo(() => resolveGalleryTier(participantCount), [participantCount]);
+  const remoteParticipantCount = Math.max(0, participantCount - 1);
 
-  const sortedRemoteIds = useMemo(
-    () =>
-      [...remoteFeeds.entries()]
-        .sort(([, a], [, b]) => a.displayName.localeCompare(b.displayName))
-        .map(([id]) => id),
-    [remoteFeeds],
-  );
+  // Mass rooms: load participant roster page from control plane (not LiveKit memory).
+  useEffect(() => {
+    if (!isMassRoom || !roomId) return;
+    let cancelled = false;
+    const offset = (galleryPage - 1) * galleryTier.videosPerPage;
+    void listParticipantsPage(roomId, { offset, limit: galleryTier.videosPerPage })
+      .then((page) => {
+        if (!cancelled) setGalleryPageParticipants(page.items);
+      })
+      .catch(() => {
+        if (!cancelled) setGalleryPageParticipants([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [galleryPage, galleryTier.videosPerPage, isMassRoom, roomId]);
 
-  /** Equal gallery grid for everyone (same tile size as host view). */
+  const sortedRemoteIds = useMemo(() => {
+    if (isMassRoom) {
+      return galleryPageParticipants
+        .filter((p) => p.id !== localIdentity)
+        .map((p) => p.id);
+    }
+    return [...remoteFeeds.entries()]
+      .sort(([, a], [, b]) => a.displayName.localeCompare(b.displayName))
+      .map(([id]) => id);
+  }, [galleryPageParticipants, isMassRoom, localIdentity, remoteFeeds]);
+
   const paginatedRemoteIds = sortedRemoteIds;
 
   const totalGalleryPages = useMemo(
-    () => galleryPageCount(paginatedRemoteIds.length, galleryTier),
-    [paginatedRemoteIds.length, galleryTier],
+    () => galleryPageCount(isMassRoom ? remoteParticipantCount : paginatedRemoteIds.length, galleryTier),
+    [galleryTier, isMassRoom, paginatedRemoteIds.length, remoteParticipantCount],
   );
 
   const visibleRemoteIds = useMemo(
-    () => new Set(sliceGalleryPage(paginatedRemoteIds, galleryPage, galleryTier)),
-    [paginatedRemoteIds, galleryPage, galleryTier],
+    () => new Set(isMassRoom ? paginatedRemoteIds : sliceGalleryPage(paginatedRemoteIds, galleryPage, galleryTier)),
+    [galleryPage, galleryTier, isMassRoom, paginatedRemoteIds],
   );
 
   const visibleRemoteOrder = useMemo(
-    () => sliceGalleryPage(paginatedRemoteIds, galleryPage, galleryTier),
-    [paginatedRemoteIds, galleryPage, galleryTier],
+    () => (isMassRoom ? paginatedRemoteIds : sliceGalleryPage(paginatedRemoteIds, galleryPage, galleryTier)),
+    [galleryPage, galleryTier, isMassRoom, paginatedRemoteIds],
   );
 
-  // Request best simulcast layer per gallery slot; LiveKit still adapts down on weak links.
+  // Mass room: subscribe only to visible page video + capped audio (active speakers).
   useEffect(() => {
+    if (!connected || !isMassRoom) return;
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
-    if (!room || !connected) return;
+    if (!room) return;
+
+    const targets = buildSubscriptionTargets({
+      visibleIds: visibleRemoteOrder,
+      activeSpeakerIds,
+      hostParticipantId,
+    });
+    subscriptionTargetsRef.current = targets;
+    applySelectiveSubscriptions(room, targets);
     applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier);
-  }, [connected, galleryTier, remoteFeeds, sessionKey, visibleRemoteOrder]);
+
+    for (const participant of room.remoteParticipants.values()) {
+      if (!shouldTrackRemoteParticipant(participant, targets)) continue;
+      upsertRemote(participant);
+    }
+
+    setRemoteFeeds((prev) => {
+      const keep = new Set([...targets.video, ...targets.audio]);
+      let changed = false;
+      const next = new Map(prev);
+      for (const id of next.keys()) {
+        if (!keep.has(id)) {
+          next.delete(id);
+          remoteStreamsRef.current.delete(id);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [
+    activeSpeakerIds,
+    connected,
+    galleryTier,
+    hostParticipantId,
+    isMassRoom,
+    sessionKey,
+    upsertRemote,
+    visibleRemoteOrder,
+  ]);
+
+  // Small/medium rooms: simulcast layer prefs only (autoSubscribe stays on).
+  useEffect(() => {
+    if (!connected || isMassRoom) return;
+    const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+    if (!room) return;
+    applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier);
+  }, [connected, galleryTier, isMassRoom, remoteFeeds, sessionKey, visibleRemoteOrder]);
 
   useEffect(() => {
     if (galleryPage > totalGalleryPages) setGalleryPage(totalGalleryPages);
@@ -691,19 +792,22 @@ export function LiveKitConference({
 
   const allStageTiles = useMemo<StageParticipantTile[]>(() => {
     const remotes: StageParticipantTile[] = [];
-    for (const id of sortedRemoteIds) {
+    const sourceIds = isMassRoom ? paginatedRemoteIds : sortedRemoteIds;
+
+    for (const id of sourceIds) {
       const feed = remoteFeeds.get(id);
-      if (!feed) continue;
+      const roster = isMassRoom ? galleryPageParticipants.find((p) => p.id === id) : undefined;
+      const label = feed?.displayName ?? roster?.displayName ?? id;
       const isHostFeed = Boolean(hostParticipantId && id === hostParticipantId);
       remotes.push({
         id,
-        label: feed.displayName,
-        stream: feed.stream,
-        trackSignature: feed.trackSignature,
-        hasVideo: feed.hasVideo,
-        isScreenShare: feed.isScreenShare,
+        label,
+        stream: feed?.stream ?? null,
+        trackSignature: feed?.trackSignature ?? "",
+        hasVideo: feed?.hasVideo ?? false,
+        isScreenShare: feed?.isScreenShare ?? false,
         isSpeaking: speakingSet.has(id),
-        roleBadge: isHostFeed ? "Host" : undefined,
+        roleBadge: isHostFeed ? "Host" : roster?.role === "cohost" ? "Co-host" : undefined,
       });
     }
     remotes.sort((a, b) => {
@@ -712,7 +816,7 @@ export function LiveKitConference({
       return a.label.localeCompare(b.label);
     });
     return [localTile, ...remotes];
-  }, [hostParticipantId, localTile, remoteFeeds, sortedRemoteIds, speakingSet]);
+  }, [galleryPageParticipants, hostParticipantId, isMassRoom, localTile, paginatedRemoteIds, remoteFeeds, sortedRemoteIds, speakingSet]);
 
   /** Gallery only downloads the current page of remotes (+ local). */
   const galleryTiles = useMemo<StageParticipantTile[]>(() => {
@@ -749,7 +853,10 @@ export function LiveKitConference({
     [activeSpeakerIds, hostParticipantId, stageTiles],
   );
 
-  const offPageCount = Math.max(0, paginatedRemoteIds.length - visibleRemoteIds.size);
+  const offPageCount = Math.max(
+    0,
+    (isMassRoom ? remoteParticipantCount : paginatedRemoteIds.length) - visibleRemoteIds.size,
+  );
 
   return (
     <div
@@ -764,6 +871,11 @@ export function LiveKitConference({
       )}
       {isWebinar && !isHostRole && connected && (
         <div className="join-banner info">Webinar — raise hand to get the host’s attention.</div>
+      )}
+      {isMassRoom && connected && (
+        <div className="join-banner info">
+          Large meeting — showing {galleryTier.videosPerPage} videos per page. Everyone can use mic/cam; flip pages to see more.
+        </div>
       )}
       {silenceNotice && connected && (
         <div className="join-banner info">{silenceNotice}</div>
@@ -824,6 +936,8 @@ export function LiveKitConference({
         mediaBusy={mediaBusy}
         onFocusChat={onFocusChat}
         onFocusParticipants={onFocusParticipants}
+        onFocusInvite={onFocusInvite}
+        activePanel={activePanel}
       />
     </div>
   );

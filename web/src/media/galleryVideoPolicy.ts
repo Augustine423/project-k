@@ -7,8 +7,8 @@
  * | 5–9       | 9             | 1        | 8      | 0    | 3–8 Mbps        |
  * | 10–25     | 25            | 1        | 8      | 16   | 4–12 Mbps       |
  * | 26–49     | 25            | 1        | 4      | 20   | 4–10 Mbps       |
- * | 50–200    | 25            | 1        | 4      | 20   | 4–10 Mbps       |
- * | 201–300   | 25            | 1        | 4      | 20   | 4–10 Mbps       |
+ * | 50–200    | 50 max        | 1        | 8      | 41   | 4–18 Mbps       |
+ * | 201–10k   | 50 max        | 1        | 8      | 41   | 4–18 Mbps       |
  *
  * Everyone may publish camera; each client only downloads video for the current page.
  * Off-page publishers remain audio-only until the user changes page.
@@ -27,6 +27,11 @@ export interface GalleryVideoTier {
   estDownloadMbps: { min: number; max: number };
   label: string;
 }
+
+export const GALLERY_PAGE_SIZE = 50;
+
+/** Rooms above this count use control-plane paging + manual LiveKit subscriptions. */
+export const MASS_ROOM_THRESHOLD = 50;
 
 export const GALLERY_VIDEO_TIERS: readonly GalleryVideoTier[] = [
   {
@@ -67,30 +72,30 @@ export const GALLERY_VIDEO_TIERS: readonly GalleryVideoTier[] = [
   },
   {
     maxRoomSize: 200,
-    videosPerPage: 25,
+    videosPerPage: 50,
     hdSlots: 1,
-    mediumSlots: 4,
-    lowSlots: 20,
-    estDownloadMbps: { min: 4, max: 10 },
-    label: "Large (50–200)",
+    mediumSlots: 8,
+    lowSlots: 41,
+    estDownloadMbps: { min: 4, max: 18 },
+    label: "Adaptive 50 (50–200)",
   },
   {
-    maxRoomSize: 300,
-    videosPerPage: 25,
+    maxRoomSize: 1000,
+    videosPerPage: 50,
     hdSlots: 1,
-    mediumSlots: 4,
-    lowSlots: 20,
-    estDownloadMbps: { min: 4, max: 10 },
-    label: "XXL (201–300)",
+    mediumSlots: 8,
+    lowSlots: 41,
+    estDownloadMbps: { min: 4, max: 18 },
+    label: "Adaptive 50 (201–1k)",
   },
   {
     maxRoomSize: 10_000,
-    videosPerPage: 25,
+    videosPerPage: 50,
     hdSlots: 1,
-    mediumSlots: 4,
-    lowSlots: 20,
-    estDownloadMbps: { min: 4, max: 10 },
-    label: "Unlimited (300+)",
+    mediumSlots: 8,
+    lowSlots: 41,
+    estDownloadMbps: { min: 4, max: 18 },
+    label: "Adaptive 50 (1k–10k)",
   },
 ] as const;
 
@@ -104,14 +109,14 @@ export function resolveGalleryTier(participantCount: number): GalleryVideoTier {
 
 /** Layer preference index into LAYER_DIMS: 0=180, 1=360, 2=720, 3=1080. */
 export function substreamForVideoSlot(slotIndex: number, tier: GalleryVideoTier): number {
-  if (slotIndex < tier.hdSlots) return 3; // best quality when bandwidth allows
+  if (slotIndex < tier.hdSlots) return 3;
   if (slotIndex < tier.hdSlots + tier.mediumSlots) return 2;
   return 1;
 }
 
-export function galleryPageCount(remotePublisherCount: number, tier: GalleryVideoTier): number {
-  if (remotePublisherCount <= 0) return 1;
-  return Math.max(1, Math.ceil(remotePublisherCount / tier.videosPerPage));
+export function galleryPageCount(remoteParticipantCount: number, tier: GalleryVideoTier): number {
+  if (remoteParticipantCount <= 0) return 1;
+  return Math.max(1, Math.ceil(remoteParticipantCount / tier.videosPerPage));
 }
 
 export function sliceGalleryPage(ids: string[], page: number, tier: GalleryVideoTier): string[] {

@@ -1,13 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Participant } from "../api/types";
 import { listParticipantsPage } from "../api/client";
+import { copyInviteLink, inviteLinkForRoom } from "../api/inviteLink";
 import type { ChatMessage } from "./chatTypes";
 import { avatarInitials, avatarTone, formatChatTime } from "./chatTypes";
-import { ChatIcon, MicMutedSmall, ParticipantsIcon, RaiseHandIcon } from "./MediaIcons";
+import {
+  ChatIcon,
+  MicMutedSmall,
+  ParticipantsIcon,
+  RaiseHandIcon,
+  ShareScreenIcon,
+} from "./MediaIcons";
 
-export type SidePanelTab = "chat" | "participants";
+export type SidePanelTab = "chat" | "participants" | "invite";
 
 const PARTICIPANTS_PAGE_SIZE = 50;
+const SUGGESTION_LIMIT = 8;
 
 export type RaisedHandInfo = {
   participantId: string;
@@ -39,7 +47,7 @@ interface RoomSidePanelProps {
   onKick?: (participantId: string) => void;
   hostBusy?: boolean;
   activeTab: SidePanelTab;
-  onTabChange: (tab: SidePanelTab) => void;
+  onClose?: () => void;
   raisedHands?: RaisedHandInfo[];
   showRaisedHands?: boolean;
   dmPeer: DmPeer | null;
@@ -54,6 +62,12 @@ function roleLabel(role: string): string | null {
   if (role === "host") return "Host";
   if (role === "cohost") return "Co-host";
   return null;
+}
+
+function panelTitle(tab: SidePanelTab): string {
+  if (tab === "chat") return "Chat";
+  if (tab === "participants") return "Participants";
+  return "Share";
 }
 
 export function RoomSidePanel({
@@ -75,7 +89,7 @@ export function RoomSidePanel({
   onKick,
   hostBusy,
   activeTab,
-  onTabChange,
+  onClose,
   raisedHands = [],
   showRaisedHands = false,
   dmPeer,
@@ -92,12 +106,24 @@ export function RoomSidePanel({
   const [pageOffset, setPageOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [participantsLoading, setParticipantsLoading] = useState(false);
+  const [inviteCopied, setInviteCopied] = useState(false);
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(0);
   const messagesRef = useRef<HTMLDivElement>(null);
+  const searchWrapRef = useRef<HTMLDivElement>(null);
+  const inviteLink = inviteLinkForRoom(roomId);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 300);
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 220);
     return () => window.clearTimeout(timer);
   }, [query]);
+
+  useEffect(() => {
+    setQuery("");
+    setDebouncedQuery("");
+    setSuggestionsOpen(false);
+    setActiveSuggestion(0);
+  }, [activeTab]);
 
   const useLiveList = Boolean(liveParticipants && participantCount <= 200 && !debouncedQuery);
 
@@ -143,6 +169,17 @@ export function RoomSidePanel({
     setDraft("");
   }, [dmPeer?.participantId]);
 
+  useEffect(() => {
+    if (!suggestionsOpen) return;
+    function onPointerDown(e: PointerEvent) {
+      if (!searchWrapRef.current?.contains(e.target as Node)) {
+        setSuggestionsOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [suggestionsOpen]);
+
   const displayedParticipants = useMemo(() => {
     if (useLiveList && liveParticipants) {
       const q = debouncedQuery.toLowerCase();
@@ -152,6 +189,16 @@ export function RoomSidePanel({
     }
     return pageItems;
   }, [useLiveList, liveParticipants, debouncedQuery, pageItems]);
+
+  const suggestions = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return [];
+    const pool =
+      liveParticipants && liveParticipants.length > 0 ? liveParticipants : displayedParticipants;
+    return pool
+      .filter((p) => p.displayName.toLowerCase().includes(q))
+      .slice(0, SUGGESTION_LIMIT);
+  }, [query, liveParticipants, displayedParticipants]);
 
   const raisedById = useMemo(() => {
     const map = new Map<string, RaisedHandInfo>();
@@ -166,6 +213,13 @@ export function RoomSidePanel({
       ),
     [raisedHands],
   );
+
+  async function copyInvite() {
+    const ok = await copyInviteLink(roomId);
+    if (!ok) return;
+    setInviteCopied(true);
+    window.setTimeout(() => setInviteCopied(false), 2000);
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -191,51 +245,64 @@ export function RoomSidePanel({
     onOpenDm({ participantId: msg.participantId, displayName: msg.displayName });
   }
 
+  function applySuggestion(p: Participant) {
+    setQuery(p.displayName);
+    setDebouncedQuery(p.displayName.trim());
+    setSuggestionsOpen(false);
+    setActiveSuggestion(0);
+    const el = document.getElementById(`participant-row-${p.id}`);
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
+
+  function onSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!suggestionsOpen || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveSuggestion((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveSuggestion((i) => (i - 1 + suggestions.length) % suggestions.length);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const pick = suggestions[activeSuggestion];
+      if (pick) applySuggestion(pick);
+    } else if (e.key === "Escape") {
+      setSuggestionsOpen(false);
+    }
+  }
+
   const composerPlaceholder = chatDisabled
     ? (chatDisabledHint ?? "Chat unavailable")
     : dmPeer
       ? `Write to ${dmPeer.displayName}…`
       : "Write to the room…";
 
+  const TitleIcon =
+    activeTab === "chat"
+      ? ChatIcon
+      : activeTab === "participants"
+        ? ParticipantsIcon
+        : ShareScreenIcon;
+
   return (
-    <section className="rsp">
-      <header className="rsp-head">
-        <div className="rsp-tabs" role="tablist" aria-label="Chat and participants">
-          <button
-            type="button"
-            role="tab"
-            id="tab-chat"
-            aria-selected={activeTab === "chat"}
-            aria-controls="panel-chat"
-            className={`rsp-tab ${activeTab === "chat" ? "is-active" : ""}`}
-            onClick={() => onTabChange("chat")}
-          >
-            <ChatIcon size={15} />
-            <span>Your Chat</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            id="tab-participants"
-            aria-selected={activeTab === "participants"}
-            aria-controls="panel-participants"
-            className={`rsp-tab ${activeTab === "participants" ? "is-active" : ""}`}
-            onClick={() => onTabChange("participants")}
-          >
-            <ParticipantsIcon size={15} />
-            <span>Participants</span>
+    <section className={`rsp rsp-solo rsp-${activeTab}`}>
+      <header className="rsp-head rsp-solo-head">
+        <div className="rsp-solo-title">
+          <TitleIcon size={16} />
+          <h2>{panelTitle(activeTab)}</h2>
+          {activeTab === "participants" && (
             <span className="rsp-tab-count">{participantCount}</span>
-          </button>
+          )}
         </div>
+        {onClose && (
+          <button type="button" className="rsp-close" onClick={onClose} aria-label="Close panel">
+            ×
+          </button>
+        )}
       </header>
 
-      {activeTab === "chat" ? (
-        <div
-          className="rsp-body rsp-chat"
-          role="tabpanel"
-          id="panel-chat"
-          aria-labelledby="tab-chat"
-        >
+      {activeTab === "chat" && (
+        <div className="rsp-body rsp-chat" role="region" aria-label="Chat">
           <nav className="rsp-lanes" aria-label="Chat destination">
             <button
               type="button"
@@ -363,25 +430,74 @@ export function RoomSidePanel({
             </button>
           </form>
         </div>
-      ) : (
-        <div
-          className="rsp-body rsp-participants"
-          role="tabpanel"
-          id="panel-participants"
-          aria-labelledby="tab-participants"
-        >
+      )}
+
+      {activeTab === "participants" && (
+        <div className="rsp-body rsp-participants" role="region" aria-label="Participants">
           <div className="rsp-people-tools">
-            <label className="rsp-search">
-              <span className="sr-only">Search participants</span>
-              <input
-                type="search"
-                placeholder="Find a participant…"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                autoComplete="off"
-                spellCheck={false}
-              />
-            </label>
+            <div className="rsp-search-wrap" ref={searchWrapRef}>
+              <label className="rsp-search">
+                <span className="sr-only">Search participants</span>
+                <input
+                  type="search"
+                  placeholder="Search people by name…"
+                  value={query}
+                  onChange={(e) => {
+                    setQuery(e.target.value);
+                    setSuggestionsOpen(true);
+                    setActiveSuggestion(0);
+                  }}
+                  onFocus={() => setSuggestionsOpen(true)}
+                  onKeyDown={onSearchKeyDown}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-autocomplete="list"
+                  aria-expanded={suggestionsOpen && suggestions.length > 0}
+                  aria-controls="rsp-search-suggestions"
+                />
+              </label>
+              {suggestionsOpen && query.trim() && (
+                <ul
+                  id="rsp-search-suggestions"
+                  className="rsp-suggest"
+                  role="listbox"
+                  aria-label="Participant suggestions"
+                >
+                  {suggestions.length === 0 && (
+                    <li className="rsp-suggest-empty">No matches for “{query.trim()}”</li>
+                  )}
+                  {suggestions.map((p, index) => {
+                    const isSelf = Boolean(selfId && p.id === selfId);
+                    const role = roleLabel(p.role);
+                    return (
+                      <li key={p.id} role="option" aria-selected={index === activeSuggestion}>
+                        <button
+                          type="button"
+                          className={`rsp-suggest-item ${index === activeSuggestion ? "is-active" : ""}`}
+                          onMouseEnter={() => setActiveSuggestion(index)}
+                          onClick={() => applySuggestion(p)}
+                        >
+                          <span
+                            className="rsp-face rsp-face-sm"
+                            style={{ background: avatarTone(p.id) }}
+                            aria-hidden="true"
+                          >
+                            {avatarInitials(p.displayName)}
+                          </span>
+                          <span className="rsp-suggest-copy">
+                            <strong>
+                              {p.displayName}
+                              {isSelf ? " (You)" : ""}
+                            </strong>
+                            {role && <em>{role}</em>}
+                          </span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
             {isHost && onSetMeetingMode && (
               <>
                 <button
@@ -458,7 +574,11 @@ export function RoomSidePanel({
               const isSelf = Boolean(selfId && p.id === selfId);
               const role = roleLabel(p.role);
               return (
-                <li key={p.id} className={`rsp-person ${isSelf ? "is-self" : ""}`}>
+                <li
+                  key={p.id}
+                  id={`participant-row-${p.id}`}
+                  className={`rsp-person ${isSelf ? "is-self" : ""}`}
+                >
                   <span
                     className="rsp-face"
                     aria-hidden="true"
@@ -520,6 +640,28 @@ export function RoomSidePanel({
               {participantsLoading ? "Loading…" : "Load more"}
             </button>
           )}
+        </div>
+      )}
+
+      {activeTab === "invite" && (
+        <div className="rsp-body rsp-invite" role="region" aria-label="Share invite">
+          <p className="rsp-invite-hint">Share this link so others can join the meeting.</p>
+          <div className="rsp-invite-row">
+            <input
+              className="rsp-invite-input"
+              type="text"
+              readOnly
+              value={inviteLink}
+              onFocus={(e) => e.target.select()}
+              aria-label="Meeting invitation link"
+            />
+            <button type="button" className="rsp-invite-copy" onClick={() => void copyInvite()}>
+              {inviteCopied ? "Copied" : "Copy"}
+            </button>
+          </div>
+          <p className="rsp-invite-room">
+            Room ID <code>{roomId}</code>
+          </p>
         </div>
       )}
     </section>

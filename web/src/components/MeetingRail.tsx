@@ -1,5 +1,5 @@
 import type { SidePanelTab } from "./RoomSidePanel";
-import { ChatIcon, ParticipantsIcon, ReactionsIcon } from "./MediaIcons";
+import { ChatIcon, ParticipantsIcon, ReactionsIcon, ShareScreenIcon } from "./MediaIcons";
 
 interface MeetingRailProps {
   activeTab: SidePanelTab | null;
@@ -8,6 +8,7 @@ interface MeetingRailProps {
   participantCount: number;
   onOpenChat: () => void;
   onOpenParticipants: () => void;
+  onOpenInvite: () => void;
   onClosePanel: () => void;
 }
 
@@ -18,14 +19,20 @@ export function MeetingRail({
   participantCount,
   onOpenChat,
   onOpenParticipants,
+  onOpenInvite,
   onClosePanel,
 }: MeetingRailProps) {
+  function toggle(tab: SidePanelTab, open: () => void) {
+    if (panelOpen && activeTab === tab) onClosePanel();
+    else open();
+  }
+
   return (
     <nav className="meeting-rail" aria-label="Meeting tools">
       <button
         type="button"
         className={`meeting-rail-btn is-chat ${panelOpen && activeTab === "chat" ? "is-active" : ""}`}
-        onClick={() => (panelOpen && activeTab === "chat" ? onClosePanel() : onOpenChat())}
+        onClick={() => toggle("chat", onOpenChat)}
         aria-pressed={panelOpen && activeTab === "chat"}
         aria-label="Chat"
         title="Chat"
@@ -40,15 +47,23 @@ export function MeetingRail({
       <button
         type="button"
         className={`meeting-rail-btn is-participants ${panelOpen && activeTab === "participants" ? "is-active" : ""}`}
-        onClick={() =>
-          panelOpen && activeTab === "participants" ? onClosePanel() : onOpenParticipants()
-        }
+        onClick={() => toggle("participants", onOpenParticipants)}
         aria-pressed={panelOpen && activeTab === "participants"}
         aria-label="Participants"
         title="Participants"
       >
         <ParticipantsIcon size={20} />
         <span className="meeting-rail-count">{participantCount}</span>
+      </button>
+      <button
+        type="button"
+        className={`meeting-rail-btn is-invite ${panelOpen && activeTab === "invite" ? "is-active" : ""}`}
+        onClick={() => toggle("invite", onOpenInvite)}
+        aria-pressed={panelOpen && activeTab === "invite"}
+        aria-label="Share invite"
+        title="Share"
+      >
+        <ShareScreenIcon size={20} />
       </button>
       <button
         type="button"

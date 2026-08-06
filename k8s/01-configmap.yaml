@@ -14,16 +14,15 @@ metadata:
 data:
   SERVICE_NAME: "kzys-control-plane"
   CORS_ORIGIN: "*"
-  # Target: Zoom Business (300 cam/mic) / Meet Enterprise (1000 in room).
-  # One LiveKit room still lives on one SFU node (~100–150 publishers/node realistic).
-  MAX_ROOM_PARTICIPANTS: "1000"
+  # Target: up to 10k in room; gallery UI loads 50 video tiles/page per client.
+  MAX_ROOM_PARTICIPANTS: "10000"
   LARGE_ROOM_EVENT_THRESHOLD: "500"
   PARTICIPANTS_PAGE_SIZE: "50"
-  PARTICIPANTS_SEARCH_SCAN_CAP: "5000"
-  WEBINAR_ENTER_LISTENERS: "400"
+  PARTICIPANTS_SEARCH_SCAN_CAP: "10000"
+  WEBINAR_ENTER_LISTENERS: "10000"
   WEBINAR_ENTER_RATIO: "8.0"
   WEBINAR_EXIT_LISTENERS: "50"
-  INTERACTIVE_MAX_PUBLISHERS: "300"
+  INTERACTIVE_MAX_PUBLISHERS: "10000"
   WEBINAR_MAX_PUBLISHERS: "50"
   # SFU autosize hint — used by GET /api/rooms/scaling/metrics (desiredSfuPods).
   SFU_PUBLISHERS_PER_NODE: "100"

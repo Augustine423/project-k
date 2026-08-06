@@ -16,9 +16,7 @@ import type { JoinTicket, Participant, Room } from "../api/types";
 import type { ChatMessage } from "../components/chatTypes";
 import { MeetingHeader } from "../components/MeetingChrome";
 import { MeetingRail } from "../components/MeetingRail";
-import { InviteLinkBar } from "../components/InviteLinkBar";
 import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
-import { copyInviteLink } from "../api/inviteLink";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { MediaConference } from "../media/MediaConference";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
@@ -56,7 +54,6 @@ export function RoomPage() {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [hostBusy, setHostBusy] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
-  const [inviteCollapsed, setInviteCollapsed] = useState(true);
   const [sidePanelOpen, setSidePanelOpen] = useState(false);
   const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
   const [chromeVisible, setChromeVisible] = useState(true);
@@ -140,6 +137,17 @@ export function RoomPage() {
     [chatMessages.length, dmPeer],
   );
 
+  const toggleSidePanel = useCallback(
+    (tab: SidePanelTab) => {
+      if (sidePanelOpenRef.current && sideTabRef.current === tab) {
+        setSidePanelOpen(false);
+        return;
+      }
+      focusSidePanel(tab);
+    },
+    [focusSidePanel],
+  );
+
   const closeSidePanel = useCallback(() => setSidePanelOpen(false), []);
 
   const revealChrome = useCallback(() => {
@@ -169,10 +177,8 @@ export function RoomPage() {
   }, [sidePanelOpen]);
 
   const shareInvite = useCallback(() => {
-    void copyInviteLink(roomId);
-    setInviteCollapsed(false);
-    focusSidePanel("participants");
-  }, [focusSidePanel, roomId]);
+    toggleSidePanel("invite");
+  }, [toggleSidePanel]);
 
   const openDm = useCallback((peer: DmPeer) => {
     setOpenDmPeers((prev) =>
@@ -214,9 +220,6 @@ export function RoomPage() {
           at?: string;
           participantId?: string;
         };
-        // #region agent log
-        fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'C',location:'RoomPage.tsx:chat.message',message:'received chat.message',data:{hasMessage:Boolean(data.message),fromSelf:data.participantId===selfId,participantId:data.participantId?String(data.participantId).slice(0,8):null,msgLen:data.message?.length??0,sideTab:sideTabRef.current,panelOpen:sidePanelOpenRef.current},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
         if (!data.message) return;
         const id = `${data.participantId ?? "unknown"}-${data.at ?? Date.now()}`;
         setChatMessages((prev) =>
@@ -592,8 +595,10 @@ export function RoomPage() {
               onLeave={leaveRoom}
               participantCount={participantCount}
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
-              onFocusChat={() => focusSidePanel("chat")}
-              onFocusParticipants={() => focusSidePanel("participants")}
+              onFocusChat={() => toggleSidePanel("chat")}
+              onFocusParticipants={() => toggleSidePanel("participants")}
+              onFocusInvite={() => toggleSidePanel("invite")}
+              activePanel={sidePanelOpen ? sideTab : null}
               roomMode={ticket.room.mode}
               participantRole={ticket.participant.role}
               hostParticipantId={ticket.room.hostParticipantId}
@@ -629,7 +634,7 @@ export function RoomPage() {
               onKick={kick}
               hostBusy={hostBusy}
               activeTab={sideTab}
-              onTabChange={setSideTab}
+              onClose={closeSidePanel}
               raisedHands={raisedHands}
               showRaisedHands={isWebinar}
               dmPeer={dmPeer}
@@ -640,11 +645,6 @@ export function RoomPage() {
               onOpenDm={openDm}
             />
           </div>
-          <InviteLinkBar
-            roomId={roomId}
-            collapsed={inviteCollapsed}
-            onToggleCollapse={() => setInviteCollapsed((v) => !v)}
-          />
           {isHost && (
             <div className="host-end-row">
               <button type="button" className="btn btn-danger btn-sm" onClick={() => void endMeeting()} disabled={hostBusy}>
@@ -661,6 +661,7 @@ export function RoomPage() {
           participantCount={participantCount}
           onOpenChat={() => focusSidePanel("chat")}
           onOpenParticipants={() => focusSidePanel("participants")}
+          onOpenInvite={() => focusSidePanel("invite")}
           onClosePanel={closeSidePanel}
         />
       </div>

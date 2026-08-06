@@ -12,8 +12,9 @@ type WorkletHandle = Awaited<ReturnType<typeof createNoiseSuppressionAudioWorkle
 
 /**
  * Open-source DTLN denoiser (MIT) as a LiveKit track processor.
- * Pipeline: Raw mic → browser AEC + AGC → DTLN ANS → Opus.
- * (Disable browser noiseSuppression while this runs to avoid double-filtering.)
+ * Not used by default — MeetingMax prefers browser AEC + noiseSuppression + AGC
+ * so echo cancel works cleanly when devices are near each other.
+ * Keep this module for optional/advanced use only.
  */
 export class DtlnNoiseSuppressorProcessor
   implements TrackProcessor<Track.Kind.Audio, AudioProcessorOptions>

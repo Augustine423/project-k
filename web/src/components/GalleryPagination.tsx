@@ -41,7 +41,7 @@ export function GalleryPagination({
             {totalParticipants != null ? `${totalParticipants} participants` : "Gallery"}
           </>
         )}
-        {offPageCount > 0 ? <> · {offPageCount} more (audio continues)</> : null}
+        {offPageCount > 0 ? <> · {offPageCount} off-page (audio when active)</> : null}
       </span>
       <button
         type="button"

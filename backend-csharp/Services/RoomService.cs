@@ -56,7 +56,7 @@ public sealed class RoomService
             Secret = "",
             Pin = pin ?? "",
             MaxParticipants = max,
-            MaxPublishers = Math.Min(max, _config.InteractiveMaxPublishers),
+            MaxPublishers = max,
             CreatedAt = DateTime.UtcNow,
             HostParticipantId = hostId,
         };

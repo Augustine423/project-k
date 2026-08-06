@@ -23,20 +23,20 @@ export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h1080.encoding.maxBitrate;
 export const LIVEKIT_MAX_FRAMERATE = VideoPresets.h1080.encoding.maxFramerate ?? 30;
 
 /**
- * Capture-side WebRTC DSP (before open-source DTLN track processor):
- * Raw mic → AEC (speaker reference) → AGC.
- * Browser `noiseSuppression` stays off so DTLN is the only ANS stage.
+ * Capture-side WebRTC DSP via browser getUserMedia constraints:
+ * Raw mic → AEC → noise suppress → AGC → Opus.
+ * Keep all three on so nearby laptop/phone speakers don't create echo loops.
  */
 export function microphoneEnableCaptureOptions(): AudioCaptureOptions {
   return {
     echoCancellation: true,
-    noiseSuppression: false,
+    noiseSuppression: true,
     autoGainControl: true,
     channelCount: 1,
   };
 }
 
-/** Re-assert AEC/AGC after enable (some devices drop constraints on restart). */
+/** Re-assert AEC / NS / AGC after enable (some devices drop constraints on restart). */
 export async function applyAudioProcessingConstraints(
   track: MediaStreamTrack | undefined | null,
 ): Promise<void> {
@@ -44,7 +44,7 @@ export async function applyAudioProcessingConstraints(
   try {
     await track.applyConstraints({
       echoCancellation: true,
-      noiseSuppression: false,
+      noiseSuppression: true,
       autoGainControl: true,
       channelCount: 1,
     });
@@ -137,7 +137,7 @@ export async function applyOrientationCaptureConstraints(
 /**
  * Publishers send high quality + simulcast ladders.
  * Each viewer only downloads the layer their bandwidth / tile size can sustain.
- * Mic: browser AEC/AGC + open-source DTLN ANS before Opus.
+ * Mic: browser AEC + noise suppress + AGC (set on getUserMedia / LiveKit capture).
  */
 export function createLiveKitRoomOptions(): RoomOptions {
   return {
