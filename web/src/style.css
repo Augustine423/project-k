@@ -674,7 +674,7 @@ h1, h2, h3, h4 {
 .video-stage .video-tile,
 .video-stage .lk-participant-tile {
   position: relative;
-  background: linear-gradient(160deg, #151c26 0%, #0f141c 100%);
+  background: linear-gradient(165deg, #141b24 0%, #0b1018 55%, #090d14 100%);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 16px;
   overflow: hidden;
@@ -701,9 +701,10 @@ h1, h2, h3, h4 {
   width: 100%;
   height: 100%;
   display: block;
-  object-fit: cover;
+  /* Full camera frame — no crop for portrait or landscape sources */
+  object-fit: contain;
   object-position: center;
-  background: #0f141c;
+  background: transparent;
 }
 
 .video-stage .video-tile .mirror,
@@ -829,14 +830,17 @@ h1, h2, h3, h4 {
 .video-stage .lk-participant-tile video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
 }
 
 .video-stage .lk-participant-tile .lk-participant-media-video,
 .video-stage .lk-participant-tile .lk-video-track {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 
@@ -3743,8 +3747,8 @@ html:has(.auth-page) body {
 }
 
 .meeting-app.meeting-light .video-stage .video-tile {
-  background: #fff;
-  border: 1px solid rgba(15, 23, 42, 0.06);
+  background: linear-gradient(165deg, #0f172a 0%, #111827 52%, #0b1220 100%);
+  border: 1px solid rgba(15, 23, 42, 0.08);
   border-radius: 18px;
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
 }
@@ -3984,38 +3988,29 @@ html:has(.auth-page) body {
   }
 }
 
-/* Zoom-style client spotlight + contain fit + chrome auto-hide */
+/* Preserve full camera frame — letterbox inside the tile (never crop). */
 .video-stage .video-tile .video-feed,
 .video-stage .video-tile video.video-feed,
-.video-tile .video-feed {
+.video-tile .video-feed,
+.video-stage .video-tile video {
+  object-fit: contain !important;
   object-position: center;
   background: transparent;
 }
 
-/* Desktop-to-desktop landscape: crop to fill 16:9 grid cell */
-.video-tile[data-fit="cover"] .video-feed {
-  object-fit: cover !important;
+/* Soft letterbox pad behind every feed */
+.video-tile[data-fit="contain"],
+.video-tile[data-fit="cover"],
+.video-tile[data-stream-aspect="portrait"],
+.video-tile[data-stream-aspect="landscape"],
+.video-tile[data-stream-aspect="square"],
+.video-tile[data-stream-aspect="unknown"] {
+  background: linear-gradient(165deg, #141b24 0%, #0b1018 55%, #090d14 100%);
 }
 
-/* Letterbox without distortion — preserve native aspect */
-.video-tile[data-fit="contain"] .video-feed,
-.video-tile[data-stream-aspect="portrait"] .video-feed {
-  object-fit: contain !important;
-  background: #0b0f14;
-}
-
-/* Hard rule: portrait phone streams never stretch inside landscape cells */
-.video-tile[data-stream-aspect="portrait"] {
-  background: #0b0f14;
-}
-
-.video-tile[data-stream-aspect="portrait"][data-fit="cover"] .video-feed {
-  object-fit: contain !important;
-}
-
-/* Portrait phone → desktop cell: centered feed + blurred side padding */
+/* Portrait / mismatched cells: centered feed + blurred side padding */
 .video-tile[data-fit="contain-blur"] {
-  background: #0b0f14;
+  background: linear-gradient(165deg, #141b24 0%, #0b1018 55%, #090d14 100%);
 }
 
 .video-tile[data-fit="contain-blur"] .video-blur-bg {
@@ -4055,19 +4050,20 @@ html:has(.auth-page) body {
   min-height: 0;
 }
 
-/* Portrait source streams: keep upright in grid cells (no stretch). */
+/* Grid cells keep native source aspect via contain — no stretch. */
 .video-stage[data-layout="gallery"] .video-tile.has-video {
   aspect-ratio: auto;
 }
 
-.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="portrait"] {
-  /* Center portrait sources; soft pad handled by contain-blur */
+.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="portrait"],
+.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="landscape"] {
   place-self: stretch;
-  background: #0b0f14;
 }
 
-.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="landscape"] .video-feed {
-  object-fit: cover;
+.video-stage[data-layout="gallery"] .video-tile .video-feed,
+.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="landscape"] .video-feed,
+.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="portrait"] .video-feed {
+  object-fit: contain !important;
 }
 
 .meeting-app.chrome-hidden .meeting-v2-header,
@@ -4327,7 +4323,8 @@ html:has(.auth-page) body {
   border-radius: 18px;
   border-color: rgba(15, 23, 42, 0.08);
   box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
-  background: linear-gradient(160deg, #0f172a 0%, #111827 100%);
+  /* Letterbox pad behind contain-fit feeds */
+  background: linear-gradient(165deg, #0f172a 0%, #111827 52%, #0b1220 100%);
 }
 
 .meeting-app.meeting-light .video-stage .video-tile.is-speaking,

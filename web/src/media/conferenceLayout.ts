@@ -5,7 +5,7 @@ export type ConferenceLayoutMode = "gallery";
 
 export type StreamAspect = "portrait" | "landscape" | "square" | "unknown";
 
-/** How a tile should render a stream inside its cell. */
+/** How a tile should render a stream inside its cell. `cover` kept for API compat but unused. */
 export type TileFitMode = "cover" | "contain" | "contain-blur";
 
 export function resolveConferenceLayout(_viewerMode?: ViewerViewportMode): ConferenceLayoutMode {
@@ -21,8 +21,8 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 }
 
 /**
- * Fit from *source camera* aspect. Viewers never stretch portrait↔landscape.
- * Bandwidth only changes which simulcast layer is downloaded — not the aspect.
+ * Always preserve the source camera aspect (mobile portrait + laptop landscape).
+ * Never crop with cover — letterbox inside the grid cell instead.
  */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
@@ -30,10 +30,9 @@ export function resolveTileFit(opts: {
   size: "grid" | "spotlight" | "strip";
 }): TileFitMode {
   const { streamAspect } = opts;
-
-  if (streamAspect === "portrait") return "contain-blur";
-  if (streamAspect === "square") return "contain";
-  return "cover";
+  // Soft blurred pad for mismatched cells; solid contain otherwise.
+  if (streamAspect === "portrait" || streamAspect === "square") return "contain-blur";
+  return "contain";
 }
 
 export type StageParticipantTile = {
