@@ -490,8 +490,8 @@ h1, h2, h3, h4 {
 }
 
 /* Mixed portrait + landscape: 12-col dense grid.
-   Landscape spans 4, portrait spans 2 (= half width of a laptop tile).
-   place-items:start so aspect-ratio is NOT stretched/cropped by the grid. */
+   Landscape = span 6 (half row), portrait = span 3 (half of landscape).
+   place-items:start so aspect-ratio is NOT stretched by the grid. */
 .video-stage[data-layout="gallery"]:not([data-count="1"]) {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
@@ -618,30 +618,31 @@ h1, h2, h3, h4 {
 }
 
 
-/* Multi-participant tiles — aspect from stream; portrait ≈ half of landscape width */
+/* Multi-participant tiles — strict ratios; portrait half the width of landscape */
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile,
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .lk-participant-tile {
   width: 100%;
   min-width: 0;
   min-height: 0;
-  height: auto;
+  height: auto !important;
   max-height: none;
   align-self: start;
   justify-self: stretch;
+  box-sizing: border-box;
 }
 
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
-  grid-column: span 4;
-  aspect-ratio: var(--tile-aspect, 16 / 9);
+  grid-column: span 6;
+  aspect-ratio: 16 / 9 !important;
 }
 
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
-  grid-column: span 2;
-  aspect-ratio: var(--tile-aspect, 9 / 16);
-  max-height: min(72vh, 920px);
+  grid-column: span 3;
+  aspect-ratio: 9 / 16 !important;
+  max-height: min(70vh, 880px);
 }
 
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile,
@@ -649,16 +650,16 @@ h1, h2, h3, h4 {
   position: relative;
   flex: 0 0 auto;
   width: min(100cqw, calc(100cqh * 16 / 9));
-  height: auto;
+  height: auto !important;
   max-width: 100%;
   max-height: 100%;
-  aspect-ratio: var(--tile-aspect, 16 / 9);
+  aspect-ratio: 16 / 9 !important;
 }
 
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="portrait"],
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="square"] {
   width: min(100cqw, calc(100cqh * 9 / 16));
-  aspect-ratio: var(--tile-aspect, 9 / 16);
+  aspect-ratio: 9 / 16 !important;
 }
 
 .video-stage .video-tile,
@@ -685,7 +686,7 @@ h1, h2, h3, h4 {
   box-shadow: 0 0 0 1px rgba(61, 207, 182, 0.35), 0 12px 28px rgba(31, 158, 138, 0.18);
 }
 
-/* Full camera frame — never cover/crop/zoom the source pixels */
+/* Full camera frame — never cover/crop/zoom/distort */
 .video-stage .video-tile video,
 .video-stage .video-tile .video-feed,
 .video-tile .video-feed,
@@ -698,6 +699,7 @@ h1, h2, h3, h4 {
   max-height: 100%;
   display: block;
   margin: 0;
+  border: 0;
   object-fit: contain !important;
   object-position: center center;
   background: #ffffff;
@@ -1972,20 +1974,22 @@ button.rsp-person-name:hover {
     aspect-ratio: 9 / 16;
   }
 
-  /* Narrow viewer: landscape full row half-system, portrait half of that */
+  /* Keep 12-col system on narrow screens: landscape half-row, portrait quarter */
   .video-stage[data-layout="gallery"]:not([data-count="1"]) {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(12, minmax(0, 1fr));
   }
 
   .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
   .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
   .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
     grid-column: span 6;
+    aspect-ratio: 16 / 9 !important;
   }
 
   .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
   .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
     grid-column: span 3;
+    aspect-ratio: 9 / 16 !important;
   }
 }
 

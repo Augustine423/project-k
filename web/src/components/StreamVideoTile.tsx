@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from "react";
+import { useEffect, useRef } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
 import { useVideoStreamSize } from "../hooks/useVideoStreamAspect";
 import {
@@ -39,18 +39,14 @@ function attachMediaStream(element: HTMLMediaElement, stream: MediaStream | null
   }
 }
 
-function aspectFromTrack(stream: MediaStream | null | undefined): {
-  aspect: StreamAspect;
-  width: number;
-  height: number;
-} {
+function aspectFromTrack(stream: MediaStream | null | undefined): StreamAspect {
   const track = stream?.getVideoTracks()[0];
-  if (!track) return { aspect: "unknown", width: 0, height: 0 };
+  if (!track) return "unknown";
   const settings = track.getSettings?.() ?? {};
   const w = Number(settings.width) || 0;
   const h = Number(settings.height) || 0;
-  if (w > 0 && h > 0) return { aspect: classifyStreamAspect(w, h), width: w, height: h };
-  return { aspect: "unknown", width: 0, height: 0 };
+  if (w > 0 && h > 0) return classifyStreamAspect(w, h);
+  return "unknown";
 }
 
 /** One video element per tile — contain-fit, aspect from real stream size (no crop). */
@@ -79,11 +75,8 @@ export function StreamVideoTile({
   const audioTrackId = audioTrack?.id ?? "";
 
   const liveSize = useVideoStreamSize(videoRef, stream, `${trackSignature}:${videoTrackId}`);
-  const boot = aspectFromTrack(stream);
-  const width = liveSize.width > 0 ? liveSize.width : boot.width;
-  const height = liveSize.height > 0 ? liveSize.height : boot.height;
-  const streamAspect =
-    liveSize.aspect !== "unknown" ? liveSize.aspect : boot.aspect;
+  const bootAspect = aspectFromTrack(stream);
+  const streamAspect = liveSize.aspect !== "unknown" ? liveSize.aspect : bootAspect;
   const fit =
     fitOverride ??
     resolveTileFit({
@@ -157,13 +150,6 @@ export function StreamVideoTile({
 
   const tone = avatarTone(label);
   const initials = avatarInitials(label);
-  const aspectStyle =
-    width > 0 && height > 0
-      ? ({
-          aspectRatio: `${width} / ${height}`,
-          ["--tile-aspect" as string]: `${width} / ${height}`,
-        } satisfies CSSProperties)
-      : undefined;
 
   return (
     <div
@@ -178,7 +164,6 @@ export function StreamVideoTile({
         .join(" ")}
       data-fit={fit}
       data-stream-aspect={streamAspect}
-      style={aspectStyle}
     >
       <video
         ref={videoRef}
