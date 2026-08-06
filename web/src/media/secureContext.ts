@@ -4,6 +4,15 @@ export function canAccessMediaDevices(): boolean {
   return typeof navigator !== "undefined" && typeof navigator.mediaDevices?.getUserMedia === "function";
 }
 
+/** Screen share uses getDisplayMedia — unsupported on most phones (iOS Safari / Chrome iOS; Android unreliable). */
+export function canShareScreenDisplay(): boolean {
+  return (
+    typeof navigator !== "undefined" &&
+    typeof navigator.mediaDevices?.getDisplayMedia === "function" &&
+    isSecureMediaContext()
+  );
+}
+
 export function isSecureMediaContext(): boolean {
   if (typeof window === "undefined") return false;
   return window.isSecureContext;

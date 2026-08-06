@@ -6,6 +6,7 @@ import {
   ParticipantsIcon,
   RaiseHandIcon,
   ReactionsIcon,
+  SettingsIcon,
   ShareScreenIcon,
 } from "./MediaIcons";
 import type { SidePanelTab } from "./RoomSidePanel";
@@ -26,6 +27,7 @@ interface ControlBarProps {
   handRaised?: boolean;
   onToggleRaiseHand?: () => void;
   chatBadge?: number | string;
+  participantCount?: number;
   mediaBusy?: boolean;
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
@@ -35,6 +37,25 @@ interface ControlBarProps {
 
 function Badge({ value }: { value: number | string }) {
   return <span className="dock-badge">{value}</span>;
+}
+
+function InviteIcon({ size = 22 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none">
+      <path
+        d="M10 13a5 5 0 0 0 7.07 0l1.41-1.41a5 5 0 0 0-7.07-7.07L10 5.93"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+      <path
+        d="M14 11a5 5 0 0 0-7.07 0L5.52 12.4a5 5 0 0 0 7.07 7.07L14 18.07"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
 }
 
 export function ControlBar({
@@ -51,6 +72,7 @@ export function ControlBar({
   handRaised = false,
   onToggleRaiseHand,
   chatBadge,
+  participantCount,
   mediaBusy = false,
   onFocusChat,
   onFocusParticipants,
@@ -129,6 +151,9 @@ export function ControlBar({
             aria-label={activePanel === "participants" ? "Hide participants" : "Show participants"}
           >
             <ParticipantsIcon size={22} />
+            {participantCount != null && participantCount > 0 && (
+              <Badge value={participantCount > 99 ? "99+" : participantCount} />
+            )}
             <span className="meeting-v2-ctrl-label">Participants</span>
           </button>
         )}
@@ -157,21 +182,31 @@ export function ControlBar({
             className={`meeting-v2-ctrl-btn ${activePanel === "invite" ? "is-active" : ""}`}
             onClick={onFocusInvite}
             aria-pressed={activePanel === "invite"}
-            aria-label={activePanel === "invite" ? "Hide share" : "Share invite"}
+            aria-label={activePanel === "invite" ? "Hide invite" : "Share invite link"}
           >
-            <ShareScreenIcon size={22} />
-            <span className="meeting-v2-ctrl-label">Share</span>
+            <InviteIcon size={22} />
+            <span className="meeting-v2-ctrl-label">Invite</span>
           </button>
         )}
 
         <button
           type="button"
           className="meeting-v2-ctrl-btn"
-          aria-label="More options"
-          title="More — coming soon"
+          aria-label="Reactions"
+          title="Reactions — coming soon"
         >
           <ReactionsIcon size={22} />
-          <span className="meeting-v2-ctrl-label">More</span>
+          <span className="meeting-v2-ctrl-label">React</span>
+        </button>
+
+        <button
+          type="button"
+          className="meeting-v2-ctrl-btn"
+          aria-label="Settings"
+          title="Settings — coming soon"
+        >
+          <SettingsIcon size={22} />
+          <span className="meeting-v2-ctrl-label">Settings</span>
         </button>
       </div>
     </div>

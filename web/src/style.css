@@ -3723,7 +3723,7 @@ html:has(.auth-page) body {
 }
 
 .meeting-app.meeting-light .meeting-body {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   position: relative;
   padding: 0.65rem 0.65rem 0.65rem 0.85rem;
   gap: 0.65rem;
@@ -3892,77 +3892,13 @@ html:has(.auth-page) body {
   display: none;
 }
 
-/* Right icon rail */
-.meeting-rail {
-  display: flex;
-  flex-direction: column;
-  gap: 0.55rem;
-  padding: 0.45rem;
-  align-self: center;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  border-radius: 18px;
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
-  z-index: 4;
-}
-
-.meeting-rail-btn {
-  position: relative;
-  width: 44px;
-  height: 44px;
-  border: none;
-  border-radius: 14px;
-  background: #f1f5f9;
-  color: var(--mm-ink);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: transform 150ms ease, background 150ms ease;
-}
-
-.meeting-rail-btn:hover {
-  transform: translateY(-1px);
-}
-
-.meeting-rail-btn.is-chat { background: #fff4cc; color: #b45309; }
-.meeting-rail-btn.is-participants { background: #ffe4ef; color: #db2777; }
-.meeting-rail-btn.is-reactions { background: #ffe4e6; color: #e11d48; }
-.meeting-rail-btn.is-settings { background: #eef2ff; color: #475569; }
-.meeting-rail-btn.is-active {
-  outline: 2px solid var(--mm-blue);
-  outline-offset: 1px;
-}
-
-.meeting-rail-badge,
-.meeting-rail-count {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 1.05rem;
-  height: 1.05rem;
-  padding: 0 0.25rem;
-  border-radius: 999px;
-  background: #e53945;
-  color: #fff;
-  font-size: 0.62rem;
-  font-weight: 700;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.meeting-rail-count {
-  background: var(--mm-blue);
-}
-
 /* Overlay side panel */
 .meeting-app.meeting-light .meeting-sidebar {
   position: absolute;
   top: 0.65rem;
-  right: 4.5rem;
+  right: 0.9rem;
   bottom: 5.5rem;
-  width: min(360px, calc(100vw - 6rem));
+  width: min(360px, calc(100vw - 2rem));
   display: none;
   z-index: 5;
   max-height: none;
@@ -4027,13 +3963,6 @@ html:has(.auth-page) body {
     right: 0.65rem;
     left: 0.65rem;
     width: auto;
-  }
-
-  .meeting-rail {
-    position: absolute;
-    right: 0.65rem;
-    top: 50%;
-    transform: translateY(-50%);
   }
 }
 
@@ -4142,7 +4071,6 @@ html:has(.auth-page) body {
 }
 
 .meeting-app.chrome-hidden .meeting-v2-header,
-.meeting-app.chrome-hidden .meeting-rail,
 .meeting-app.chrome-hidden .meeting-v2-control-bar-wrap,
 .meeting-app.chrome-hidden .meeting-sidebar:not(.open),
 .meeting-app.chrome-hidden .join-banner {
@@ -4153,11 +4081,9 @@ html:has(.auth-page) body {
 }
 
 .meeting-app.is-client-view .meeting-v2-header,
-.meeting-app.is-client-view .meeting-rail,
 .meeting-app.is-client-view .meeting-v2-control-bar-wrap,
 .meeting-app.is-client-view .join-banner,
 .meeting-app.viewport-mobile-landscape .meeting-v2-header,
-.meeting-app.viewport-mobile-landscape .meeting-rail,
 .meeting-app.viewport-mobile-landscape .meeting-v2-control-bar-wrap,
 .meeting-app.viewport-mobile-landscape .join-banner {
   transition: opacity 220ms ease, transform 220ms ease;
@@ -4169,7 +4095,7 @@ html:has(.auth-page) body {
 
 .meeting-app.is-client-view .meeting-body,
 .meeting-app.viewport-mobile-landscape .meeting-body {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   padding: 0;
   gap: 0;
 }
@@ -4408,9 +4334,5 @@ html:has(.auth-page) body {
 .meeting-app.meeting-light .video-featured .video-tile {
   border-color: rgba(37, 99, 235, 0.55);
   box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25), 0 14px 30px rgba(37, 99, 235, 0.12);
-}
-
-.meeting-rail-btn.is-invite.is-active {
-  color: var(--mm-blue, #2563eb);
 }
 

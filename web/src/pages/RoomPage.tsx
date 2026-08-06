@@ -15,7 +15,6 @@ import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant, Room } from "../api/types";
 import type { ChatMessage } from "../components/chatTypes";
 import { MeetingHeader } from "../components/MeetingChrome";
-import { MeetingRail } from "../components/MeetingRail";
 import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { MediaConference } from "../media/MediaConference";
@@ -407,9 +406,6 @@ export function RoomPage() {
   function sendChat(text: string) {
     if (!ticket) return;
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'D',location:'RoomPage.tsx:sendChat',message:'user send chat',data:{isDm:Boolean(dmPeer),chatReady,roomId,selfId:selfId.slice(0,8),msgLen:text.length},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (dmPeer) {
         sendDirectChat(
           roomId,
@@ -422,9 +418,6 @@ export function RoomPage() {
         sendRoomChat(roomId, ticket.participantToken, ticket.participant.displayName, text);
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7901/ingest/04f6ee3f-e89d-4744-b298-47f83e50cfc2',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'c10931'},body:JSON.stringify({sessionId:'c10931',runId:'chat-pre',hypothesisId:'A',location:'RoomPage.tsx:sendChatError',message:'chat send failed',data:{error:err instanceof Error?err.message:String(err)},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       setStatusMessage(err instanceof Error ? err.message : "Chat send failed");
     }
   }
@@ -517,19 +510,13 @@ export function RoomPage() {
   }, [refreshCount]);
 
   const handleDisconnected = useCallback(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'C',location:'RoomPage.tsx:handleDisconnected',message:'UI marked disconnected from media server',data:{roomId,pageHost:typeof window!=='undefined'?window.location.host:null,mediaUrl:mediaConfig?.url??null,turnUrls:mediaConfig?.turn?.urls??[]},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setStatus("error");
     setStatusMessage("Disconnected from media server");
-  }, [mediaConfig?.turn?.urls, mediaConfig?.url, roomId]);
+  }, []);
 
   const handleMediaError = useCallback((message: string) => {
-    // #region agent log
-    fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'E',location:'RoomPage.tsx:handleMediaError',message:'Media error surfaced to UI',data:{message,pageHost:typeof window!=='undefined'?window.location.host:null,mediaUrl:mediaConfig?.url??null},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     setMediaWarning(message);
-  }, [mediaConfig?.url]);
+  }, []);
 
   if (!ticket || !mediaConfig) {
     return (
@@ -659,17 +646,6 @@ export function RoomPage() {
             </div>
           )}
         </aside>
-
-        <MeetingRail
-          activeTab={sideTab}
-          panelOpen={sidePanelOpen}
-          chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
-          participantCount={participantCount}
-          onOpenChat={() => focusSidePanel("chat")}
-          onOpenParticipants={() => focusSidePanel("participants")}
-          onOpenInvite={() => focusSidePanel("invite")}
-          onClosePanel={closeSidePanel}
-        />
       </div>
     </div>
   );

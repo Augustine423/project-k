@@ -21,7 +21,7 @@ import {
   resolveConferenceLayout,
   type StageParticipantTile,
 } from "../media/conferenceLayout";
-import { canAccessMediaDevices, mediaUnavailableReason } from "../media/secureContext";
+import { canAccessMediaDevices, canShareScreenDisplay, mediaUnavailableReason } from "../media/secureContext";
 import {
   galleryPageCount,
   MASS_ROOM_THRESHOLD,
@@ -337,9 +337,6 @@ export function LiveKitConference({
     };
 
     const onDisconnected = () => {
-      // #region agent log
-      fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'C',location:'LiveKitConference.tsx:RoomEvent.Disconnected',message:'LiveKit room disconnected event',data:{roomState:room.state,liveKitUrl:liveKitUrlRef.current,turnUrls:turnRef.current?.urls??[]},timestamp:Date.now()})}).catch(()=>{});
-      // #endregion
       if (cancelled) return;
       setConnected(false);
       onDisconnectedRef.current();
@@ -434,22 +431,12 @@ export function LiveKitConference({
               }))
             : [{ urls: "stun:stun.l.google.com:19302" }];
 
-          // #region agent log
-          fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:connect-start',message:'LiveKit connect attempt',data:{liveKitUrl:liveKitUrlRef.current,pageHost:typeof window!=='undefined'?window.location.host:null,pageHref:typeof window!=='undefined'?window.location.href:null,turnUrls:t.urls,iceCount:iceServers.length,autoSubscribe:!isMassRoomRef.current,roomState:room.state},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
-
           await room.connect(liveKitUrlRef.current, liveKitTokenRef.current, {
             rtcConfig: { iceServers },
             autoSubscribe: !isMassRoomRef.current,
           });
-          // #region agent log
-          fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'B',location:'LiveKitConference.tsx:connect-ok',message:'LiveKit connect resolved',data:{roomState:room.state,serverUrl:liveKitUrlRef.current},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           if (!cancelled) finishConnected();
         } catch (err) {
-          // #region agent log
-          fetch('http://127.0.0.1:7915/ingest/927eb900-bcfe-4ccd-95e6-75d977cfbeb3',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'66e6fc'},body:JSON.stringify({sessionId:'66e6fc',runId:'pre-fix',hypothesisId:'A',location:'LiveKitConference.tsx:connect-fail',message:'LiveKit connect threw',data:{error:err instanceof Error?err.message:String(err),name:err instanceof Error?err.name:typeof err,liveKitUrl:liveKitUrlRef.current,turnUrls:turnRef.current?.urls??[]},timestamp:Date.now()})}).catch(()=>{});
-          // #endregion
           if (!cancelled) {
             onErrorRef.current(err instanceof Error ? err.message : "Failed to join media room");
           }
@@ -643,6 +630,10 @@ export function LiveKitConference({
   const shareScreen = useCallback(async () => {
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
     if (!room || mediaBusyRef.current || !canPublishVideo) return;
+    if (!canShareScreenDisplay()) {
+      onError("Screen share is not supported on this phone/browser. Use a desktop browser, or share camera instead.");
+      return;
+    }
     roomRef.current = room;
     if (room.state !== ConnectionState.Connected) {
       onError("Not connected to media server — open this page over HTTPS and refresh.");
@@ -654,7 +645,12 @@ export function LiveKitConference({
       await room.localParticipant.setScreenShareEnabled(true);
       applyLocalState(room);
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Screen share failed");
+      const msg = err instanceof Error ? err.message : "Screen share failed";
+      if (/getDisplayMedia|not supported|NotSupported/i.test(msg)) {
+        onError("Screen share is not supported on this phone/browser. Use a desktop browser, or share camera instead.");
+      } else {
+        onError(msg);
+      }
     } finally {
       mediaBusyRef.current = false;
       setMediaBusy(false);
@@ -939,7 +935,7 @@ export function LiveKitConference({
         onToggleVideo={() => void runMediaToggle("video")}
         onShareScreen={() => void shareScreen()}
         onLeave={handleLeave}
-        showScreenShare={canPublishVideo}
+        showScreenShare={canPublishVideo && canShareScreenDisplay()}
         showAudioControl={canPublishAudio}
         showVideoControl={canPublishVideo}
         showRaiseHand={showRaiseHand}
@@ -947,6 +943,7 @@ export function LiveKitConference({
         onToggleRaiseHand={onToggleRaiseHand}
         chatBadge={chatBadge}
         mediaBusy={mediaBusy}
+        participantCount={participantCount}
         onFocusChat={onFocusChat}
         onFocusParticipants={onFocusParticipants}
         onFocusInvite={onFocusInvite}
