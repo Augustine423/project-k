@@ -377,15 +377,17 @@ public static class RoomWebSocketHandler
         var displayName = data.TryGetProperty("displayName", out var dn) ? dn.GetString() : null;
         if (string.IsNullOrWhiteSpace(displayName)) displayName = "Guest";
 
+        var at = DateTime.UtcNow.ToString("O");
         hub.Broadcast(roomId, new RoomEvent
         {
             Type = "chat.message",
             Data = new
             {
+                id = Guid.NewGuid().ToString("N"),
                 participantId,
                 displayName,
                 message,
-                at = DateTime.UtcNow,
+                at,
             },
         });
     }
@@ -418,6 +420,7 @@ public static class RoomWebSocketHandler
         if (string.IsNullOrWhiteSpace(displayName))
             displayName = sender?.DisplayName ?? "Guest";
 
+        var at = DateTime.UtcNow.ToString("O");
         hub.SendToParticipants(
             roomId,
             [participantId, toParticipantId],
@@ -426,12 +429,13 @@ public static class RoomWebSocketHandler
                 Type = "chat.dm",
                 Data = new
                 {
+                    id = Guid.NewGuid().ToString("N"),
                     participantId,
                     displayName,
                     message,
                     toParticipantId,
                     toDisplayName = recipient.DisplayName,
-                    at = DateTime.UtcNow,
+                    at,
                 },
             });
     }

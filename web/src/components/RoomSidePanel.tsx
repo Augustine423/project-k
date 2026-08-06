@@ -35,7 +35,8 @@ interface RoomSidePanelProps {
   guestCount?: number;
   hostParticipantId?: string;
   messages: ChatMessage[];
-  onSend: (message: string) => void;
+  /** Return false to keep the draft when send fails. */
+  onSend: (message: string) => boolean | void;
   chatDisabled?: boolean;
   chatDisabledHint?: string;
   selfName?: string;
@@ -262,8 +263,9 @@ export function RoomSidePanel({
   function submit(e: React.FormEvent) {
     e.preventDefault();
     const text = draft.trim();
-    if (!text) return;
-    onSend(text);
+    if (!text || chatDisabled) return;
+    const ok = onSend(text);
+    if (ok === false) return;
     setDraft("");
   }
 

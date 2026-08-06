@@ -622,10 +622,9 @@ h1, h2, h3, h4 {
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile,
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .lk-participant-tile {
   width: 100%;
+  height: auto;
   min-width: 0;
   min-height: 0;
-  height: auto !important;
-  max-height: none;
   align-self: start;
   justify-self: stretch;
   box-sizing: border-box;
@@ -635,13 +634,13 @@ h1, h2, h3, h4 {
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
   grid-column: span 6;
-  aspect-ratio: 16 / 9 !important;
+  aspect-ratio: 16 / 9;
 }
 
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
 .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
   grid-column: span 3;
-  aspect-ratio: 9 / 16 !important;
+  aspect-ratio: 9 / 16;
   max-height: min(70vh, 880px);
 }
 
@@ -650,16 +649,16 @@ h1, h2, h3, h4 {
   position: relative;
   flex: 0 0 auto;
   width: min(100cqw, calc(100cqh * 16 / 9));
-  height: auto !important;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
-  aspect-ratio: 16 / 9 !important;
+  aspect-ratio: 16 / 9;
 }
 
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="portrait"],
 .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="square"] {
   width: min(100cqw, calc(100cqh * 9 / 16));
-  aspect-ratio: 9 / 16 !important;
+  aspect-ratio: 9 / 16;
 }
 
 .video-stage .video-tile,
@@ -686,7 +685,7 @@ h1, h2, h3, h4 {
   box-shadow: 0 0 0 1px rgba(61, 207, 182, 0.35), 0 12px 28px rgba(31, 158, 138, 0.18);
 }
 
-/* Full camera frame — never cover/crop/zoom/distort */
+/* Full camera frame — LiveKit-style absolute fill; contain (no crop) */
 .video-stage .video-tile video,
 .video-stage .video-tile .video-feed,
 .video-tile .video-feed,
@@ -700,7 +699,7 @@ h1, h2, h3, h4 {
   display: block;
   margin: 0;
   border: 0;
-  object-fit: contain !important;
+  object-fit: contain;
   object-position: center center;
   background: #ffffff;
 }
@@ -1433,8 +1432,9 @@ button.rsp-face:disabled {
   font-size: 0.86rem;
   font-weight: 450;
   line-height: 1.45;
-  color: rgba(232, 238, 244, 0.88);
+  color: var(--rsp-ink);
   word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .rsp-composer {
@@ -1963,33 +1963,22 @@ button.rsp-person-name:hover {
   .video-stage[data-layout="gallery"][data-count="1"] .video-tile,
   .video-stage[data-layout="gallery"][data-count="1"] .lk-participant-tile {
     width: min(100%, calc((100dvh - 14rem) * 16 / 9));
-    height: min(calc(100dvh - 14rem), calc(100vw * 9 / 16));
     max-height: calc(100dvh - 14rem);
+    height: auto;
+    aspect-ratio: 16 / 9;
   }
 
   .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="portrait"],
   .video-stage[data-layout="gallery"][data-count="1"] .video-tile[data-stream-aspect="square"] {
     width: min(100%, calc((100dvh - 14rem) * 9 / 16));
-    height: min(calc(100dvh - 14rem), calc(100vw * 16 / 9));
+    max-height: calc(100dvh - 14rem);
+    height: auto;
     aspect-ratio: 9 / 16;
   }
 
-  /* Keep 12-col system on narrow screens: landscape half-row, portrait quarter */
+  /* Same 12-col gallery on narrow screens — no separate mobile tile system */
   .video-stage[data-layout="gallery"]:not([data-count="1"]) {
     grid-template-columns: repeat(12, minmax(0, 1fr));
-  }
-
-  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
-  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
-  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
-    grid-column: span 6;
-    aspect-ratio: 16 / 9 !important;
-  }
-
-  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
-  .video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
-    grid-column: span 3;
-    aspect-ratio: 9 / 16 !important;
   }
 }
 
@@ -3928,9 +3917,25 @@ html:has(.auth-page) body {
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
 }
 
+.meeting-app.meeting-light .rsp-msg.is-other {
+  background: rgba(15, 23, 42, 0.03);
+}
+
+.meeting-app.meeting-light .rsp-msg.is-self {
+  background: rgba(59, 102, 245, 0.1);
+  border-color: rgba(59, 102, 245, 0.22);
+}
+
+.meeting-app.meeting-light .rsp-msg-body {
+  color: var(--rsp-ink);
+}
+
 .meeting-app.meeting-light .rsp-msg.is-self .rsp-msg-body {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0.45rem 0.7rem;
+  border-radius: 12px;
   background: linear-gradient(135deg, #3b66f5, #5b82f7);
-  border-color: transparent;
   color: #fff;
 }
 
@@ -3987,50 +3992,15 @@ html:has(.auth-page) body {
   }
 }
 
-/* Preserve full camera frame — letterbox inside the tile (never crop). */
+/* Preserve full camera frame — letterbox inside the tile (never crop).
+   Pattern follows LiveKit ParticipantTile: absolute media fill + object-fit. */
 .video-stage .video-tile .video-feed,
 .video-stage .video-tile video.video-feed,
 .video-tile .video-feed,
 .video-stage .video-tile video {
-  object-fit: contain !important;
+  object-fit: contain;
   object-position: center center;
   background: #ffffff;
-}
-
-/* Clean white video card — original aspect, no crop/zoom */
-.video-tile,
-.video-tile[data-fit="contain"],
-.video-tile[data-fit="cover"],
-.video-tile[data-fit="contain-blur"],
-.video-tile[data-stream-aspect="portrait"],
-.video-tile[data-stream-aspect="landscape"],
-.video-tile[data-stream-aspect="square"],
-.video-tile[data-stream-aspect="unknown"] {
-  background: #ffffff !important;
-}
-
-.video-tile[data-fit="contain-blur"] .video-blur-bg {
-  display: none !important;
-}
-
-.video-stage[data-layout="gallery"] .video-tile .video-feed,
-.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="landscape"] .video-feed,
-.video-stage[data-layout="gallery"] .video-tile[data-stream-aspect="portrait"] .video-feed {
-  object-fit: contain !important;
-}
-
-/* Reinforce span rules so later overrides cannot force equal square cells */
-.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="landscape"],
-.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="unknown"],
-.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile.no-video {
-  grid-column: span 6 !important;
-  aspect-ratio: 16 / 9 !important;
-}
-
-.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="portrait"],
-.video-stage[data-layout="gallery"]:not([data-count="1"]) .video-tile[data-stream-aspect="square"] {
-  grid-column: span 3 !important;
-  aspect-ratio: 9 / 16 !important;
 }
 
 .video-stage-shell {

@@ -247,20 +247,25 @@ export function RoomPage() {
 
       if (evt.type === "chat.message") {
         const data = evt.data as {
+          id?: string;
           displayName?: string;
           message?: string;
           at?: string;
           participantId?: string;
         };
-        if (!data.message) return;
-        const id = `${data.participantId ?? "unknown"}-${data.at ?? Date.now()}`;
+        const text = typeof data.message === "string" ? data.message.trim() : "";
+        if (!text) return;
+        const at = typeof data.at === "string" && data.at ? data.at : new Date().toISOString();
+        const id =
+          (typeof data.id === "string" && data.id) ||
+          `${data.participantId ?? "unknown"}-${at}`;
         setChatMessages((prev) =>
           appendChatMessage(prev, {
             id,
             participantId: data.participantId,
             displayName: data.displayName ?? "Guest",
-            message: data.message!,
-            at: data.at ?? new Date().toISOString(),
+            message: text,
+            at,
           }),
         );
         return;
@@ -268,6 +273,7 @@ export function RoomPage() {
 
       if (evt.type === "chat.dm") {
         const data = evt.data as {
+          id?: string;
           displayName?: string;
           message?: string;
           at?: string;
@@ -275,7 +281,8 @@ export function RoomPage() {
           toParticipantId?: string;
           toDisplayName?: string;
         };
-        if (!data.message || !data.participantId || !data.toParticipantId || !selfId) return;
+        const text = typeof data.message === "string" ? data.message.trim() : "";
+        if (!text || !data.participantId || !data.toParticipantId || !selfId) return;
 
         const peerId =
           data.participantId === selfId ? data.toParticipantId : data.participantId;
@@ -284,13 +291,16 @@ export function RoomPage() {
             ? (data.toDisplayName ?? "Guest")
             : (data.displayName ?? "Guest");
 
-        const id = `dm-${data.participantId}-${data.toParticipantId}-${data.at ?? Date.now()}`;
+        const at = typeof data.at === "string" && data.at ? data.at : new Date().toISOString();
+        const id =
+          (typeof data.id === "string" && data.id) ||
+          `dm-${data.participantId}-${data.toParticipantId}-${at}`;
         const nextMsg: ChatMessage = {
           id,
           participantId: data.participantId,
           displayName: data.displayName ?? "Guest",
-          message: data.message,
-          at: data.at ?? new Date().toISOString(),
+          message: text,
+          at,
           dm: true,
           toParticipantId: data.toParticipantId,
           toDisplayName: data.toDisplayName,
@@ -435,8 +445,10 @@ export function RoomPage() {
     })();
   }
 
-  function sendChat(text: string) {
-    if (!ticket) return;
+  function sendChat(text: string): boolean {
+    if (!ticket) return false;
+    const message = text.trim();
+    if (!message) return false;
     try {
       if (dmPeer) {
         sendDirectChat(
@@ -444,13 +456,15 @@ export function RoomPage() {
           ticket.participantToken,
           ticket.participant.displayName,
           dmPeer.participantId,
-          text,
+          message,
         );
       } else {
-        sendRoomChat(roomId, ticket.participantToken, ticket.participant.displayName, text);
+        sendRoomChat(roomId, ticket.participantToken, ticket.participant.displayName, message);
       }
+      return true;
     } catch (err) {
       setStatusMessage(err instanceof Error ? err.message : "Chat send failed");
+      return false;
     }
   }
 
