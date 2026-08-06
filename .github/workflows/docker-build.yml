@@ -27,6 +27,7 @@ permissions:
   actions: write
 
 jobs:
+  # Native git diff — no marketplace action (avoids "Failed to resolve action" / 503).
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
@@ -36,16 +37,70 @@ jobs:
       web: ${{ steps.filter.outputs.web }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dorny/paths-filter@v3
-        id: filter
         with:
-          filters: |
-            workflow:
-              - '.github/workflows/docker-build.yml'
-            csharp:
-              - 'backend-csharp/**'
-            web:
-              - 'web/**'
+          fetch-depth: 0
+
+      - name: Detect path changes
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # workflow_dispatch → rebuild both images
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "workflow=true" >> "$GITHUB_OUTPUT"
+            echo "csharp=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch — building csharp + web"
+            exit 0
+          fi
+
+          before="${{ github.event.before }}"
+          after="${{ github.sha }}"
+
+          # PR: compare against base branch
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            before="${{ github.event.pull_request.base.sha }}"
+            after="${{ github.event.pull_request.head.sha }}"
+          fi
+
+          # First push / missing before → treat everything as changed
+          if [ -z "${before}" ] || [ "${before}" = "0000000000000000000000000000000000000000" ]; then
+            echo "workflow=true" >> "$GITHUB_OUTPUT"
+            echo "csharp=true" >> "$GITHUB_OUTPUT"
+            echo "web=true" >> "$GITHUB_OUTPUT"
+            echo "No usable before SHA — building csharp + web"
+            exit 0
+          fi
+
+          changed="$(git diff --name-only "$before" "$after" || true)"
+          echo "Changed files:"
+          echo "$changed"
+
+          workflow=false
+          csharp=false
+          web=false
+
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              .github/workflows/docker-build.yml) workflow=true ;;
+              backend-csharp/*) csharp=true ;;
+              web/*) web=true ;;
+            esac
+          done <<< "$changed"
+
+          # Top-level paths filter already limited runs; if diff is empty, still build both.
+          if [ "$workflow" = false ] && [ "$csharp" = false ] && [ "$web" = false ]; then
+            csharp=true
+            web=true
+            echo "Empty filtered diff — building csharp + web as fallback"
+          fi
+
+          echo "workflow=$workflow" >> "$GITHUB_OUTPUT"
+          echo "csharp=$csharp" >> "$GITHUB_OUTPUT"
+          echo "web=$web" >> "$GITHUB_OUTPUT"
+          echo "Result: workflow=$workflow csharp=$csharp web=$web"
 
   verify-secrets:
     name: Verify Docker Hub secrets
@@ -70,9 +125,12 @@ jobs:
     if: |
       always() &&
       (needs.verify-secrets.result == 'success' || needs.verify-secrets.result == 'skipped') &&
-      (needs.changes.outputs.csharp == 'true' ||
-       needs.changes.outputs.workflow == 'true' ||
-       github.event_name == 'workflow_dispatch')
+      (
+        needs.changes.result != 'success' ||
+        needs.changes.outputs.csharp == 'true' ||
+        needs.changes.outputs.workflow == 'true' ||
+        github.event_name == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -106,9 +164,12 @@ jobs:
     if: |
       always() &&
       (needs.verify-secrets.result == 'success' || needs.verify-secrets.result == 'skipped') &&
-      (needs.changes.outputs.web == 'true' ||
-       needs.changes.outputs.workflow == 'true' ||
-       github.event_name == 'workflow_dispatch')
+      (
+        needs.changes.result != 'success' ||
+        needs.changes.outputs.web == 'true' ||
+        needs.changes.outputs.workflow == 'true' ||
+        github.event_name == 'workflow_dispatch'
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
