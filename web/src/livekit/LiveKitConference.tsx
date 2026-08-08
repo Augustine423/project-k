@@ -19,7 +19,11 @@ import { StreamVideoTile } from "../components/StreamVideoTile";
 import { LayoutSimPanel } from "../components/LayoutSimPanel";
 import { useViewerViewport } from "../hooks/useViewerViewport";
 import {
-  resolveConferenceLayout,
+  layoutPageSize,
+  layoutRemotesPerPage,
+  persistLayoutMode,
+  readStoredLayoutMode,
+  type ConferenceLayoutMode,
   type StageParticipantTile,
   type StreamAspect,
 } from "../media/conferenceLayout";
@@ -31,7 +35,6 @@ import {
 } from "../media/layoutSimulation";
 import {
   galleryPageCount,
-  GALLERY_PAGE_SIZE,
   MASS_ROOM_THRESHOLD,
   resolveGalleryTier,
   sliceGalleryPage,
@@ -48,9 +51,11 @@ import {
   applyLocalUplinkVideoQuality,
   applyOrientationCaptureConstraints,
   applyRemoteSimulcastPreferences,
-  buildLocalParticipantStream,
+  buildLocalCameraStream,
+  buildLocalScreenStream,
   cameraEnableCaptureOptions,
   collectRemoteMediaTracks,
+  collectRemoteScreenTrack,
   mediaToggleErrorMessage,
   microphoneEnableCaptureOptions,
   participantHasVideo,
@@ -103,8 +108,10 @@ type RemoteFeed = {
   displayName: string;
   stream: MediaStream;
   trackSignature: string;
+  screenStream: MediaStream | null;
+  screenTrackSignature: string;
   hasVideo: boolean;
-  isScreenShare: boolean;
+  hasScreenShare: boolean;
   preferredAspect?: StreamAspect;
 };
 
@@ -139,7 +146,9 @@ export function LiveKitConference({
   const mediaBusyRef = useRef(false);
   /** Stable MediaStreams per remote — recreating them restarts audio and sounds like echo. */
   const remoteStreamsRef = useRef(new Map<string, MediaStream>());
+  const remoteScreenStreamsRef = useRef(new Map<string, MediaStream>());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
+  const [localScreenStream, setLocalScreenStream] = useState<MediaStream | null>(null);
   const [remoteFeeds, setRemoteFeeds] = useState<Map<string, RemoteFeed>>(new Map());
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [videoEnabled, setVideoEnabled] = useState(false);
@@ -151,6 +160,7 @@ export function LiveKitConference({
   );
   const [activeSpeakerIds, setActiveSpeakerIds] = useState<string[]>([]);
   const [localScreenShare, setLocalScreenShare] = useState(false);
+  const [layoutMode, setLayoutMode] = useState<ConferenceLayoutMode>(() => readStoredLayoutMode());
   const [localIdentity, setLocalIdentity] = useState("");
   const isHostRole = participantRole === "host" || participantRole === "cohost";
   const isWebinar = roomMode === "webinar";
@@ -200,15 +210,30 @@ export function LiveKitConference({
     }
     const tracks = collectRemoteMediaTracks(participant);
     syncMediaStreamTracks(stream, tracks);
-    const screenPub = participant.getTrackPublication(Track.Source.ScreenShare);
-    const isScreenShare = Boolean(screenPub?.track && !screenPub.isMuted);
+
+    const screenTrack = collectRemoteScreenTrack(participant);
+    let screenStream = remoteScreenStreamsRef.current.get(participant.identity) ?? null;
+    if (screenTrack) {
+      if (!screenStream) {
+        screenStream = new MediaStream();
+        remoteScreenStreamsRef.current.set(participant.identity, screenStream);
+      }
+      syncMediaStreamTracks(screenStream, [screenTrack]);
+    } else if (screenStream) {
+      syncMediaStreamTracks(screenStream, []);
+      remoteScreenStreamsRef.current.delete(participant.identity);
+      screenStream = null;
+    }
+
     return {
       displayName: participant.name || participant.identity,
       stream,
       trackSignature: remoteTrackSignature(tracks),
-      hasVideo: participantHasVideo(participant) || isScreenShare,
-      isScreenShare,
-      preferredAspect: isScreenShare ? undefined : readPreferredVideoAspect(participant.attributes),
+      screenStream,
+      screenTrackSignature: screenTrack ? remoteTrackSignature([screenTrack]) : "",
+      hasVideo: participantHasVideo(participant),
+      hasScreenShare: Boolean(screenTrack),
+      preferredAspect: readPreferredVideoAspect(participant.attributes),
     };
   }, []);
 
@@ -218,7 +243,8 @@ export function LiveKitConference({
     setVideoEnabled(lp.isCameraEnabled);
     setLocalScreenShare(lp.isScreenShareEnabled);
     setLocalIdentity(lp.identity);
-    setLocalStream(buildLocalParticipantStream(lp));
+    setLocalStream(buildLocalCameraStream(lp));
+    setLocalScreenStream(buildLocalScreenStream(lp));
   }, []);
 
   const applyPublishCaps = useCallback(
@@ -310,6 +336,7 @@ export function LiveKitConference({
 
   const removeRemote = useCallback((identity: string) => {
     remoteStreamsRef.current.delete(identity);
+    remoteScreenStreamsRef.current.delete(identity);
     setRemoteFeeds((prev) => {
       if (!prev.has(identity)) return prev;
       const next = new Map(prev);
@@ -714,14 +741,22 @@ export function LiveKitConference({
   }, [onLeave, sessionKey]);
 
   const galleryTier = useMemo(() => resolveGalleryTier(participantCount), [participantCount]);
+  const layoutTier = useMemo(
+    () => ({
+      ...galleryTier,
+      videosPerPage: layoutRemotesPerPage(layoutMode),
+    }),
+    [galleryTier, layoutMode],
+  );
+  const pageSize = layoutPageSize(layoutMode);
   const remoteParticipantCount = Math.max(0, participantCount - 1);
 
   // Mass rooms: load participant roster page from control plane (not LiveKit memory).
   useEffect(() => {
     if (!isMassRoom || !roomId) return;
     let cancelled = false;
-    const offset = (galleryPage - 1) * galleryTier.videosPerPage;
-    void listParticipantsPage(roomId, { offset, limit: galleryTier.videosPerPage })
+    const offset = (galleryPage - 1) * layoutTier.videosPerPage;
+    void listParticipantsPage(roomId, { offset, limit: layoutTier.videosPerPage })
       .then((page) => {
         if (!cancelled) setGalleryPageParticipants(page.items);
       })
@@ -731,7 +766,7 @@ export function LiveKitConference({
     return () => {
       cancelled = true;
     };
-  }, [galleryPage, galleryTier.videosPerPage, isMassRoom, roomId]);
+  }, [galleryPage, layoutTier.videosPerPage, isMassRoom, roomId]);
 
   const sortedRemoteIds = useMemo(() => {
     if (isMassRoom) {
@@ -747,18 +782,18 @@ export function LiveKitConference({
   const paginatedRemoteIds = sortedRemoteIds;
 
   const totalGalleryPages = useMemo(
-    () => galleryPageCount(isMassRoom ? remoteParticipantCount : paginatedRemoteIds.length, galleryTier),
-    [galleryTier, isMassRoom, paginatedRemoteIds.length, remoteParticipantCount],
+    () => galleryPageCount(isMassRoom ? remoteParticipantCount : paginatedRemoteIds.length, layoutTier),
+    [layoutTier, isMassRoom, paginatedRemoteIds.length, remoteParticipantCount],
   );
 
   const visibleRemoteIds = useMemo(
-    () => new Set(isMassRoom ? paginatedRemoteIds : sliceGalleryPage(paginatedRemoteIds, galleryPage, galleryTier)),
-    [galleryPage, galleryTier, isMassRoom, paginatedRemoteIds],
+    () => new Set(isMassRoom ? paginatedRemoteIds : sliceGalleryPage(paginatedRemoteIds, galleryPage, layoutTier)),
+    [galleryPage, layoutTier, isMassRoom, paginatedRemoteIds],
   );
 
   const visibleRemoteOrder = useMemo(
-    () => (isMassRoom ? paginatedRemoteIds : sliceGalleryPage(paginatedRemoteIds, galleryPage, galleryTier)),
-    [galleryPage, galleryTier, isMassRoom, paginatedRemoteIds],
+    () => (isMassRoom ? paginatedRemoteIds : sliceGalleryPage(paginatedRemoteIds, galleryPage, layoutTier)),
+    [galleryPage, layoutTier, isMassRoom, paginatedRemoteIds],
   );
 
   // Mass room: subscribe only to visible page video + capped audio (active speakers).
@@ -833,9 +868,9 @@ export function LiveKitConference({
             .join("|")
         : "",
       mirror: true,
-      hasVideo: videoEnabled || localScreenShare,
-      isScreenShare: localScreenShare,
-      preferredAspect: localScreenShare ? undefined : preferredAspectForCaptureDevice(),
+      hasVideo: videoEnabled,
+      isScreenShare: false,
+      preferredAspect: preferredAspectForCaptureDevice(),
       isSpeaking: Boolean(localIdentity && speakingSet.has(localIdentity)),
       roleBadge: isHostRole ? (participantRole === "cohost" ? "Co-host" : "Host") : "You",
     }),
@@ -843,7 +878,6 @@ export function LiveKitConference({
       displayName,
       isHostRole,
       localIdentity,
-      localScreenShare,
       localStream,
       participantRole,
       speakingSet,
@@ -851,6 +885,26 @@ export function LiveKitConference({
       viewport.mode,
     ],
   );
+
+  const localScreenTile = useMemo<StageParticipantTile | null>(() => {
+    if (!localScreenShare || !localScreenStream) return null;
+    return {
+      id: "local:screen",
+      label: `${displayName} (Screen)`,
+      stream: localScreenStream,
+      trackSignature: localScreenStream
+        .getTracks()
+        .map((t) => `${t.id}:${t.kind}:${t.readyState}`)
+        .sort()
+        .join("|"),
+      mirror: false,
+      hasVideo: true,
+      isScreenShare: true,
+      preferredAspect: undefined,
+      isSpeaking: false,
+      roleBadge: isHostRole ? (participantRole === "cohost" ? "Co-host" : "Host") : undefined,
+    };
+  }, [displayName, isHostRole, localScreenShare, localScreenStream, participantRole]);
 
   const allStageTiles = useMemo<StageParticipantTile[]>(() => {
     const remotes: StageParticipantTile[] = [];
@@ -861,39 +915,71 @@ export function LiveKitConference({
       const roster = isMassRoom ? galleryPageParticipants.find((p) => p.id === id) : undefined;
       const label = feed?.displayName ?? roster?.displayName ?? id;
       const isHostFeed = Boolean(hostParticipantId && id === hostParticipantId);
-      remotes.push({
-        id,
-        label,
-        stream: feed?.stream ?? null,
-        trackSignature: feed?.trackSignature ?? "",
-        hasVideo: feed?.hasVideo ?? false,
-        isScreenShare: feed?.isScreenShare ?? false,
-        preferredAspect: feed?.isScreenShare ? undefined : feed?.preferredAspect,
-        isSpeaking: speakingSet.has(id),
-        roleBadge: isHostFeed ? "Host" : roster?.role === "cohost" ? "Co-host" : undefined,
-      });
+      const roleBadge = isHostFeed ? "Host" : roster?.role === "cohost" ? "Co-host" : undefined;
+      // While screen sharing, show only the share tile (hide camera duplicate).
+      if (feed?.hasScreenShare && feed.screenStream) {
+        remotes.push({
+          id: `${id}:screen`,
+          label: `${label} (Screen)`,
+          stream: feed.screenStream,
+          trackSignature: feed.screenTrackSignature,
+          hasVideo: true,
+          isScreenShare: true,
+          preferredAspect: undefined,
+          isSpeaking: speakingSet.has(id),
+          roleBadge,
+        });
+      } else {
+        remotes.push({
+          id,
+          label,
+          stream: feed?.stream ?? null,
+          trackSignature: feed?.trackSignature ?? "",
+          hasVideo: feed?.hasVideo ?? false,
+          isScreenShare: false,
+          preferredAspect: feed?.preferredAspect,
+          isSpeaking: speakingSet.has(id),
+          roleBadge,
+        });
+      }
     }
     remotes.sort((a, b) => {
+      if (a.isScreenShare !== b.isScreenShare) return a.isScreenShare ? -1 : 1;
       if (a.roleBadge === "Host") return -1;
       if (b.roleBadge === "Host") return 1;
       return a.label.localeCompare(b.label);
     });
-    return [localTile, ...remotes];
-  }, [galleryPageParticipants, hostParticipantId, isMassRoom, localTile, paginatedRemoteIds, remoteFeeds, sortedRemoteIds, speakingSet]);
+    const self = localScreenTile ? [localScreenTile] : [localTile];
+    return [...self, ...remotes];
+  }, [
+    galleryPageParticipants,
+    hostParticipantId,
+    isMassRoom,
+    localScreenTile,
+    localTile,
+    paginatedRemoteIds,
+    remoteFeeds,
+    sortedRemoteIds,
+    speakingSet,
+  ]);
 
-  /** Visible mosaic page: self + up to 49 remotes (≤50 total). */
+  /** Visible page: self (or screen-only while sharing) + remotes. */
   const galleryTiles = useMemo<StageParticipantTile[]>(() => {
-    const result: StageParticipantTile[] = [localTile];
+    const result: StageParticipantTile[] = localScreenTile ? [localScreenTile] : [localTile];
     for (const id of paginatedRemoteIds) {
       if (!visibleRemoteIds.has(id)) continue;
-      const tile = allStageTiles.find((t) => t.id === id);
-      if (tile) result.push(tile);
+      const screen = allStageTiles.find((t) => t.id === `${id}:screen`);
+      if (screen) {
+        result.push(screen);
+        continue;
+      }
+      const camera = allStageTiles.find((t) => t.id === id);
+      if (camera) result.push(camera);
     }
-    if (result.length === 1 && !localStream) {
-      return [{ ...localTile, id: "placeholder", hasVideo: false, stream: null }];
-    }
+    // Keep id "local" even before the stream attaches — swapping to "placeholder"
+    // remounts the tile and causes a visible resize flash on join/create.
     return result;
-  }, [allStageTiles, localStream, localTile, paginatedRemoteIds, visibleRemoteIds]);
+  }, [allStageTiles, localScreenTile, localTile, paginatedRemoteIds, visibleRemoteIds]);
 
   const realStageTiles = galleryTiles;
 
@@ -902,10 +988,11 @@ export function LiveKitConference({
     return buildSimulatedStageTiles(realStageTiles, simTotal);
   }, [realStageTiles, simTotal]);
 
-  const layoutMode = useMemo(
-    () => resolveConferenceLayout(viewport.mode, stageTiles.length),
-    [stageTiles.length, viewport.mode],
-  );
+  const handleLayoutChange = useCallback((mode: ConferenceLayoutMode) => {
+    setLayoutMode(mode);
+    persistLayoutMode(mode);
+    setGalleryPage(1);
+  }, []);
 
   const offPageCount = Math.max(
     0,
@@ -926,9 +1013,9 @@ export function LiveKitConference({
       {isWebinar && !isHostRole && connected && (
         <div className="join-banner info">Webinar — raise hand to get the host’s attention.</div>
       )}
-      {participantCount > GALLERY_PAGE_SIZE && connected && (
+      {participantCount > pageSize && connected && (
         <div className="join-banner info">
-          Large meeting — up to {GALLERY_PAGE_SIZE} people per page. Flip pages to see everyone.
+          Large meeting — up to {pageSize} people per page. Flip pages to see everyone.
         </div>
       )}
       {silenceNotice && connected && (
@@ -945,10 +1032,13 @@ export function LiveKitConference({
       )}
       <ConferenceVideoStage
         layoutMode={layoutMode}
+        onLayoutChange={handleLayoutChange}
         tiles={stageTiles}
-        maxPerPage={GALLERY_PAGE_SIZE}
+        maxPerPage={pageSize}
         hostParticipantId={hostParticipantId}
         viewerMode={viewport.mode}
+        activeSpeakerIds={activeSpeakerIds}
+        localIdentity={localIdentity || undefined}
       />
       <GalleryPagination
         page={galleryPage}
@@ -957,7 +1047,7 @@ export function LiveKitConference({
         totalParticipants={participantCount}
         offPageCount={offPageCount}
       />
-      <div className="hide" aria-hidden>
+      <div hidden aria-hidden>
         {sortedRemoteIds
           .filter((id) => {
             return !visibleRemoteIds.has(id) && !stageTiles.some((t) => t.id === id);

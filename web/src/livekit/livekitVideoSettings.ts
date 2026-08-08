@@ -278,18 +278,30 @@ function cameraPublication(participant: RemoteParticipant): RemoteTrackPublicati
   return pub as RemoteTrackPublication;
 }
 
-/** Local preview — screen share preferred, else camera. Never put the mic in a playback stream (echo). */
-export function buildLocalParticipantStream(participant: LocalParticipant): MediaStream | null {
-  const screen = participant.getTrackPublication(Track.Source.ScreenShare);
-  const screenTrack = screen?.track?.mediaStreamTrack;
-  if (participant.isScreenShareEnabled && screenTrack) {
-    return new MediaStream([screenTrack]);
-  }
+/** Local camera preview only (no mic — avoids echo). */
+export function buildLocalCameraStream(participant: LocalParticipant): MediaStream | null {
   if (!participant.isCameraEnabled) return null;
   const cam = participant.getTrackPublication(Track.Source.Camera);
   const track = cam?.track?.mediaStreamTrack;
   if (!track) return null;
   return new MediaStream([track]);
+}
+
+/** Local screen-share preview only. */
+export function buildLocalScreenStream(participant: LocalParticipant): MediaStream | null {
+  if (!participant.isScreenShareEnabled) return null;
+  const screen = participant.getTrackPublication(Track.Source.ScreenShare);
+  const track = screen?.track?.mediaStreamTrack;
+  if (!track) return null;
+  return new MediaStream([track]);
+}
+
+/**
+ * Local preview — camera preferred for the self tile.
+ * Prefer {@link buildLocalCameraStream} + {@link buildLocalScreenStream} for side-by-side.
+ */
+export function buildLocalParticipantStream(participant: LocalParticipant): MediaStream | null {
+  return buildLocalCameraStream(participant) ?? buildLocalScreenStream(participant);
 }
 
 /** Keep a MediaStream identity stable; only add/remove tracks (avoids audio restart echo). */
@@ -308,17 +320,14 @@ export function collectRemoteMediaTracks(participant: {
   trackPublications: Map<string, { track?: { mediaStreamTrack: MediaStreamTrack } | null }>;
   getTrackPublication?: (source: Track.Source) => { track?: { mediaStreamTrack: MediaStreamTrack } | null; isMuted?: boolean } | undefined;
 }): MediaStreamTrack[] {
-  // Prefer screen share over camera so active-speaker / primary tiles show the share.
+  // Camera + mic for the person tile. Screen share is a separate tile/stream.
   if (typeof participant.getTrackPublication === "function") {
     const tracks: MediaStreamTrack[] = [];
-    const screen = participant.getTrackPublication(Track.Source.ScreenShare);
     const cam = participant.getTrackPublication(Track.Source.Camera);
     const mic = participant.getTrackPublication(Track.Source.Microphone);
-    const screenTrack = screen && !screen.isMuted ? screen.track?.mediaStreamTrack : undefined;
     const camTrack = cam && !cam.isMuted ? cam.track?.mediaStreamTrack : undefined;
     const micTrack = mic?.track?.mediaStreamTrack;
-    if (screenTrack) tracks.push(screenTrack);
-    else if (camTrack) tracks.push(camTrack);
+    if (camTrack) tracks.push(camTrack);
     if (micTrack) tracks.push(micTrack);
     if (tracks.length) return tracks;
   }
@@ -329,6 +338,16 @@ export function collectRemoteMediaTracks(participant: {
     if (track) tracks.push(track);
   }
   return tracks;
+}
+
+/** Remote screen-share video track only (no audio). */
+export function collectRemoteScreenTrack(participant: {
+  getTrackPublication?: (source: Track.Source) => { track?: { mediaStreamTrack: MediaStreamTrack } | null; isMuted?: boolean } | undefined;
+}): MediaStreamTrack | null {
+  if (typeof participant.getTrackPublication !== "function") return null;
+  const screen = participant.getTrackPublication(Track.Source.ScreenShare);
+  const track = screen && !screen.isMuted ? screen.track?.mediaStreamTrack : undefined;
+  return track ?? null;
 }
 
 export function remoteTrackSignature(tracks: MediaStreamTrack[]): string {

@@ -27,16 +27,16 @@ data:
   SFU_PUBLISHERS_PER_NODE: "50"
   KZYS_SFU_STANDBY_POOL: "0"
   # Your laptop Wi‑Fi IP (phone opens https://THIS_IP/)
-  PUBLIC_HOST: "192.168.1.5"
-  TURN_HOST: "192.168.1.5"
+  PUBLIC_HOST: "192.168.1.6"
+  TURN_HOST: "192.168.1.6"
   # ICE address LiveKit advertises to browsers (must be phone-reachable)
-  LIVEKIT_NODE_IP: "192.168.1.5"
+  LIVEKIT_NODE_IP: "192.168.1.6"
   TURN_PORT: "3478"
   TURN_TLS_PORT: "5349"
   TURN_USE_TLS: "false"
   TURN_REALM: "kzys.local"
   # Same-origin LiveKit via nginx HTTPS proxy on the web LB
-  LIVEKIT_PUBLIC_URL: "wss://192.168.1.5/livekit"
+  LIVEKIT_PUBLIC_URL: "wss://192.168.1.6/livekit"
 ---
 apiVersion: v1
 kind: ConfigMap

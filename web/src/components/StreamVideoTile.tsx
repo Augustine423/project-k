@@ -85,7 +85,7 @@ export function StreamVideoTile({
   showStats = import.meta.env.DEV,
   roleBadge,
   size = "grid",
-  layoutMode = "mosaic",
+  layoutMode = "gallery",
   fit: fitOverride,
   preferredAspect,
   className = "",
@@ -193,6 +193,7 @@ export function StreamVideoTile({
         .join(" ")}
       data-fit={fit}
       data-stream-aspect={streamAspect}
+      data-ai-active={isSpeaking ? "true" : undefined}
     >
       <video
         ref={videoRef}
@@ -202,7 +203,7 @@ export function StreamVideoTile({
         className={["video-feed", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
       />
       {!muted && (
-        <audio ref={audioRef} className="hide" autoPlay playsInline aria-hidden />
+        <audio ref={audioRef} hidden autoPlay playsInline aria-hidden />
       )}
       {!showVideo && (
         <div className="no-video-container" style={{ ["--tile-tone" as string]: tone }}>
@@ -212,7 +213,7 @@ export function StreamVideoTile({
           <span className="no-video-text">{label}</span>
         </div>
       )}
-      {showStats && <span ref={statsRef} className="video-res-badge hide" aria-hidden />}
+      {showStats && <span ref={statsRef} className="video-res-badge" aria-hidden />}
       <div className="video-chrome">
         {roleBadge && <span className="video-role">{roleBadge}</span>}
         <span className="video-label">{label}</span>
