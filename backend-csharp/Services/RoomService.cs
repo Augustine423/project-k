@@ -177,6 +177,42 @@ public sealed class RoomService
         await RoomWebSocketHandler.BroadcastRaisedHandsAsync(_hub, _store, roomId, ct);
     }
 
+    /// <summary>
+    /// Rehydrate a participant seat after an accidental refresh leave (token still valid).
+    /// Keeps the original participant id/role from the JWT so LiveKit identity stays stable.
+    /// </summary>
+    public async Task<ParticipantRecord> EnsureParticipantSeatAsync(
+        string roomId,
+        string participantId,
+        string role,
+        string? displayNameFallback,
+        CancellationToken ct = default)
+    {
+        var existing = await _store.GetParticipantAsync(roomId, participantId, ct);
+        if (existing is not null) return existing;
+
+        await MustRoomAsync(roomId, ct);
+
+        var restored = new ParticipantRecord
+        {
+            Id = participantId,
+            RoomId = roomId,
+            DisplayName = string.IsNullOrWhiteSpace(displayNameFallback)
+                ? (role is ParticipantRoles.Host or ParticipantRoles.CoHost ? "Host" : "Guest")
+                : displayNameFallback.Trim(),
+            Role = string.IsNullOrWhiteSpace(role) ? ParticipantRoles.Participant : role,
+            Approved = true,
+            JoinedAt = DateTime.UtcNow,
+        };
+
+        // Force-write by id (capacity check skipped — seat reclaim after refresh).
+        await _store.AddParticipantAsync(restored, ct);
+        _log.LogInformation(
+            "restored participant seat room={RoomId} participant={ParticipantId} role={Role}",
+            roomId, participantId, restored.Role);
+        return restored;
+    }
+
     public async Task SetLockedAsync(string roomId, bool locked, CancellationToken ct = default)
     {
         var room = await MustRoomAsync(roomId, ct);

@@ -1,23 +1,77 @@
 import type { ViewerViewportMode } from "../hooks/useViewerViewport";
 
 /**
- * Stage presentation:
- * - gallery — equal grid (solo / fallback)
- * - spotlight — desktop Meet style: primary + bottom filmstrip
- * - mobile-stack — mobile client: primary on top + 2-col grid below
+ * Single stage mode for host + client (web & mobile):
+ * equal-priority “breathing mosaic” — no spotlight / filmstrip / stack.
  */
-export type ConferenceLayoutMode = "gallery" | "spotlight" | "mobile-stack";
+export type ConferenceLayoutMode = "mosaic";
 
 export type StreamAspect = "portrait" | "landscape" | "square" | "unknown";
 
-/** How a tile should render a stream inside its cell. `cover` kept for API compat but unused. */
+/** How a tile should render a stream inside its cell. */
 export type TileFitMode = "cover" | "contain" | "contain-blur";
 
-export function resolveConferenceLayout(viewerMode?: ViewerViewportMode): ConferenceLayoutMode {
-  if (viewerMode === "mobile-portrait" || viewerMode === "mobile-landscape") {
-    return "mobile-stack";
+export type MosaicDensity = "roomy" | "cozy" | "dense";
+
+/** Always mosaic — layout no longer branches on count or device. */
+export function resolveConferenceLayout(
+  _viewerMode?: ViewerViewportMode,
+  _tileCount = 1,
+): ConferenceLayoutMode {
+  return "mosaic";
+}
+
+/**
+ * Pick column count so the grid stays near-square and readable.
+ * Mobile portrait caps columns; desktop can go wider up to 50 tiles.
+ */
+export function resolveMosaicColumns(
+  tileCount: number,
+  viewerMode?: ViewerViewportMode,
+): number {
+  const n = Math.max(1, Math.min(Math.round(tileCount), 50));
+  if (n <= 1) return 1;
+
+  // Portrait phones — fewer, larger tiles; scroll when dense.
+  if (viewerMode === "mobile-portrait") {
+    if (n <= 2) return 2;
+    if (n <= 4) return 2;
+    if (n <= 9) return 3;
+    return 4;
   }
-  return "spotlight";
+
+  // Landscape phones / small tablets.
+  if (viewerMode === "mobile-landscape") {
+    if (n === 2) return 2;
+    if (n === 3) return 3;
+    if (n <= 6) return 3;
+    if (n <= 12) return 4;
+    if (n <= 20) return 5;
+    return 6;
+  }
+
+  // Desktop / host web — near-square presence (Meet-inspired packing).
+  if (n === 2) return 2;
+  if (n === 3) return 3;
+  if (n === 4) return 2;
+  if (n <= 6) return 3;
+  if (n <= 9) return 3;
+  if (n <= 12) return 4;
+  if (n <= 16) return 4;
+  if (n <= 20) return 5;
+  if (n <= 25) return 5;
+  if (n <= 30) return 6;
+  if (n <= 36) return 6;
+  if (n <= 42) return 7;
+  if (n <= 49) return 7;
+  return 8; // 50 → 8×7
+}
+
+export function resolveMosaicDensity(tileCount: number): MosaicDensity {
+  const n = Math.max(1, tileCount);
+  if (n <= 4) return "roomy";
+  if (n <= 16) return "cozy";
+  return "dense";
 }
 
 export function classifyStreamAspect(width: number, height: number): StreamAspect {
@@ -29,13 +83,17 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 }
 
 /**
- * Preserve source camera aspect with dark letterbox — never crop.
+ * Portrait / phone: cover inside the 9:16 tile (unchanged — mobile logic).
+ * Laptop / tablet landscape: contain inside a 16:9 tile so the full camera is visible.
  */
-export function resolveTileFit(_opts: {
+export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
   layout: ConferenceLayoutMode;
   size: "grid" | "spotlight" | "strip";
 }): TileFitMode {
+  if (opts.streamAspect === "portrait" || opts.streamAspect === "square") {
+    return "cover";
+  }
   return "contain";
 }
 
@@ -49,68 +107,48 @@ export type StageParticipantTile = {
   roleBadge?: string;
   isSpeaking?: boolean;
   isScreenShare?: boolean;
+  /**
+   * Publisher hint (mobile phone → portrait). Wins over decoded WxH for tile
+   * chrome so phone cameras stay 9:16 on desktop viewers even if the browser
+   * negotiated a landscape buffer.
+   */
+  preferredAspect?: StreamAspect;
 };
 
-/**
- * Prefer screen share, then (for hosts) self large, then loudest active speaker,
- * then room host feed, then first remote, then local.
- */
-export function pickPrimaryTileId(opts: {
-  tiles: StageParticipantTile[];
-  activeSpeakerIds: string[];
-  hostParticipantId?: string;
-  localId?: string;
-  /** Host/room-creator viewer: keep self as the large primary tile. */
-  preferLocalSelf?: boolean;
-}): string {
-  const {
-    tiles,
-    activeSpeakerIds,
-    hostParticipantId,
-    localId = "local",
-    preferLocalSelf = false,
-  } = opts;
-  if (!tiles.length) return localId;
-
-  const byId = new Map(tiles.map((t) => [t.id, t]));
-  const remotes = tiles.filter((t) => t.id !== localId);
-
-  const screen =
-    remotes.find((t) => t.isScreenShare && t.hasVideo) ??
-    tiles.find((t) => t.isScreenShare && t.hasVideo);
-  if (screen) return screen.id;
-
-  // Host UI: self stays large; clients sit in the filmstrip / 2-col grid.
-  if (preferLocalSelf && byId.has(localId)) {
-    return localId;
-  }
-
-  for (const id of activeSpeakerIds) {
-    if (id !== localId && byId.has(id)) return id;
-  }
-
-  if (hostParticipantId && hostParticipantId !== localId && byId.has(hostParticipantId)) {
-    return hostParticipantId;
-  }
-
-  if (remotes[0]) return remotes[0].id;
-  return tiles[0].id;
-}
-
-/** CSS data-count for gallery: clamp to a sensible grid key (1–25). */
-export function galleryDataCount(tileCount: number, maxPerPage: number): number {
-  return Math.min(Math.max(tileCount, 1), maxPerPage + 1, 25);
-}
-
-/** Split primary vs secondary tiles for spotlight / mobile-stack. */
-export function splitPrimaryAndRest(
+/** Order mosaic tiles with host first, then self, then others (A–Z). */
+export function orderMosaicTiles(
   tiles: StageParticipantTile[],
-  primaryId: string,
-): { primary: StageParticipantTile; rest: StageParticipantTile[] } {
-  const primary =
-    tiles.find((t) => t.id === primaryId) ??
-    tiles[0] ??
-    ({ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false } satisfies StageParticipantTile);
-  const rest = tiles.filter((t) => t.id !== primary.id);
-  return { primary, rest };
+  opts: { hostParticipantId?: string; localId?: string } = {},
+): StageParticipantTile[] {
+  const { hostParticipantId, localId = "local" } = opts;
+  const rank = (t: StageParticipantTile) => {
+    if (t.isScreenShare) return 0;
+    if (preferHost(t, hostParticipantId, localId)) return 1;
+    if (t.id === localId) return 2;
+    return 3;
+  };
+  return [...tiles].sort((a, b) => {
+    const d = rank(a) - rank(b);
+    if (d !== 0) return d;
+    return a.label.localeCompare(b.label);
+  });
+}
+
+/** @deprecated alias — prefer orderMosaicTiles */
+export const orderGalleryTiles = orderMosaicTiles;
+
+function preferHost(
+  tile: StageParticipantTile,
+  hostParticipantId: string | undefined,
+  localId: string,
+): boolean {
+  if (hostParticipantId && tile.id === hostParticipantId) return true;
+  if (tile.id === localId && (tile.roleBadge === "Host" || tile.roleBadge === "Co-host")) return true;
+  if (tile.roleBadge === "Host") return true;
+  return false;
+}
+
+/** Visible mosaic count key (1–50) for CSS density / debugging. */
+export function mosaicDataCount(tileCount: number, maxPerPage = 50): number {
+  return Math.min(Math.max(tileCount, 1), maxPerPage);
 }

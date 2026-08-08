@@ -105,36 +105,91 @@ export function isPortraitCapturePreferred(): boolean {
 /**
  * Request device-appropriate camera resolution before / during enable:
  * phone → 720×1280 portrait; tablet + laptop → 1280×720 landscape.
- * Downstream viewers adapt via simulcast; UI uses object-fit: contain (no crop).
+ * Prefer full sensor frame (resizeMode none) — no hardware face/auto-crop.
+ * UI renders with object-fit: contain.
  */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {
-  const { width, height, aspectRatio } = resolveCaptureDimensions();
+  const { width, height, aspectRatio, portrait } = resolveCaptureDimensions();
   return {
     resolution: {
       width,
       height,
       frameRate: LIVEKIT_MAX_FRAMERATE,
-      aspectRatio,
+      // Soft ideal only — exact aspectRatio forces many phones to crop the sensor.
+      ...(portrait ? {} : { aspectRatio }),
     },
     facingMode: "user",
   };
 }
 
-/** Re-assert device + orientation capture targets after enable / rotate. */
+/**
+ * Build constraints that keep the full camera sensor frame (native camera app style).
+ * - Portrait phones: prefer 720×1280 without crop-and-scale
+ * - resizeMode: "none" when the UA supports it (Chrome/Android)
+ * - zoom locked to 1 when exposed
+ */
+export function fullFrameCameraConstraints(): MediaTrackConstraints {
+  const { width, height, portrait } = resolveCaptureDimensions();
+  const base: MediaTrackConstraints = {
+    width: { ideal: width },
+    height: { ideal: height },
+    frameRate: { ideal: LIVEKIT_MAX_FRAMERATE, max: LIVEKIT_MAX_FRAMERATE },
+    facingMode: { ideal: "user" },
+  };
+
+  // Avoid forcing aspectRatio on phones — browsers often crop to satisfy it.
+  if (!portrait) {
+    base.aspectRatio = { ideal: 16 / 9 };
+  }
+
+  // Spec: resizeMode "none" = UA must not crop/downscale the source to fit.
+  const withResize = {
+    ...base,
+    resizeMode: "none",
+  } as MediaTrackConstraints;
+
+  return withResize;
+}
+
+/** Re-assert device + orientation capture targets after enable / rotate (no hardware crop). */
 export async function applyOrientationCaptureConstraints(
   track: MediaStreamTrack | undefined | null,
 ): Promise<void> {
   if (!track || track.kind !== "video") return;
-  const { width, height, aspectRatio } = resolveCaptureDimensions();
+
+  const tryApply = async (constraints: MediaTrackConstraints) => {
+    await track.applyConstraints(constraints);
+  };
+
   try {
-    await track.applyConstraints({
-      width: { ideal: width },
-      height: { ideal: height },
-      aspectRatio: { ideal: aspectRatio },
-      frameRate: { ideal: LIVEKIT_MAX_FRAMERATE },
-    });
+    await tryApply(fullFrameCameraConstraints());
   } catch {
-    // Browser may reject; keep whatever was negotiated.
+    // Fallback without resizeMode (Safari / older WebViews).
+    const { width, height, portrait } = resolveCaptureDimensions();
+    try {
+      await tryApply({
+        width: { ideal: width },
+        height: { ideal: height },
+        ...(portrait ? {} : { aspectRatio: { ideal: 16 / 9 } }),
+        frameRate: { ideal: LIVEKIT_MAX_FRAMERATE },
+      });
+    } catch {
+      // Keep negotiated settings if the browser rejects.
+    }
+  }
+
+  // Lock digital zoom to 1× when the track exposes it (stops some Android face crops).
+  try {
+    const caps = track.getCapabilities?.() as
+      | (MediaTrackCapabilities & { zoom?: { min: number; max: number } })
+      | undefined;
+    if (caps && "zoom" in caps && caps.zoom) {
+      await track.applyConstraints({
+        advanced: [{ zoom: caps.zoom.min ?? 1 } as MediaTrackConstraintSet],
+      });
+    }
+  } catch {
+    // Zoom constraint not supported — ignore.
   }
 }
 

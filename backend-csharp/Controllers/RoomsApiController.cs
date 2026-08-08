@@ -146,6 +146,15 @@ public sealed class RoomsApiController : ControllerBase
 
         try
         {
+            // Refresh can race a prior /leave; rehydrate the seat from the JWT so
+            // publish caps (and mic/cam buttons) stay available.
+            var participant = await _rooms.EnsureParticipantSeatAsync(
+                roomId,
+                claims.ParticipantId,
+                claims.Role,
+                displayNameFallback: null,
+                ct);
+
             var (room, _) = await _modes.ReportMediaPresenceAsync(
                 roomId,
                 claims.ParticipantId,
@@ -154,11 +163,7 @@ public sealed class RoomsApiController : ControllerBase
                 body.Video,
                 ct);
 
-            var participant = await _store.GetParticipantAsync(roomId, claims.ParticipantId, ct);
-
-            var caps = participant is not null
-                ? _modes.GetPublishCapabilities(room, participant, room.ActivePublishers, body.Publishing)
-                : PublishCapabilities.None;
+            var caps = _modes.GetPublishCapabilities(room, participant, room.ActivePublishers, body.Publishing);
 
             return Ok(new
             {

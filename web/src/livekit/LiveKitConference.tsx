@@ -16,15 +16,22 @@ import { ControlBar } from "../components/ControlBar";
 import { GalleryPagination } from "../components/GalleryPagination";
 import { ConferenceVideoStage } from "../components/conference/VideoStageLayouts";
 import { StreamVideoTile } from "../components/StreamVideoTile";
+import { LayoutSimPanel } from "../components/LayoutSimPanel";
 import { useViewerViewport } from "../hooks/useViewerViewport";
 import {
-  pickPrimaryTileId,
   resolveConferenceLayout,
   type StageParticipantTile,
+  type StreamAspect,
 } from "../media/conferenceLayout";
 import { canAccessMediaDevices, canShareScreenDisplay, mediaUnavailableReason } from "../media/secureContext";
+import { preferredAspectForCaptureDevice, localDeviceAttributes, readPreferredVideoAspect } from "../media/participantDevice";
+import {
+  buildSimulatedStageTiles,
+  layoutSimEnabledFromUrl,
+} from "../media/layoutSimulation";
 import {
   galleryPageCount,
+  GALLERY_PAGE_SIZE,
   MASS_ROOM_THRESHOLD,
   resolveGalleryTier,
   sliceGalleryPage,
@@ -98,6 +105,7 @@ type RemoteFeed = {
   trackSignature: string;
   hasVideo: boolean;
   isScreenShare: boolean;
+  preferredAspect?: StreamAspect;
 };
 
 export function LiveKitConference({
@@ -149,9 +157,10 @@ export function LiveKitConference({
   const [canPublishAudio, setCanPublishAudio] = useState(true);
   const [canPublishVideo, setCanPublishVideo] = useState(() => isHostRole || roomMode !== "webinar");
   const [silenceNotice, setSilenceNotice] = useState<string | null>(null);
+  const [simTotal, setSimTotal] = useState<number | null>(null);
+  const layoutSimEnabled = import.meta.env.DEV || layoutSimEnabledFromUrl();
   const mediaAvailable = canAccessMediaDevices();
   const viewport = useViewerViewport();
-  const layoutMode = resolveConferenceLayout(viewport.mode);
 
   const onConnectedRef = useRef(onConnected);
   const onDisconnectedRef = useRef(onDisconnected);
@@ -199,6 +208,7 @@ export function LiveKitConference({
       trackSignature: remoteTrackSignature(tracks),
       hasVideo: participantHasVideo(participant) || isScreenShare,
       isScreenShare,
+      preferredAspect: isScreenShare ? undefined : readPreferredVideoAspect(participant.attributes),
     };
   }, []);
 
@@ -216,20 +226,24 @@ export function LiveKitConference({
       room: Room,
       caps: { canPublishAudio: boolean; canPublishVideo: boolean },
     ) => {
-      setCanPublishAudio(caps.canPublishAudio);
-      setCanPublishVideo(caps.canPublishVideo);
+      // Host/co-host always keep media controls (server may briefly return None
+      // if the seat was raced during refresh).
+      const audio = isHostRole ? true : caps.canPublishAudio;
+      const video = isHostRole ? true : isWebinar ? false : caps.canPublishVideo;
+      setCanPublishAudio(audio);
+      setCanPublishVideo(video);
       const lp = room.localParticipant;
-      if (!caps.canPublishAudio && lp.isMicrophoneEnabled) {
+      if (!audio && lp.isMicrophoneEnabled) {
         await lp.setMicrophoneEnabled(false);
       }
-      if (!caps.canPublishVideo) {
+      if (!video) {
         if (lp.isCameraEnabled) await lp.setCameraEnabled(false);
         if (lp.isScreenShareEnabled) await lp.setScreenShareEnabled(false);
       }
       // UI only — do not re-report media presence (avoids sync loops).
       refreshLocalUi(room);
     },
-    [refreshLocalUi],
+    [isHostRole, isWebinar, refreshLocalUi],
   );
 
   const syncMediaPresence = useCallback(
@@ -245,9 +259,15 @@ export function LiveKitConference({
           const video = res.canPublishVideo ?? !res.listenerOnly;
           void applyPublishCaps(room, { canPublishAudio: audio, canPublishVideo: video });
         })
-        .catch(() => undefined);
+        .catch(() => {
+          // Network blip after refresh — keep role-based defaults, don't hide controls.
+          void applyPublishCaps(room, {
+            canPublishAudio: true,
+            canPublishVideo: isHostRole || !isWebinar,
+          });
+        });
     },
-    [applyPublishCaps, roomId, participantToken],
+    [applyPublishCaps, isHostRole, isWebinar, roomId, participantToken],
   );
 
   const syncMediaPresenceRef = useRef(syncMediaPresence);
@@ -380,6 +400,7 @@ export function LiveKitConference({
 
     const onReconnected = () => {
       if (!cancelled) {
+        publishLocalDeviceAttrs();
         applyLocalStateRef.current(room);
         refreshRemotes(room);
         setConnected(true);
@@ -398,9 +419,24 @@ export function LiveKitConference({
       applyLocalUplinkVideoQuality(room, quality);
     };
 
+    const onParticipantAttributesChanged = (
+      _changed: Record<string, string>,
+      participant: Participant,
+    ) => {
+      if (cancelled || participant.isLocal) return;
+      if (participant instanceof Object && "identity" in participant) {
+        upsertRemote(participant as RemoteParticipant);
+      }
+    };
+
+    const publishLocalDeviceAttrs = () => {
+      void room.localParticipant.setAttributes(localDeviceAttributes()).catch(() => undefined);
+    };
+
     const finishConnected = () => {
       if (cancelled) return;
       setConnected(true);
+      publishLocalDeviceAttrs();
       applyLocalStateRef.current(room);
       refreshRemotes(room);
       applyLocalUplinkVideoQuality(room, room.localParticipant.connectionQuality);
@@ -418,6 +454,7 @@ export function LiveKitConference({
     room.on(RoomEvent.TrackUnsubscribed, onRemoteMediaChange);
     room.on(RoomEvent.ParticipantConnected, onParticipantConnected);
     room.on(RoomEvent.ParticipantDisconnected, onParticipantDisconnected);
+    room.on(RoomEvent.ParticipantAttributesChanged, onParticipantAttributesChanged);
     room.on(RoomEvent.Reconnected, onReconnected);
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveSpeakersChanged, onActiveSpeakersChanged);
@@ -464,6 +501,7 @@ export function LiveKitConference({
       room.off(RoomEvent.TrackUnsubscribed, onRemoteMediaChange);
       room.off(RoomEvent.ParticipantConnected, onParticipantConnected);
       room.off(RoomEvent.ParticipantDisconnected, onParticipantDisconnected);
+      room.off(RoomEvent.ParticipantAttributesChanged, onParticipantAttributesChanged);
       room.off(RoomEvent.Reconnected, onReconnected);
       room.off(RoomEvent.Disconnected, onDisconnected);
       room.off(RoomEvent.ActiveSpeakersChanged, onActiveSpeakersChanged);
@@ -549,14 +587,17 @@ export function LiveKitConference({
     return () => window.clearTimeout(t);
   }, [silenceNotice]);
 
-  // Phones: re-apply capture constraints when rotating so portrait/landscape FOV isn't cropped.
+  // Phones: re-apply capture + publish orientation attrs when rotating.
   useEffect(() => {
-    if (!connected || !videoEnabled || !canPublishVideo) return;
+    if (!connected) return;
 
     let busy = false;
-    const restartForOrientation = () => {
+    const syncOrientation = () => {
       const room = roomRef.current ?? getLiveKitRoom(sessionKey);
-      if (!room || busy || mediaBusyRef.current) return;
+      if (!room) return;
+      void room.localParticipant.setAttributes(localDeviceAttributes()).catch(() => undefined);
+
+      if (!videoEnabled || !canPublishVideo || busy || mediaBusyRef.current) return;
       const lp = room.localParticipant;
       if (!lp.isCameraEnabled) return;
       busy = true;
@@ -577,7 +618,7 @@ export function LiveKitConference({
     };
 
     const mq = window.matchMedia("(orientation: portrait)");
-    const onChange = () => restartForOrientation();
+    const onChange = () => syncOrientation();
     mq.addEventListener?.("change", onChange);
     window.addEventListener("orientationchange", onChange);
     return () => {
@@ -794,6 +835,7 @@ export function LiveKitConference({
       mirror: true,
       hasVideo: videoEnabled || localScreenShare,
       isScreenShare: localScreenShare,
+      preferredAspect: localScreenShare ? undefined : preferredAspectForCaptureDevice(),
       isSpeaking: Boolean(localIdentity && speakingSet.has(localIdentity)),
       roleBadge: isHostRole ? (participantRole === "cohost" ? "Co-host" : "Host") : "You",
     }),
@@ -806,6 +848,7 @@ export function LiveKitConference({
       participantRole,
       speakingSet,
       videoEnabled,
+      viewport.mode,
     ],
   );
 
@@ -825,6 +868,7 @@ export function LiveKitConference({
         trackSignature: feed?.trackSignature ?? "",
         hasVideo: feed?.hasVideo ?? false,
         isScreenShare: feed?.isScreenShare ?? false,
+        preferredAspect: feed?.isScreenShare ? undefined : feed?.preferredAspect,
         isSpeaking: speakingSet.has(id),
         roleBadge: isHostFeed ? "Host" : roster?.role === "cohost" ? "Co-host" : undefined,
       });
@@ -837,7 +881,7 @@ export function LiveKitConference({
     return [localTile, ...remotes];
   }, [galleryPageParticipants, hostParticipantId, isMassRoom, localTile, paginatedRemoteIds, remoteFeeds, sortedRemoteIds, speakingSet]);
 
-  /** Visible page of remotes (+ local) for gallery / spotlight / mobile-stack. */
+  /** Visible mosaic page: self + up to 49 remotes (≤50 total). */
   const galleryTiles = useMemo<StageParticipantTile[]>(() => {
     const result: StageParticipantTile[] = [localTile];
     for (const id of paginatedRemoteIds) {
@@ -851,18 +895,16 @@ export function LiveKitConference({
     return result;
   }, [allStageTiles, localStream, localTile, paginatedRemoteIds, visibleRemoteIds]);
 
-  const stageTiles = galleryTiles;
+  const realStageTiles = galleryTiles;
 
-  const primaryId = useMemo(
-    () =>
-      pickPrimaryTileId({
-        tiles: stageTiles,
-        activeSpeakerIds,
-        hostParticipantId,
-        localId: "local",
-        preferLocalSelf: isHostRole,
-      }),
-    [activeSpeakerIds, hostParticipantId, isHostRole, stageTiles],
+  const stageTiles = useMemo(() => {
+    if (simTotal == null) return realStageTiles;
+    return buildSimulatedStageTiles(realStageTiles, simTotal);
+  }, [realStageTiles, simTotal]);
+
+  const layoutMode = useMemo(
+    () => resolveConferenceLayout(viewport.mode, stageTiles.length),
+    [stageTiles.length, viewport.mode],
   );
 
   const offPageCount = Math.max(
@@ -884,29 +926,37 @@ export function LiveKitConference({
       {isWebinar && !isHostRole && connected && (
         <div className="join-banner info">Webinar — raise hand to get the host’s attention.</div>
       )}
-      {isMassRoom && connected && (
+      {participantCount > GALLERY_PAGE_SIZE && connected && (
         <div className="join-banner info">
-          Large meeting — showing {galleryTier.videosPerPage} videos per page. Everyone can use mic/cam; flip pages to see more.
+          Large meeting — up to {GALLERY_PAGE_SIZE} people per page. Flip pages to see everyone.
         </div>
       )}
       {silenceNotice && connected && (
         <div className="join-banner info">{silenceNotice}</div>
       )}
-      <ConferenceVideoStage
-        layoutMode={layoutMode}
-        primaryId={primaryId}
-        tiles={stageTiles}
-        maxPerPage={galleryTier.videosPerPage}
-      />
-      {(layoutMode === "gallery" || layoutMode === "spotlight" || layoutMode === "mobile-stack") && (
-        <GalleryPagination
-          page={galleryPage}
-          totalPages={totalGalleryPages}
-          onPageChange={setGalleryPage}
-          totalParticipants={participantCount}
-          offPageCount={offPageCount}
+      {layoutSimEnabled && (
+        <LayoutSimPanel
+          active={simTotal != null}
+          totalOnStage={stageTiles.length}
+          realCount={realStageTiles.length}
+          onApply={setSimTotal}
+          onClear={() => setSimTotal(null)}
         />
       )}
+      <ConferenceVideoStage
+        layoutMode={layoutMode}
+        tiles={stageTiles}
+        maxPerPage={GALLERY_PAGE_SIZE}
+        hostParticipantId={hostParticipantId}
+        viewerMode={viewport.mode}
+      />
+      <GalleryPagination
+        page={galleryPage}
+        totalPages={totalGalleryPages}
+        onPageChange={setGalleryPage}
+        totalParticipants={participantCount}
+        offPageCount={offPageCount}
+      />
       <div className="hide" aria-hidden>
         {sortedRemoteIds
           .filter((id) => {

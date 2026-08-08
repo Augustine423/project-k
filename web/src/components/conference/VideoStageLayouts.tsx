@@ -1,27 +1,32 @@
 import { StreamVideoTile } from "../StreamVideoTile";
+import type { CSSProperties } from "react";
 import {
-  galleryDataCount,
-  splitPrimaryAndRest,
+  mosaicDataCount,
+  orderMosaicTiles,
+  resolveMosaicColumns,
+  resolveMosaicDensity,
   type ConferenceLayoutMode,
   type StageParticipantTile,
 } from "../../media/conferenceLayout";
+import type { ViewerViewportMode } from "../../hooks/useViewerViewport";
 
 type CommonProps = {
   layoutMode: ConferenceLayoutMode;
-  primaryId: string;
   tiles: StageParticipantTile[];
   maxPerPage?: number;
+  hostParticipantId?: string;
+  viewerMode?: ViewerViewportMode;
+  /** Kept for API compat; mosaic does not use a primary spotlight. */
+  primaryId?: string;
 };
 
 function Tile({
   tile,
   layoutMode,
-  size,
   className,
 }: {
   tile: StageParticipantTile;
   layoutMode: ConferenceLayoutMode;
-  size: "grid" | "spotlight" | "strip";
   className?: string;
 }) {
   return (
@@ -34,102 +39,65 @@ function Tile({
       hasVideo={tile.hasVideo}
       roleBadge={tile.roleBadge}
       isSpeaking={tile.isSpeaking}
-      size={size}
+      size="grid"
       layoutMode={layoutMode}
+      preferredAspect={tile.isScreenShare ? undefined : tile.preferredAspect}
+      fit={tile.isScreenShare ? "contain" : undefined}
       className={className}
     />
   );
 }
 
 /**
- * Equal participant grid — used for solo / tiny rooms.
+ * Breathing Mosaic — one equal-priority grid for host & client (web + mobile).
+ * Column count adapts to tile count + viewport; portrait/landscape stay per-tile.
  */
-export function GalleryGridStage({ layoutMode, tiles, maxPerPage = 25 }: CommonProps) {
-  const stageTiles =
+export function MosaicStage({
+  layoutMode,
+  tiles,
+  maxPerPage = 50,
+  hostParticipantId,
+  viewerMode,
+}: CommonProps) {
+  const raw =
     tiles.length > 0
       ? tiles
       : [{ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false }];
-  const count = galleryDataCount(stageTiles.length, maxPerPage);
+  const stageTiles = orderMosaicTiles(raw, { hostParticipantId, localId: "local" });
+  const count = mosaicDataCount(stageTiles.length, maxPerPage);
+  const cols = resolveMosaicColumns(count, viewerMode);
+  const rows = Math.max(1, Math.ceil(count / cols));
+  const density = resolveMosaicDensity(count);
 
   return (
-    <div className="video-stage-shell" data-layout="gallery">
-      <div className="video-stage" data-layout="gallery" data-count={String(count)}>
+    <div className="video-stage-shell" data-layout="mosaic">
+      <div
+        className="video-stage"
+        data-layout="mosaic"
+        data-count={String(count)}
+        data-density={density}
+        data-cols={String(cols)}
+        data-rows={String(rows)}
+        style={
+          {
+            ["--mosaic-cols"]: String(cols),
+            ["--mosaic-rows"]: String(rows),
+          } as CSSProperties
+        }
+      >
         {stageTiles.map((tile) => (
-          <Tile key={tile.id} tile={tile} layoutMode={layoutMode} size="grid" />
+          <div key={tile.id} className="mosaic-cell">
+            <Tile tile={tile} layoutMode={layoutMode} />
+          </div>
         ))}
       </div>
     </div>
   );
 }
 
-/**
- * Desktop Meet-style: large active speaker + horizontal filmstrip.
- * Matches video-grid-for-other.jpg
- */
-export function SpotlightFilmstripStage({ layoutMode, primaryId, tiles }: CommonProps) {
-  if (tiles.length <= 1) {
-    return <GalleryGridStage layoutMode="gallery" primaryId={primaryId} tiles={tiles} />;
-  }
-
-  const { primary, rest } = splitPrimaryAndRest(tiles, primaryId);
-
-  return (
-    <div className="video-stage-shell" data-layout="spotlight">
-      <div className="video-stage" data-layout="spotlight" data-count={String(tiles.length)}>
-        <div className="video-spotlight">
-          <Tile tile={primary} layoutMode={layoutMode} size="spotlight" />
-        </div>
-        {rest.length > 0 && (
-          <div className="video-filmstrip" role="list" aria-label="Other participants">
-            {rest.map((tile) => (
-              <div key={tile.id} className="video-filmstrip-item" role="listitem">
-                <Tile tile={tile} layoutMode={layoutMode} size="strip" />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * Mobile client stack: large primary on top, 2-column grid below.
- * Matches client-view-for-mobile.png
- */
-export function MobileStackStage({ layoutMode, primaryId, tiles }: CommonProps) {
-  if (tiles.length <= 1) {
-    return <GalleryGridStage layoutMode="gallery" primaryId={primaryId} tiles={tiles} />;
-  }
-
-  const { primary, rest } = splitPrimaryAndRest(tiles, primaryId);
-
-  return (
-    <div className="video-stage-shell" data-layout="mobile-stack">
-      <div className="video-stage" data-layout="mobile-stack" data-count={String(tiles.length)}>
-        <div className="video-stack-primary">
-          <Tile tile={primary} layoutMode={layoutMode} size="spotlight" />
-        </div>
-        {rest.length > 0 && (
-          <div className="video-stack-grid" role="list" aria-label="Other participants">
-            {rest.map((tile) => (
-              <div key={tile.id} className="video-stack-cell" role="listitem">
-                <Tile tile={tile} layoutMode={layoutMode} size="grid" />
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
+/** @deprecated — mosaic is the only stage */
+export const GalleryGridStage = MosaicStage;
 
 export function ConferenceVideoStage(props: CommonProps) {
-  if (props.layoutMode === "spotlight") {
-    return <SpotlightFilmstripStage {...props} />;
-  }
-  if (props.layoutMode === "mobile-stack") {
-    return <MobileStackStage {...props} />;
-  }
-  return <GalleryGridStage {...props} />;
+  return <MosaicStage {...props} />;
 }

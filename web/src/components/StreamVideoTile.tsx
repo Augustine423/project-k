@@ -23,10 +23,15 @@ interface StreamVideoTileProps {
   showStats?: boolean;
   roleBadge?: string;
   size?: "grid" | "spotlight" | "strip";
-  /** Current conference stage layout — drives portrait/landscape fit policy. */
+  /** Conference stage layout (always mosaic). */
   layoutMode?: ConferenceLayoutMode;
   /** Override automatic fit (cover / contain / contain-blur). */
   fit?: TileFitMode;
+  /**
+   * Publisher device hint (mobile → portrait). Used when decoded frame size is
+   * missing/wrong so phone cameras still render as 9:16 boxes.
+   */
+  preferredAspect?: StreamAspect;
   className?: string;
 }
 
@@ -49,7 +54,26 @@ function aspectFromTrack(stream: MediaStream | null | undefined): StreamAspect {
   return "unknown";
 }
 
-/** One video element per tile — contain-fit, aspect from real stream size (no crop). */
+/**
+ * Resolve display aspect for the tile box.
+ * Publisher orientation hint (mm.videoAspect) wins — it tracks real phone
+ * orientation. Measured WxH is the fallback (some browsers lie about rotation).
+ */
+export function resolveDisplayAspect(opts: {
+  measured: StreamAspect;
+  preferred?: StreamAspect;
+  isScreenShare?: boolean;
+}): StreamAspect {
+  if (opts.isScreenShare) {
+    return opts.measured !== "unknown" ? opts.measured : "landscape";
+  }
+  if (opts.preferred === "portrait" || opts.preferred === "landscape") {
+    return opts.preferred;
+  }
+  return opts.measured;
+}
+
+/** One video element per tile — portrait cover; landscape contain (full laptop/tablet). */
 export function StreamVideoTile({
   stream,
   trackSignature = "",
@@ -61,8 +85,9 @@ export function StreamVideoTile({
   showStats = import.meta.env.DEV,
   roleBadge,
   size = "grid",
-  layoutMode = "gallery",
+  layoutMode = "mosaic",
   fit: fitOverride,
+  preferredAspect,
   className = "",
 }: StreamVideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -76,7 +101,11 @@ export function StreamVideoTile({
 
   const liveSize = useVideoStreamSize(videoRef, stream, `${trackSignature}:${videoTrackId}`);
   const bootAspect = aspectFromTrack(stream);
-  const streamAspect = liveSize.aspect !== "unknown" ? liveSize.aspect : bootAspect;
+  const measuredAspect = liveSize.aspect !== "unknown" ? liveSize.aspect : bootAspect;
+  const streamAspect = resolveDisplayAspect({
+    measured: measuredAspect,
+    preferred: preferredAspect,
+  });
   const fit =
     fitOverride ??
     resolveTileFit({

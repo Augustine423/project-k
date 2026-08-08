@@ -69,8 +69,9 @@ export function RoomPage() {
   const selfId = ticket?.participant.id ?? "";
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
   const viewport = useViewerViewport();
-  /** Auto-hide chrome on client views and whenever the phone is in landscape fullscreen mode. */
-  const autoHideChrome = !isHost || viewport.mode === "mobile-landscape";
+  /** Auto-hide chrome only on mobile viewports — host web + client web stay visible. */
+  const autoHideChrome =
+    viewport.mode === "mobile-portrait" || viewport.mode === "mobile-landscape";
   const unreadRoomChat = Math.max(0, chatMessages.length - roomChatReadCount);
   const unreadDmTotal = Object.values(dmUnreadByPeer).reduce((a, b) => a + b, 0);
   const unreadChat = unreadRoomChat + unreadDmTotal;
@@ -111,26 +112,6 @@ export function RoomPage() {
     void refreshCount();
     void refreshLiveParticipants();
   }, [roomId, refreshCount, refreshLiveParticipants]);
-
-  // Best-effort cleanup when the tab closes so Redis does not keep a ghost seat.
-  useEffect(() => {
-    if (!ticket?.participantToken || !roomId) return;
-    const token = ticket.participantToken;
-    const id = roomId;
-    const onPageHide = () => {
-      try {
-        void fetch(`/api/rooms/${encodeURIComponent(id)}/leave`, {
-          method: "POST",
-          headers: { Authorization: `Bearer ${token}` },
-          keepalive: true,
-        });
-      } catch {
-        /* ignore */
-      }
-    };
-    window.addEventListener("pagehide", onPageHide);
-    return () => window.removeEventListener("pagehide", onPageHide);
-  }, [roomId, ticket?.participantToken]);
 
   useEffect(() => {
     if (!roomId) return;
