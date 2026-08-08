@@ -123,7 +123,18 @@ function EqualGridStage({
         }
       >
         {stageTiles.map((tile) => (
-          <div key={tile.id} className="grid-cell mosaic-cell">
+          <div
+            key={tile.id}
+            className="grid-cell mosaic-cell"
+            data-kind={tile.isScreenShare ? "screen" : "camera"}
+            data-stream-aspect={
+              tile.isScreenShare
+                ? "landscape"
+                : tile.preferredAspect && tile.preferredAspect !== "unknown"
+                  ? tile.preferredAspect
+                  : undefined
+            }
+          >
             <Tile tile={tile} layoutMode={layoutMode} />
           </div>
         ))}

@@ -73,7 +73,7 @@ export function resolveDisplayAspect(opts: {
   return opts.measured;
 }
 
-/** One video element per tile — portrait cover; landscape contain (full laptop/tablet). */
+/** One video element per tile — contain (+ optional blur fill) so content is never cropped. */
 export function StreamVideoTile({
   stream,
   trackSignature = "",
@@ -91,6 +91,7 @@ export function StreamVideoTile({
   className = "",
 }: StreamVideoTileProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const blurRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const statsRef = useRef<HTMLSpanElement>(null);
 
@@ -113,23 +114,33 @@ export function StreamVideoTile({
       layout: layoutMode,
       size,
     });
+  const useBlurFill = fit === "contain-blur";
 
   // Video bind — independent of audio so quality/layer changes don't restart sound.
   useEffect(() => {
     const videoEl = videoRef.current;
+    const blurEl = blurRef.current;
     if (!videoEl) return;
 
     const videoStream = videoTrack ? new MediaStream([videoTrack]) : null;
     attachMediaStream(videoEl, videoStream);
     if (videoStream) void videoEl.play().catch(() => undefined);
+    if (blurEl) {
+      attachMediaStream(blurEl, videoStream);
+      if (videoStream) void blurEl.play().catch(() => undefined);
+    }
 
-    const onEnded = () => attachMediaStream(videoEl, null);
+    const onEnded = () => {
+      attachMediaStream(videoEl, null);
+      if (blurEl) attachMediaStream(blurEl, null);
+    };
     videoTrack?.addEventListener("ended", onEnded);
     return () => {
       videoTrack?.removeEventListener("ended", onEnded);
       attachMediaStream(videoEl, null);
+      if (blurEl) attachMediaStream(blurEl, null);
     };
-  }, [videoTrack, videoTrackId, trackSignature]);
+  }, [videoTrack, videoTrackId, trackSignature, useBlurFill]);
 
   // Audio bind — local tile is muted so mic never plays into speakers (echo).
   useEffect(() => {
@@ -179,6 +190,7 @@ export function StreamVideoTile({
 
   const tone = avatarTone(label);
   const initials = avatarInitials(label);
+  const feedClass = ["video-feed", mirror ? "mirror" : ""].filter(Boolean).join(" ");
 
   return (
     <div
@@ -195,12 +207,22 @@ export function StreamVideoTile({
       data-stream-aspect={streamAspect}
       data-ai-active={isSpeaking ? "true" : undefined}
     >
+      {useBlurFill && showVideo ? (
+        <video
+          ref={blurRef}
+          autoPlay
+          playsInline
+          muted
+          aria-hidden
+          className={["video-feed-blur", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
+        />
+      ) : null}
       <video
         ref={videoRef}
         autoPlay
         playsInline
         muted
-        className={["video-feed", mirror ? "mirror" : ""].filter(Boolean).join(" ")}
+        className={feedClass}
       />
       {!muted && (
         <audio ref={audioRef} hidden autoPlay playsInline aria-hidden />

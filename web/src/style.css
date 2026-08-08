@@ -1017,7 +1017,7 @@ h1, h2, h3, h4 {
     var(--tile-shadow);
 }
 
-/* Feed fill: cover by default ? crop bars, no pale pillarbox inside the tile. */
+/* Feed fill: contain by default when data-fit says so; cover only when explicitly requested. */
 .video-stage .video-tile video,
 .video-stage .video-tile .video-feed,
 .video-tile .video-feed,
@@ -1031,38 +1031,56 @@ h1, h2, h3, h4 {
   display: block;
   margin: 0;
   border: 0;
-  object-fit: cover;
-  object-position: center center;
-  background: transparent;
-}
-
-.video-stage .video-tile[data-stream-aspect="portrait"] .video-feed,
-.video-stage .video-tile[data-stream-aspect="portrait"] video,
-.video-stage .video-tile[data-stream-aspect="square"] .video-feed,
-.video-stage .video-tile[data-stream-aspect="square"] video,
-.video-stage .video-tile[data-stream-aspect="landscape"] .video-feed,
-.video-stage .video-tile[data-stream-aspect="landscape"] video,
-.video-stage .video-tile[data-stream-aspect="unknown"] .video-feed,
-.video-stage .video-tile[data-stream-aspect="unknown"] video {
-  object-fit: cover;
-  object-position: center center;
-  background: transparent;
-}
-
-/* Screen share only: full frame on dark (never pale white bars) */
-.video-stage .video-tile[data-fit="contain"] .video-feed,
-.video-stage .video-tile[data-fit="contain"] video,
-.video-stage .video-tile[data-fit="contain-blur"] .video-feed,
-.video-stage .video-tile[data-fit="contain-blur"] video {
   object-fit: contain;
   object-position: center center;
+  background: transparent;
+  z-index: 1;
+}
+
+/* Meet-style blurred fill behind contain — never crops the sharp feed */
+.video-stage .video-tile .video-feed-blur,
+.video-tile .video-feed-blur {
+  position: absolute;
+  inset: -12%;
+  width: 124%;
+  height: 124%;
+  max-width: none;
+  max-height: none;
+  display: block;
+  margin: 0;
+  border: 0;
+  object-fit: cover;
+  object-position: center center;
+  filter: blur(18px) brightness(0.55) saturate(1.15);
+  transform: scale(1.04);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.video-stage .video-tile[data-fit="cover"] .video-feed,
+.video-stage .video-tile[data-fit="cover"] video:not(.video-feed-blur) {
+  object-fit: cover;
+}
+
+/* Screen share / plain contain: full frame on dark, no blur layer */
+.video-stage .video-tile[data-fit="contain"] .video-feed,
+.video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur),
+.video-stage .video-tile[data-fit="contain-blur"] .video-feed,
+.video-stage .video-tile[data-fit="contain-blur"] video:not(.video-feed-blur) {
+  object-fit: contain;
+  object-position: center center;
+  background: transparent;
+}
+
+.video-stage .video-tile[data-fit="contain"] .video-feed,
+.video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
   background: #0b1220;
 }
 
 .meeting-app.stage-theme-light .video-stage .video-tile[data-fit="contain"] .video-feed,
-.meeting-app.stage-theme-light .video-stage .video-tile[data-fit="contain"] video,
+.meeting-app.stage-theme-light .video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur),
 .meeting-app.meeting-light .video-stage .video-tile[data-fit="contain"] .video-feed,
-.meeting-app.meeting-light .video-stage .video-tile[data-fit="contain"] video {
+.meeting-app.meeting-light .video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
   background: #0b1220;
 }
 
@@ -1300,20 +1318,15 @@ h1, h2, h3, h4 {
   border-radius: inherit;
 }
 
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] .video-feed,
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] video,
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] .video-feed,
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] video {
-  object-fit: cover;
-  object-position: center center;
-  background: transparent;
-}
-
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] .video-feed,
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] video,
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] .video-feed,
-.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] video {
-  object-fit: cover;
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] .video-feed:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] video:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] .video-feed:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] video:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] .video-feed:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] video:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] .video-feed:not(.video-feed-blur),
+.video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] video:not(.video-feed-blur) {
+  object-fit: contain;
   object-position: center center;
   background: transparent;
 }
@@ -4720,13 +4733,15 @@ html:has(.auth-page) body {
 }
 
 /* ---------- Equal grids: Gallery / Standard / Extended ----------
- * Aspect-aware flex (portrait 9:16 / landscape 16:9), cover fill ? no pale bars.
+ * Width from column count (no CQ flash). Tile aspect follows stream.
+ * Video uses contain-blur — never crops faces.
  */
 .video-stage.equal-grid {
   --grid-cols: 1;
   --grid-rows: 1;
   --mosaic-cols: 1;
   --mosaic-rows: 1;
+  --cols: var(--grid-cols, 1);
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -4789,47 +4804,55 @@ html:has(.auth-page) body {
 
 .video-stage.equal-grid .grid-cell,
 .video-stage.equal-grid .mosaic-cell {
-  --mosaic-tile-h: calc(
-    (100cqh - (var(--grid-rows, var(--mosaic-rows, 1)) - 1) * var(--stage-gap)) /
-      var(--grid-rows, var(--mosaic-rows, 1))
-  );
-  --mosaic-tile-max-w: calc(
-    (100cqw - (var(--grid-cols, var(--mosaic-cols, 1)) - 1) * var(--stage-gap)) /
-      var(--grid-cols, var(--mosaic-cols, 1))
-  );
   flex: 0 0 auto;
   box-sizing: border-box;
-  width: auto;
-  height: var(--mosaic-tile-h);
-  max-width: var(--mosaic-tile-max-w);
+  width: calc(
+    (100% - (var(--cols, var(--grid-cols, 2)) - 1) * var(--stage-gap)) /
+      var(--cols, var(--grid-cols, 2))
+  );
+  max-width: 100%;
+  max-height: calc(100% - 4px);
+  aspect-ratio: 16 / 9;
   min-width: 0;
   min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: stretch;
+  justify-content: stretch;
+  position: relative;
   overflow: hidden;
-  background: transparent;
+  border-radius: var(--tile-radius, 14px);
+  background: #14181f;
 }
 
-.video-stage.equal-grid:not([data-count="1"]) .grid-cell .video-tile,
-.video-stage.equal-grid:not([data-count="1"]) .grid-cell .lk-participant-tile {
+/* Live stream aspect on the tile wins over cell hint */
+.video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
+.video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"] {
+  aspect-ratio: 9 / 16;
+}
+
+.video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
+.video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
+.video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
+.video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"] {
+  aspect-ratio: 1 / 1;
+}
+
+.video-stage.equal-grid .grid-cell .video-tile,
+.video-stage.equal-grid .grid-cell .lk-participant-tile {
   box-sizing: border-box;
+  width: 100%;
   height: 100%;
-  width: auto;
-  max-height: 100%;
   max-width: 100%;
-  aspect-ratio: 16 / 9;
-  flex: 0 0 auto;
-  border-radius: var(--tile-radius, 14px);
+  max-height: 100%;
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+  border-radius: inherit;
   overflow: hidden;
   background: #0b1220;
-}
-
-.video-stage.equal-grid:not([data-count="1"]) .grid-cell .video-tile[data-stream-aspect="portrait"],
-.video-stage.equal-grid:not([data-count="1"]) .grid-cell .video-tile[data-stream-aspect="square"],
-.video-stage.equal-grid:not([data-count="1"]) .grid-cell .lk-participant-tile[data-stream-aspect="portrait"],
-.video-stage.equal-grid:not([data-count="1"]) .grid-cell .lk-participant-tile[data-stream-aspect="square"] {
-  aspect-ratio: 9 / 16;
+  border: none;
+  box-shadow: none;
 }
 
 .video-stage.equal-grid[data-count="1"] {
@@ -4840,41 +4863,34 @@ html:has(.auth-page) body {
 }
 
 .video-stage.equal-grid[data-count="1"] .grid-cell {
-  width: 100%;
-  height: 100%;
+  width: min(100%, calc((100% - 24px) * 16 / 9), calc((100cqh - 24px) * 16 / 9));
   max-width: 100%;
   max-height: 100%;
-  --mosaic-tile-h: 100%;
-  --mosaic-tile-max-w: 100%;
-}
-
-.video-stage.equal-grid[data-count="1"] .grid-cell .video-tile,
-.video-stage.equal-grid[data-count="1"] .grid-cell .lk-participant-tile {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
-  max-height: 100%;
+  height: auto;
   aspect-ratio: 16 / 9;
   border-radius: 20px;
-  overflow: hidden;
-  background: #0b1220;
 }
 
-.video-stage.equal-grid[data-count="1"] .grid-cell .video-tile[data-stream-aspect="portrait"],
-.video-stage.equal-grid[data-count="1"] .grid-cell .video-tile[data-stream-aspect="square"] {
+.video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"] {
+  width: min(100%, calc((100% - 24px) * 9 / 16), calc((100cqh - 24px) * 9 / 16));
   aspect-ratio: 9 / 16;
 }
 
-.video-stage.equal-grid .video-tile .video-feed,
-.video-stage.equal-grid .video-tile video {
-  object-fit: cover;
+.video-stage.equal-grid .video-tile .video-feed:not(.video-feed-blur),
+.video-stage.equal-grid .video-tile video:not(.video-feed-blur) {
+  object-fit: contain;
   background: transparent;
 }
 
-.video-stage.equal-grid .video-tile[data-fit="contain"] .video-feed,
-.video-stage.equal-grid .video-tile[data-fit="contain"] video {
+.video-stage.equal-grid .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.video-stage.equal-grid .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
   object-fit: contain;
   background: #0b1220;
+}
+
+.video-stage.equal-grid .grid-cell[data-kind="screen"] .video-feed-blur {
+  display: none;
 }
 
 .video-stage.equal-grid .video-chrome,
@@ -4938,14 +4954,14 @@ html:has(.auth-page) body {
   border-color: rgba(255, 255, 255, 0.06);
 }
 
-.video-stage.jitsi-grid .jitsi-cell .video-tile .video-feed,
-.video-stage.jitsi-grid .jitsi-cell .video-tile video {
-  object-fit: cover;
+.video-stage.jitsi-grid .jitsi-cell .video-tile .video-feed:not(.video-feed-blur),
+.video-stage.jitsi-grid .jitsi-cell .video-tile video:not(.video-feed-blur) {
+  object-fit: contain;
   background: transparent;
 }
 
-.video-stage.jitsi-grid .jitsi-cell .video-tile[data-fit="contain"] .video-feed,
-.video-stage.jitsi-grid .jitsi-cell .video-tile[data-fit="contain"] video {
+.video-stage.jitsi-grid .jitsi-cell .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.video-stage.jitsi-grid .jitsi-cell .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
   object-fit: contain;
   background: #0b1220;
 }
@@ -5085,26 +5101,18 @@ html:has(.auth-page) body {
   overflow: hidden;
 }
 
-.video-stage.layout-active-speaker .video-tile[data-stream-aspect="portrait"] .video-feed,
-.video-stage.layout-active-speaker .video-tile[data-stream-aspect="portrait"] video,
-.video-stage.layout-active-speaker .video-tile[data-stream-aspect="square"] .video-feed,
-.video-stage.layout-active-speaker .video-tile[data-stream-aspect="square"] video,
-.video-stage.layout-stage .video-tile[data-stream-aspect="portrait"] .video-feed,
-.video-stage.layout-stage .video-tile[data-stream-aspect="portrait"] video,
-.video-stage.layout-stage .video-tile[data-stream-aspect="square"] .video-feed,
-.video-stage.layout-stage .video-tile[data-stream-aspect="square"] video,
-.video-stage.layout-active-speaker .video-tile[data-stream-aspect="landscape"] .video-feed,
-.video-stage.layout-active-speaker .video-tile[data-stream-aspect="landscape"] video,
-.video-stage.layout-stage .video-tile[data-stream-aspect="landscape"] .video-feed,
-.video-stage.layout-stage .video-tile[data-stream-aspect="landscape"] video {
-  object-fit: cover;
+.video-stage.layout-active-speaker .video-tile .video-feed:not(.video-feed-blur),
+.video-stage.layout-active-speaker .video-tile video:not(.video-feed-blur),
+.video-stage.layout-stage .video-tile .video-feed:not(.video-feed-blur),
+.video-stage.layout-stage .video-tile video:not(.video-feed-blur) {
+  object-fit: contain;
   background: transparent;
 }
 
-.video-stage.layout-active-speaker .video-tile[data-fit="contain"] .video-feed,
-.video-stage.layout-active-speaker .video-tile[data-fit="contain"] video,
-.video-stage.layout-stage .video-tile[data-fit="contain"] .video-feed,
-.video-stage.layout-stage .video-tile[data-fit="contain"] video {
+.video-stage.layout-active-speaker .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.video-stage.layout-active-speaker .video-tile[data-fit="contain"] video:not(.video-feed-blur),
+.video-stage.layout-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.video-stage.layout-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
   object-fit: contain;
   background: #0b1220;
 }
@@ -5168,26 +5176,23 @@ html:has(.auth-page) body {
 }
 
 /* Mobile viewer: keep portrait cover; landscape laptop/tablet show full frame */
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="portrait"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="portrait"] video,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="square"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="square"] video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="portrait"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="portrait"] video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="square"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="square"] video {
-  object-fit: cover;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="landscape"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="landscape"] video,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="unknown"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="unknown"] video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="landscape"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="landscape"] video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="unknown"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="unknown"] video {
-  object-fit: cover;
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="portrait"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="portrait"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="square"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="square"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="portrait"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="portrait"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="square"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="square"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="landscape"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="landscape"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="unknown"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="unknown"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="landscape"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="landscape"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="unknown"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="unknown"] video:not(.video-feed-blur) {
+  object-fit: contain;
 }
 
 .meeting-app.chrome-hidden .meeting-v2-header,
@@ -5562,7 +5567,18 @@ html:has(.auth-page) body {
   background: #0b1220;
 }
 
-/* Portrait phones ? keep 9:16 cover; landscape boxes 16:9 cover (crop bars) */
+/* Portrait phones — aspect lives on the cell; tile fills it (contain-blur, no crop) */
+.meeting-app.viewport-mobile-portrait .equal-grid .mosaic-cell .video-tile,
+.meeting-app.viewport-mobile-portrait .equal-grid .grid-cell .video-tile,
+.meeting-app.viewport-mobile-landscape .equal-grid .mosaic-cell .video-tile,
+.meeting-app.viewport-mobile-landscape .equal-grid .grid-cell .video-tile {
+  height: 100%;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: auto;
+  flex: 1 1 auto;
+}
+
 .meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="portrait"],
 .meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="square"],
 .meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="portrait"],
@@ -5576,6 +5592,16 @@ html:has(.auth-page) body {
   max-width: 100%;
   aspect-ratio: 9 / 16;
   flex: 0 0 auto;
+}
+
+.meeting-app.viewport-mobile-portrait .equal-grid .mosaic-cell .video-tile[data-stream-aspect],
+.meeting-app.viewport-mobile-portrait .equal-grid .grid-cell .video-tile[data-stream-aspect],
+.meeting-app.viewport-mobile-landscape .equal-grid .mosaic-cell .video-tile[data-stream-aspect],
+.meeting-app.viewport-mobile-landscape .equal-grid .grid-cell .video-tile[data-stream-aspect] {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+  flex: 1 1 auto;
 }
 
 .meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="landscape"],
@@ -5593,12 +5619,19 @@ html:has(.auth-page) body {
   flex: 0 0 auto;
 }
 
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile video {
-  object-fit: cover;
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile video:not(.video-feed-blur) {
+  object-fit: contain;
   background: transparent;
+}
+
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
+  object-fit: contain;
 }
 
 .meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] .video-feed,
@@ -5639,34 +5672,13 @@ html:has(.auth-page) body {
   flex: 0 0 auto;
 }
 
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile video,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile video {
+.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile video:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile .video-feed:not(.video-feed-blur),
+.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile video:not(.video-feed-blur) {
+  object-fit: contain;
   object-position: center center;
   background: transparent;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] video,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] video,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="portrait"] video,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="square"] video {
-  object-fit: cover;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] video,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] video,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="landscape"] video,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile[data-stream-aspect="unknown"] video {
-  object-fit: cover;
 }
 
 @media (orientation: landscape) and (max-height: 520px) {

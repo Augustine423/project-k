@@ -266,16 +266,19 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 }
 
 /**
- * Camera tiles always cover (crop bars) so the box matches the video face —
- * no pale pillar/letterbox. Screen share still uses contain via fit override.
+ * Camera tiles use contain-blur so faces/content are never cropped.
+ * A blurred cover layer fills letterbox bars (Meet-style).
+ * Screen share still uses plain contain via fit override.
  */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
   layout: ConferenceLayoutMode;
   size: "grid" | "spotlight" | "strip";
 }): TileFitMode {
-  void opts;
-  return "cover";
+  void opts.streamAspect;
+  void opts.layout;
+  void opts.size;
+  return "contain-blur";
 }
 
 export type StageParticipantTile = {
