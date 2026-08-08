@@ -260,9 +260,10 @@ export function resolveMosaicColumns(
 export function classifyStreamAspect(width: number, height: number): StreamAspect {
   if (width <= 0 || height <= 0) return "unknown";
   const ratio = width / height;
-  if (ratio >= 0.92 && ratio <= 1.08) return "square";
-  if (ratio < 0.92) return "portrait";
-  return "landscape";
+  // Clear phone vs webcam bands (Meet-style). Mid band ≈ square tablets.
+  if (ratio > 1.2) return "landscape";
+  if (ratio < 0.85) return "portrait";
+  return "square";
 }
 
 /**

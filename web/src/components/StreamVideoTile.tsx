@@ -90,6 +90,7 @@ export function StreamVideoTile({
   preferredAspect,
   className = "",
 }: StreamVideoTileProps) {
+  const tileRef = useRef<HTMLDivElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const blurRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -116,7 +117,12 @@ export function StreamVideoTile({
     });
   const useBlurFill = fit === "contain-blur";
 
-  // Video bind — independent of audio so quality/layer changes don't restart sound.
+  const showVideo =
+    hasVideo !== undefined
+      ? hasVideo && Boolean(stream?.getVideoTracks().length)
+      : Boolean(stream?.getVideoTracks().length);
+
+  // Video bind — sharp + blur share the same track.
   useEffect(() => {
     const videoEl = videoRef.current;
     const blurEl = blurRef.current;
@@ -140,7 +146,23 @@ export function StreamVideoTile({
       attachMediaStream(videoEl, null);
       if (blurEl) attachMediaStream(blurEl, null);
     };
-  }, [videoTrack, videoTrackId, trackSignature, useBlurFill]);
+  }, [videoTrack, videoTrackId, trackSignature, useBlurFill, showVideo]);
+
+  // Push live aspect onto parent cell so CSS can size the box (desktop 16:9 / mobile 9:16).
+  useEffect(() => {
+    const tileEl = tileRef.current;
+    if (!tileEl) return;
+    const aspect = streamAspect !== "unknown" ? streamAspect : "";
+    if (aspect) tileEl.dataset.streamAspect = aspect;
+    else delete tileEl.dataset.streamAspect;
+
+    const cell = tileEl.closest(
+      ".mosaic-cell, .grid-cell, .jitsi-cell, .filmstrip-cell, .featured-cell",
+    );
+    if (!(cell instanceof HTMLElement)) return;
+    if (aspect) cell.dataset.streamAspect = aspect;
+    else delete cell.dataset.streamAspect;
+  }, [streamAspect]);
 
   // Audio bind — local tile is muted so mic never plays into speakers (echo).
   useEffect(() => {
@@ -158,11 +180,6 @@ export function StreamVideoTile({
       attachMediaStream(audioEl, null);
     };
   }, [audioTrack, audioTrackId, muted]);
-
-  const showVideo =
-    hasVideo !== undefined
-      ? hasVideo && Boolean(stream?.getVideoTracks().length)
-      : Boolean(stream?.getVideoTracks().length);
 
   useEffect(() => {
     if (!showStats) return;
@@ -194,6 +211,7 @@ export function StreamVideoTile({
 
   return (
     <div
+      ref={tileRef}
       className={[
         "video-tile",
         `is-${size}`,
@@ -204,7 +222,7 @@ export function StreamVideoTile({
         .filter(Boolean)
         .join(" ")}
       data-fit={fit}
-      data-stream-aspect={streamAspect}
+      data-stream-aspect={streamAspect !== "unknown" ? streamAspect : undefined}
       data-ai-active={isSpeaking ? "true" : undefined}
     >
       {useBlurFill && showVideo ? (

@@ -4812,6 +4812,7 @@ html:has(.auth-page) body {
   );
   max-width: 100%;
   max-height: calc(100% - 4px);
+  /* Default landscape — uniform grid; blur fills mismatch */
   aspect-ratio: 16 / 9;
   min-width: 0;
   min-height: 0;
@@ -4824,18 +4825,43 @@ html:has(.auth-page) body {
   background: #14181f;
 }
 
-/* Live stream aspect on the tile wins over cell hint */
-.video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
-.video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"] {
+/*
+ * Desktop + mobile-landscape viewers: keep 16:9 cells for every stream.
+ * Portrait phone video sits inside with contain; blur fills the sides.
+ */
+.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
+.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"],
+.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
+.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
+.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
+.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"],
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"],
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"] {
+  aspect-ratio: 16 / 9;
+}
+
+/*
+ * Mobile portrait viewer: tall tiles for phone streams so video fills edge-to-edge.
+ */
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"] {
   aspect-ratio: 9 / 16;
 }
 
-.video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
-.video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
-.video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
-.video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"] {
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"] {
   aspect-ratio: 1 / 1;
 }
 
@@ -4871,10 +4897,20 @@ html:has(.auth-page) body {
   border-radius: 20px;
 }
 
-.video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"] {
+/* Solo on mobile portrait: match phone stream for edge-to-edge fill */
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"] {
   width: min(100%, calc((100% - 24px) * 9 / 16), calc((100cqh - 24px) * 9 / 16));
   aspect-ratio: 9 / 16;
+}
+
+/* Desktop solo with portrait stream: keep 16:9; blur fills sides */
+.meeting-app.viewport-desktop .video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-desktop .video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"],
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
+.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"] {
+  width: min(100%, calc((100% - 24px) * 16 / 9), calc((100cqh - 24px) * 16 / 9));
+  aspect-ratio: 16 / 9;
 }
 
 .video-stage.equal-grid .video-tile .video-feed:not(.video-feed-blur),
