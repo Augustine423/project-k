@@ -9,19 +9,25 @@ import type { StreamAspect } from "./conferenceLayout";
 export const MM_DEVICE_ATTR = "mm.device";
 export const MM_VIDEO_ASPECT_ATTR = "mm.videoAspect";
 
-export type MmVideoAspectAttr = "portrait" | "landscape";
+/**
+ * Advertised video box aspect:
+ * - mobile upright → portrait (9:16 gallery box)
+ * - mobile sideways / tablet / laptop → square (1:1 gallery box)
+ */
+export type MmVideoAspectAttr = "portrait" | "landscape" | "square";
 
 /**
  * Aspect to advertise to other participants.
- * Phones follow the real device orientation (was wrongly always-portrait).
+ * Gallery: 9:16 only for mobile portrait; all other cases → 1:1 (`square`).
+ * (Capture may still be 16:9 on mobile landscape; the tile box is 1:1 + cover.)
  */
 export function preferredAspectForCaptureDevice(
   device: CaptureDeviceClass = detectCaptureDeviceClass(),
 ): MmVideoAspectAttr {
-  if (device === "mobile") {
-    return isDeviceOrientationPortrait() ? "portrait" : "landscape";
+  if (device === "mobile" && isDeviceOrientationPortrait()) {
+    return "portrait";
   }
-  return "landscape";
+  return "square";
 }
 
 /** Attributes every MeetingMax client should publish on join / camera enable / rotate. */
@@ -34,17 +40,38 @@ export function localDeviceAttributes(
   };
 }
 
+export function readSourceDevice(
+  attributes: Record<string, string> | undefined | null,
+): CaptureDeviceClass | undefined {
+  const raw = attributes?.[MM_DEVICE_ATTR];
+  if (raw === "mobile" || raw === "tablet" || raw === "laptop") return raw;
+  return undefined;
+}
+
 export function readPreferredVideoAspect(
   attributes: Record<string, string> | undefined | null,
 ): StreamAspect | undefined {
   if (!attributes) return undefined;
   const raw = attributes[MM_VIDEO_ASPECT_ATTR];
-  if (raw === "portrait" || raw === "landscape") return raw;
+  if (raw === "portrait" || raw === "landscape" || raw === "square") return raw;
   const device = attributes[MM_DEVICE_ATTR];
-  // Legacy: old clients only sent mm.device=mobile without aspect — assume portrait.
+  // Legacy: old clients only sent mm.device=mobile without aspect — assume upright portrait.
   if (device === "mobile") return "portrait";
-  if (device === "tablet" || device === "laptop") return "landscape";
+  if (device === "tablet" || device === "laptop") return "square";
   return undefined;
+}
+
+/** 9:16 gallery box only when publisher is a phone held upright. */
+export function isMobilePortraitSource(
+  attributes: Record<string, string> | undefined | null,
+): boolean {
+  if (!attributes) return false;
+  const device = readSourceDevice(attributes);
+  const aspect = readPreferredVideoAspect(attributes);
+  if (device === "mobile" && aspect === "portrait") return true;
+  // Legacy mobile with no aspect attr
+  if (device === "mobile" && !attributes[MM_VIDEO_ASPECT_ATTR]) return true;
+  return false;
 }
 
 export function isMobileSourceAttributes(

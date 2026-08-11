@@ -1,32 +1,42 @@
+/**
+ * Conference video stage (Grid button lives on the bottom control bar).
+ *
+ * - Gallery view — project-k/index1.html auto-fit gallery + right chat column
+ * - Host stage — project-k/index.html large host + right sidebar
+ */
 import { StreamVideoTile } from "../StreamVideoTile";
-import { LayoutPicker } from "./LayoutPicker";
 import type { CSSProperties, ReactNode } from "react";
 import {
-  isEqualGridMode,
-  isJitsiGridMode,
-  layoutDataCount,
-  layoutPageSize,
-  orderStageTiles,
-  pickActiveSpeakerFeatured,
-  pickHostScreenFeatured,
-  resolveEqualGridColumns,
-  resolveGridDensity,
-  resolveJitsiColumns,
+  GALLERY_CHAT_COLUMN_PX,
+  GALLERY_MIN_ROW_PX,
+  GALLERY_MIN_TILE_PX,
+  SIDEBAR_WIDTH_PX,
+  filmstripLandscapeUnits,
+  resolveStagePlan,
   type ConferenceLayoutMode,
+  type FocusStagePlan,
+  type LandscapePackSlot,
+  type SidebarStagePlan,
+  type SmallGroupStagePlan,
+  type SoloStagePlan,
   type StageParticipantTile,
+  type TileStagePlan,
 } from "../../media/conferenceLayout";
+import {
+  layoutGalleryFreeformAbsolute,
+  type GalleryFreeformPlacement,
+} from "../../media/galleryFreeformLayout";
 import type { ViewerViewportMode } from "../../hooks/useViewerViewport";
+import { useMemo } from "react";
 
 type CommonProps = {
-  layoutMode: ConferenceLayoutMode;
-  onLayoutChange?: (mode: ConferenceLayoutMode) => void;
   tiles: StageParticipantTile[];
   maxPerPage?: number;
   hostParticipantId?: string;
   viewerMode?: ViewerViewportMode;
-  /** Active speaker identities from LiveKit (for activeSpeaker layout). */
   activeSpeakerIds?: readonly string[];
   localIdentity?: string;
+  layoutMode: ConferenceLayoutMode;
   primaryId?: string;
 };
 
@@ -54,7 +64,7 @@ function Tile({
       size={size}
       layoutMode={layoutMode}
       preferredAspect={tile.isScreenShare ? undefined : tile.preferredAspect}
-      fit={tile.isScreenShare ? "contain" : undefined}
+      fit={tile.isScreenShare ? "contain" : "cover"}
       className={className}
     />
   );
@@ -62,298 +72,388 @@ function Tile({
 
 function StageShell({
   layoutMode,
-  onLayoutChange,
   children,
 }: {
   layoutMode: ConferenceLayoutMode;
-  onLayoutChange?: (mode: ConferenceLayoutMode) => void;
   children: ReactNode;
 }) {
   return (
     <div className="video-stage-shell" data-layout={layoutMode}>
-      {onLayoutChange && (
-        <LayoutPicker layoutMode={layoutMode} onLayoutChange={onLayoutChange} />
-      )}
       {children}
     </div>
   );
 }
 
-function normalizeTiles(tiles: StageParticipantTile[]): StageParticipantTile[] {
-  return tiles.length > 0
-    ? tiles
-    : [{ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false }];
+function streamAspectAttr(tile: StageParticipantTile): string | undefined {
+  if (tile.isScreenShare) return "landscape";
+  if (tile.preferredAspect && tile.preferredAspect !== "unknown") return tile.preferredAspect;
+  return undefined;
 }
 
-/** Gallery / Standard / Extended — equal tiles with portrait/landscape aspect boxes. */
-function EqualGridStage({
+function MmSlot({
+  slot,
   layoutMode,
-  tiles,
-  maxPerPage,
-  hostParticipantId,
-  viewerMode,
-  onLayoutChange,
-}: CommonProps) {
-  const pageSize = maxPerPage ?? layoutPageSize(layoutMode);
-  const stageTiles = orderStageTiles(normalizeTiles(tiles), {
-    hostParticipantId,
-    localId: "local",
-  });
-  const count = layoutDataCount(stageTiles.length, pageSize);
-  const cols = resolveEqualGridColumns(count, layoutMode, viewerMode);
-  const rows = Math.max(1, Math.ceil(stageTiles.length / cols));
-  const density = resolveGridDensity(stageTiles.length, layoutMode);
+  size = "grid",
+  className = "mm-slot",
+  style,
+}: {
+  slot: LandscapePackSlot | GalleryFreeformPlacement<StageParticipantTile>;
+  layoutMode: ConferenceLayoutMode;
+  size?: "grid" | "spotlight" | "strip";
+  className?: string;
+  style?: CSSProperties;
+}) {
+  if (slot.kind === "portrait-pair") {
+    const [a, b] = slot.tiles;
+    return (
+      <div className={`${className} mm-slot--pair`} data-stream-aspect="landscape" style={style}>
+        <div className="mm-pair">
+          <div className="mm-pair__cell" data-stream-aspect="portrait">
+            <Tile tile={a} layoutMode={layoutMode} size={size} />
+          </div>
+          <div className="mm-pair__cell" data-stream-aspect="portrait">
+            <Tile tile={b} layoutMode={layoutMode} size={size} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (slot.kind === "freeform") {
+    const aspect = slot.box === "portrait" ? "portrait" : "square";
+    return (
+      <div
+        className={`${className} mm-slot--freeform mm-slot--box-${slot.box} free-tile`}
+        data-kind={slot.tile.isScreenShare ? "screen" : "camera"}
+        data-stream-aspect={aspect}
+        data-box={slot.box}
+        style={style}
+      >
+        <Tile tile={slot.tile} layoutMode={layoutMode} size={size} />
+      </div>
+    );
+  }
 
   return (
-    <StageShell layoutMode={layoutMode} onLayoutChange={onLayoutChange}>
+    <div
+      className={className}
+      data-kind={slot.tile.isScreenShare ? "screen" : "camera"}
+      data-stream-aspect={streamAspectAttr(slot.tile)}
+      style={style}
+    >
+      <Tile tile={slot.tile} layoutMode={layoutMode} size={size} />
+    </div>
+  );
+}
+
+function slotKey(
+  slot: LandscapePackSlot | GalleryFreeformPlacement<StageParticipantTile>,
+): string {
+  if (slot.kind === "portrait-pair") return `pair-${slot.tiles[0].id}`;
+  return slot.tile.id;
+}
+
+function filmstripStyle(slots: LandscapePackSlot[]): CSSProperties {
+  const stripUnits = Math.max(0.5, filmstripLandscapeUnits(slots));
+  return {
+    ["--strip-slots"]: String(slots.length),
+    ["--strip-units"]: String(stripUnits),
+  } as CSSProperties;
+}
+
+function SoloStage({ plan }: { plan: SoloStagePlan }) {
+  const { tile, layoutMode, orientation } = plan;
+  return (
+    <StageShell layoutMode={layoutMode}>
       <div
-        className="video-stage equal-grid"
+        className="video-stage mm-stage mm-stage--solo"
+        data-layout={layoutMode}
+        data-count="1"
+        data-orientation={orientation}
+      >
+        <div
+          className="mm-stage__cell"
+          data-kind={tile.isScreenShare ? "screen" : "camera"}
+          data-stream-aspect={streamAspectAttr(tile) ?? orientation}
+        >
+          <Tile tile={tile} layoutMode={layoutMode} size="spotlight" />
+        </div>
+      </div>
+    </StageShell>
+  );
+}
+
+function SmallGroupStage({ plan }: { plan: SmallGroupStagePlan }) {
+  const { layoutMode, count, slots, orientation, viewerMode, stripUnits } = plan;
+  const bleed =
+    viewerMode === "mobile-portrait" || viewerMode === "mobile-landscape";
+  const isRow = orientation === "row";
+
+  return (
+    <StageShell layoutMode={layoutMode}>
+      <div
+        className={[
+          "video-stage mm-stage mm-stage--small mm-stage--filmstrip",
+          isRow ? "mm-stage--filmstrip-row" : "mm-stage--filmstrip-col",
+          bleed ? "mm-stage--bleed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
         data-layout={layoutMode}
         data-count={String(count)}
+        data-viewer={viewerMode ?? "desktop"}
+        data-strip={String(slots.length)}
+      >
+        <div
+          className="mm-stage__filmstrip"
+          aria-label="Participants"
+          data-orientation={orientation}
+          data-strip={String(slots.length)}
+          data-strip-units={String(stripUnits)}
+          style={filmstripStyle(slots)}
+        >
+          {slots.map((slot) => (
+            <MmSlot
+              key={slotKey(slot)}
+              slot={slot}
+              layoutMode={layoutMode}
+              className="mm-slot mm-stage__peer"
+            />
+          ))}
+        </div>
+      </div>
+    </StageShell>
+  );
+}
+
+/** Gallery view — large→small by count; 15-up tile size then scroll (50/page). */
+function TileStage({ plan }: { plan: TileStagePlan }) {
+  const {
+    layoutMode,
+    count,
+    cols,
+    rows,
+    density,
+    sizeLocked,
+    scroll,
+    tiles,
+    lockCols,
+    viewportCap,
+    portraitGrid,
+    fillBleed,
+    viewerMode,
+    shape,
+    sizeCols,
+    sizeRows,
+    sizeN,
+  } = plan;
+
+  const mobileFit =
+    viewerMode === "mobile-portrait" || viewerMode === "mobile-landscape";
+  const layout = useMemo(
+    () => layoutGalleryFreeformAbsolute(tiles, { viewerMode, mobileFit }),
+    [tiles, viewerMode, mobileFit],
+  );
+
+  const galleryStyle = {
+    ["--lock-cols"]: String(lockCols),
+    ["--lock-rows"]: String(sizeRows),
+    ["--grid-cols"]: String(cols),
+    ["--grid-rows"]: String(rows),
+    ["--gallery-min-tile"]: `${GALLERY_MIN_TILE_PX}px`,
+    ["--gallery-min-row"]: `${GALLERY_MIN_ROW_PX}px`,
+    ["--gallery-chat-col"]: `${GALLERY_CHAT_COLUMN_PX}px`,
+    ["--gallery-cols"]: String(cols),
+    ["--gallery-size-cols"]: String(sizeCols),
+    ["--gallery-size-rows"]: String(sizeRows),
+    ["--gallery-size-n"]: String(sizeN),
+    ["--gallery-rows"]: String(rows),
+    ["--gallery-gap"]: count <= 2 ? "12px" : "10px",
+  } as CSSProperties;
+
+  return (
+    <StageShell layoutMode={layoutMode}>
+      <div
+        className={[
+          "video-stage mm-stage mm-stage--gallery mm-stage--index1 mm-stage--pretty",
+          sizeLocked ? "mm-stage--locked" : "",
+          scroll ? "mm-stage--scroll" : "",
+          portraitGrid ? "mm-stage--portrait" : "",
+          fillBleed ? "mm-stage--bleed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-layout="gallery"
+        data-count={String(count)}
+        data-shape={shape}
         data-density={density}
         data-cols={String(cols)}
         data-rows={String(rows)}
+        data-viewer={viewerMode ?? "desktop"}
+        data-size-lock={sizeLocked ? String(viewportCap) : undefined}
+        data-scroll={scroll ? "1" : undefined}
+        style={galleryStyle}
+      >
+        <div
+          className="mm-stage__gallery mm-gallery-flow"
+          aria-label="Participants"
+          data-cols={String(cols)}
+          data-shape={shape}
+          data-scroll={scroll ? "1" : undefined}
+        >
+          {layout.placements.map((placement) => (
+            <MmSlot
+              key={slotKey(placement)}
+              slot={placement}
+              layoutMode={layoutMode}
+              className="mm-slot mm-stage__cell free-tile"
+            />
+          ))}
+        </div>
+      </div>
+    </StageShell>
+  );
+}
+
+/** Gallery view + screen share — same chrome as Host stage (large share + right peer sidebar). */
+function FocusStage({ plan }: { plan: FocusStagePlan }) {
+  const {
+    layoutMode,
+    count,
+    focus,
+    filmstripSlots,
+    sizeLocked,
+    scroll,
+    fillBleed,
+    viewerMode,
+  } = plan;
+
+  const peerScroll = scroll || sizeLocked || filmstripSlots.length > 6;
+
+  return (
+    <StageShell layoutMode={layoutMode}>
+      <div
+        className={[
+          "video-stage mm-stage mm-stage--sidebar mm-stage--gallery-share",
+          fillBleed ? "mm-stage--bleed" : "",
+          peerScroll ? "is-scroll" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-layout="gallery"
+        data-count={String(count)}
+        data-viewer={viewerMode ?? "desktop"}
+        data-scroll={peerScroll ? "1" : undefined}
         style={
           {
-            ["--grid-cols"]: String(cols),
-            ["--grid-rows"]: String(rows),
-            ["--mosaic-cols"]: String(cols),
-            ["--mosaic-rows"]: String(rows),
+            ["--sidebar-width"]: `${SIDEBAR_WIDTH_PX}px`,
+            ["--meeting-sidebar-width"]: `${SIDEBAR_WIDTH_PX}px`,
           } as CSSProperties
         }
       >
-        {stageTiles.map((tile) => (
+        <div
+          className="mm-stage__focus mm-stage__host-tile"
+          data-kind={focus.isScreenShare ? "screen" : "host"}
+          data-stream-aspect={streamAspectAttr(focus)}
+        >
+          <Tile tile={focus} layoutMode={layoutMode} size="spotlight" />
+        </div>
+        {filmstripSlots.length > 0 && (
           <div
-            key={tile.id}
-            className="grid-cell mosaic-cell"
-            data-kind={tile.isScreenShare ? "screen" : "camera"}
-            data-stream-aspect={
-              tile.isScreenShare
-                ? "landscape"
-                : tile.preferredAspect && tile.preferredAspect !== "unknown"
-                  ? tile.preferredAspect
-                  : undefined
-            }
+            className="mm-stage__sidebar"
+            aria-label="Participants"
+            data-scroll={peerScroll ? "1" : undefined}
           >
-            <Tile tile={tile} layoutMode={layoutMode} />
+            {filmstripSlots.map((slot) => (
+              <MmSlot
+                key={slotKey(slot)}
+                slot={slot}
+                layoutMode={layoutMode}
+                className="mm-slot mm-stage__sidebar-tile"
+              />
+            ))}
           </div>
-        ))}
+        )}
       </div>
     </StageShell>
   );
 }
 
 /**
- * Jitsi-style tile view — equal CSS cells that fill the stage (web + mobile).
- * Video covers each cell; screen share still contains.
+ * project-k/index.html Host stage:
+ * `.main-stage` → large host/share left + right participants sidebar (~300px).
  */
-function JitsiGridStage({
-  layoutMode,
-  tiles,
-  maxPerPage,
-  hostParticipantId,
-  viewerMode,
-  onLayoutChange,
-}: CommonProps) {
-  const pageSize = maxPerPage ?? layoutPageSize(layoutMode);
-  const stageTiles = orderStageTiles(normalizeTiles(tiles), {
-    hostParticipantId,
-    localId: "local",
-  });
-  const count = layoutDataCount(stageTiles.length, pageSize);
-  const cols = resolveJitsiColumns(count, viewerMode);
-  const rows = Math.max(1, Math.ceil(stageTiles.length / cols));
-  const density = resolveGridDensity(stageTiles.length, layoutMode);
+function SidebarStage({ plan }: { plan: SidebarStagePlan }) {
+  const { layoutMode, count, focus, peerSlots, scroll, fillBleed, viewerMode } = plan;
 
   return (
-    <StageShell layoutMode={layoutMode} onLayoutChange={onLayoutChange}>
+    <StageShell layoutMode={layoutMode}>
       <div
-        className="video-stage jitsi-grid"
-        data-layout="jitsi"
+        className={[
+          "video-stage mm-stage mm-stage--sidebar",
+          fillBleed ? "mm-stage--bleed" : "",
+          scroll ? "is-scroll" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-layout="sidebar"
         data-count={String(count)}
-        data-density={density}
-        data-cols={String(cols)}
-        data-rows={String(rows)}
+        data-viewer={viewerMode ?? "desktop"}
+        data-scroll={scroll ? "1" : undefined}
         style={
           {
-            ["--grid-cols"]: String(cols),
-            ["--grid-rows"]: String(rows),
+            ["--sidebar-width"]: `${SIDEBAR_WIDTH_PX}px`,
+            ["--meeting-sidebar-width"]: `${SIDEBAR_WIDTH_PX}px`,
           } as CSSProperties
         }
       >
-        {stageTiles.map((tile) => (
-          <div key={tile.id} className="jitsi-cell">
-            <Tile tile={tile} layoutMode={layoutMode} />
-          </div>
-        ))}
-      </div>
-    </StageShell>
-  );
-}
-
-function FeaturedDuoRow({
-  featured,
-  layoutMode,
-}: {
-  featured: StageParticipantTile[];
-  layoutMode: ConferenceLayoutMode;
-}) {
-  if (featured.length === 0) return null;
-  return (
-    <div className="featured-row" data-count={String(featured.length)}>
-      {featured.map((tile) => (
         <div
-          key={tile.id}
-          className="featured-cell"
-          data-kind={tile.isScreenShare ? "screen" : "host"}
+          className="mm-stage__focus mm-stage__host-tile"
+          data-kind={focus.isScreenShare ? "screen" : "host"}
+          data-stream-aspect={streamAspectAttr(focus)}
         >
-          <Tile tile={tile} layoutMode={layoutMode} size="spotlight" />
+          <Tile tile={focus} layoutMode={layoutMode} size="spotlight" />
         </div>
-      ))}
-    </div>
-  );
-}
-
-const FILMSTRIP_VISIBLE_MAX = 12;
-
-function Filmstrip({
-  tiles,
-  layoutMode,
-  orientation = "bottom",
-  onShowAll,
-}: {
-  tiles: StageParticipantTile[];
-  layoutMode: ConferenceLayoutMode;
-  orientation?: "bottom" | "side";
-  onShowAll?: () => void;
-}) {
-  if (tiles.length === 0) return null;
-  const overflow = tiles.length > FILMSTRIP_VISIBLE_MAX;
-  const visible = overflow ? tiles.slice(0, FILMSTRIP_VISIBLE_MAX) : tiles;
-  const hiddenCount = Math.max(0, tiles.length - visible.length);
-
-  return (
-    <div className={`video-filmstrip is-${orientation}`} data-count={String(tiles.length)}>
-      {visible.map((tile) => (
-        <div key={tile.id} className="filmstrip-cell">
-          <Tile tile={tile} layoutMode={layoutMode} size="strip" />
-        </div>
-      ))}
-      {overflow && onShowAll ? (
-        <button
-          type="button"
-          className="peers-show-all"
-          onClick={onShowAll}
-          aria-label={`Show all ${tiles.length} participants`}
+        <div
+          className="mm-stage__sidebar"
+          aria-label="Participants"
+          data-scroll={scroll ? "1" : undefined}
         >
-          Show all · +{hiddenCount}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-/** Active speaker — large primary (or host+screen duo) + bottom filmstrip. */
-function ActiveSpeakerStage({
-  layoutMode,
-  tiles,
-  hostParticipantId,
-  activeSpeakerIds,
-  localIdentity,
-  onLayoutChange,
-}: CommonProps) {
-  const stageTiles = orderStageTiles(normalizeTiles(tiles), {
-    hostParticipantId,
-    localId: "local",
-  });
-  const featured = pickActiveSpeakerFeatured(stageTiles, {
-    hostParticipantId,
-    activeSpeakerIds,
-    localIdentity,
-  });
-  const featuredIds = new Set(featured.map((t) => t.id));
-  const strip = stageTiles.filter((t) => !featuredIds.has(t.id));
-
-  return (
-    <StageShell layoutMode={layoutMode} onLayoutChange={onLayoutChange}>
-      <div
-        className="video-stage layout-active-speaker"
-        data-layout={layoutMode}
-        data-count={String(stageTiles.length)}
-        data-featured={String(featured.length)}
-      >
-        <div className="spotlight-pane">
-          <FeaturedDuoRow featured={featured} layoutMode={layoutMode} />
+          {peerSlots.map((slot) => (
+            <MmSlot
+              key={slotKey(slot)}
+              slot={slot}
+              layoutMode={layoutMode}
+              className="mm-slot mm-stage__sidebar-tile"
+            />
+          ))}
         </div>
-        <Filmstrip
-          tiles={strip}
-          layoutMode={layoutMode}
-          orientation="bottom"
-          onShowAll={onLayoutChange ? () => onLayoutChange("gallery") : undefined}
-        />
-      </div>
-    </StageShell>
-  );
-}
-
-/** Stage — host (+ screen side-by-side) up front; peers in side strip on wide, bottom on narrow. */
-function StageLayoutView({
-  layoutMode,
-  tiles,
-  hostParticipantId,
-  onLayoutChange,
-  viewerMode,
-}: CommonProps) {
-  const stageTiles = orderStageTiles(normalizeTiles(tiles), {
-    hostParticipantId,
-    localId: "local",
-  });
-  let featured = pickHostScreenFeatured(stageTiles, hostParticipantId);
-  if (featured.length === 0 && stageTiles.length > 1) {
-    featured = [stageTiles.find((t) => !t.isScreenShare) ?? stageTiles[0]];
-  }
-  if (featured.length === 0) {
-    featured = stageTiles.slice(0, 1);
-  }
-  const featuredIds = new Set(featured.map((t) => t.id));
-  const strip = stageTiles.filter((t) => !featuredIds.has(t.id));
-  const sideStrip =
-    viewerMode !== "mobile-portrait" && strip.length > 0 && stageTiles.length > 1;
-
-  return (
-    <StageShell layoutMode={layoutMode} onLayoutChange={onLayoutChange}>
-      <div
-        className={`video-stage layout-stage${sideStrip ? " has-side-strip" : ""}`}
-        data-layout={layoutMode}
-        data-count={String(stageTiles.length)}
-        data-featured={String(featured.length)}
-      >
-        <div className="spotlight-pane">
-          <FeaturedDuoRow featured={featured} layoutMode={layoutMode} />
-        </div>
-        <Filmstrip
-          tiles={strip}
-          layoutMode={layoutMode}
-          orientation={sideStrip ? "side" : "bottom"}
-          onShowAll={onLayoutChange ? () => onLayoutChange("gallery") : undefined}
-        />
       </div>
     </StageShell>
   );
 }
 
 export function ConferenceVideoStage(props: CommonProps) {
-  const { layoutMode } = props;
-  if (isJitsiGridMode(layoutMode)) {
-    return <JitsiGridStage {...props} />;
+  const plan = resolveStagePlan({
+    tiles: props.tiles,
+    layoutMode: props.layoutMode,
+    viewerMode: props.viewerMode,
+    hostParticipantId: props.hostParticipantId,
+    maxPerPage: props.maxPerPage,
+  });
+
+  switch (plan.kind) {
+    case "solo":
+      return <SoloStage plan={plan} />;
+    case "smallGroup":
+      return <SmallGroupStage plan={plan} />;
+    case "gallery":
+      return <TileStage plan={plan} />;
+    case "focus":
+      return <FocusStage plan={plan} />;
+    case "sidebar":
+      return <SidebarStage plan={plan} />;
   }
-  if (isEqualGridMode(layoutMode)) {
-    return <EqualGridStage {...props} />;
-  }
-  if (layoutMode === "activeSpeaker") {
-    return <ActiveSpeakerStage {...props} />;
-  }
-  return <StageLayoutView {...props} />;
 }
 
 /** @deprecated */

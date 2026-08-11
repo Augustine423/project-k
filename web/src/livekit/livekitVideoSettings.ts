@@ -2,6 +2,7 @@ import {
   AudioPresets,
   ConnectionQuality,
   LocalVideoTrack,
+  ScreenSharePresets,
   Track,
   VideoPresets,
   VideoQuality,
@@ -11,6 +12,7 @@ import {
   type RemoteTrackPublication,
   type Room,
   type RoomOptions,
+  type ScreenShareCaptureOptions,
   type VideoCaptureOptions,
 } from "livekit-client";
 import {
@@ -19,33 +21,42 @@ import {
 } from "../media/galleryVideoPolicy";
 import { resolveCaptureDimensions } from "../media/deviceCapture";
 
-/** Prefer device max quality — do not cap to 720p. Viewers adapt via simulcast. */
+/** Cap publish / receive at 1080p 16:9 (1920×1080). Viewers adapt via simulcast. */
 export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h1080.encoding.maxBitrate;
 export const LIVEKIT_MAX_FRAMERATE = VideoPresets.h1080.encoding.maxFramerate ?? 30;
 
 /**
- * Capture-side WebRTC DSP via browser getUserMedia constraints:
- * Raw mic → AEC → noise suppress → AGC → Opus.
- * Keep all three on so nearby laptop/phone speakers don't create echo loops.
+ * Capture-side WebRTC DSP via browser getUserMedia constraints
+ * (Jitsi / Meet / LiveKit default mic path before optional ML filters):
+ * Raw mic → AEC → (browser NS unless enhanced DTLN is on) → AGC → Opus.
+ *
+ * Keep AEC + AGC always on so nearby speakers don't create echo loops.
+ * When enhanced NC (DTLN) is enabled, turn off browser noiseSuppression to
+ * avoid double-denoising (same idea as Krisp replacing browser NS in Meet).
  */
-export function microphoneEnableCaptureOptions(): AudioCaptureOptions {
+export function microphoneEnableCaptureOptions(opts?: {
+  enhancedNoiseCancel?: boolean;
+}): AudioCaptureOptions {
+  const enhanced = Boolean(opts?.enhancedNoiseCancel);
   return {
     echoCancellation: true,
-    noiseSuppression: true,
+    noiseSuppression: !enhanced,
     autoGainControl: true,
     channelCount: 1,
   };
 }
 
-/** Re-assert AEC / NS / AGC after enable (some devices drop constraints on restart). */
+/** Re-assert AEC / NS / AGC after enable / NC toggle (some devices drop constraints). */
 export async function applyAudioProcessingConstraints(
   track: MediaStreamTrack | undefined | null,
+  opts?: { enhancedNoiseCancel?: boolean },
 ): Promise<void> {
   if (!track || track.kind !== "audio") return;
+  const enhanced = Boolean(opts?.enhancedNoiseCancel);
   try {
     await track.applyConstraints({
       echoCancellation: true,
-      noiseSuppression: true,
+      noiseSuppression: !enhanced,
       autoGainControl: true,
       channelCount: 1,
     });
@@ -81,7 +92,7 @@ export function applyLocalUplinkVideoQuality(room: Room, quality: ConnectionQual
   track.setPublishingQuality(maxQuality);
 }
 
-/** Max simulcast layer index (0=h180 … 3=h1080) for the viewer's current downlink. */
+/** Max simulcast layer index (0=h180, 1=h360, 2=h720, 3=h1080) for the viewer's current downlink. */
 export function receiveLayerCapForQuality(quality: ConnectionQuality): number {
   switch (quality) {
     case ConnectionQuality.Lost:
@@ -103,10 +114,9 @@ export function isPortraitCapturePreferred(): boolean {
 }
 
 /**
- * Request device-appropriate camera resolution before / during enable:
- * phone → 720×1280 portrait; tablet + laptop → 1280×720 landscape.
+ * Request camera capture before / during enable (host + guests).
+ * Mobile upright → 720×1280; tablet/laptop → 1920×1080.
  * Prefer full sensor frame (resizeMode none) — no hardware face/auto-crop.
- * UI renders with object-fit: contain.
  */
 export function cameraEnableCaptureOptions(): VideoCaptureOptions {
   const { width, height, aspectRatio, portrait } = resolveCaptureDimensions();
@@ -115,16 +125,27 @@ export function cameraEnableCaptureOptions(): VideoCaptureOptions {
       width,
       height,
       frameRate: LIVEKIT_MAX_FRAMERATE,
-      // Soft ideal only — exact aspectRatio forces many phones to crop the sensor.
       ...(portrait ? {} : { aspectRatio }),
     },
     facingMode: "user",
   };
 }
 
+/** Screen share capture — 1080p 16:9. */
+export function screenShareCaptureOptions(): ScreenShareCaptureOptions {
+  return {
+    resolution: {
+      width: 1920,
+      height: 1080,
+      frameRate: 30,
+    },
+  };
+}
+
 /**
  * Build constraints that keep the full camera sensor frame (native camera app style).
- * - Portrait phones: prefer 720×1280 without crop-and-scale
+ * - Portrait phones: 720×1280 without forced landscape crop
+ * - Tablet/laptop: 1920×1080 16:9
  * - resizeMode: "none" when the UA supports it (Chrome/Android)
  * - zoom locked to 1 when exposed
  */
@@ -137,12 +158,10 @@ export function fullFrameCameraConstraints(): MediaTrackConstraints {
     facingMode: { ideal: "user" },
   };
 
-  // Avoid forcing aspectRatio on phones — browsers often crop to satisfy it.
   if (!portrait) {
     base.aspectRatio = { ideal: 16 / 9 };
   }
 
-  // Spec: resizeMode "none" = UA must not crop/downscale the source to fit.
   const withResize = {
     ...base,
     resizeMode: "none",
@@ -164,7 +183,6 @@ export async function applyOrientationCaptureConstraints(
   try {
     await tryApply(fullFrameCameraConstraints());
   } catch {
-    // Fallback without resizeMode (Safari / older WebViews).
     const { width, height, portrait } = resolveCaptureDimensions();
     try {
       await tryApply({
@@ -178,14 +196,13 @@ export async function applyOrientationCaptureConstraints(
     }
   }
 
-  // Lock digital zoom to 1× when the track exposes it (stops some Android face crops).
   try {
     const caps = track.getCapabilities?.() as
       | (MediaTrackCapabilities & { zoom?: { min: number; max: number } })
       | undefined;
     if (caps && "zoom" in caps && caps.zoom) {
       await track.applyConstraints({
-        advanced: [{ zoom: caps.zoom.min ?? 1 } as MediaTrackConstraintSet],
+        advanced: [{ zoom: 1 } as MediaTrackConstraintSet],
       });
     }
   } catch {
@@ -194,9 +211,10 @@ export async function applyOrientationCaptureConstraints(
 }
 
 /**
- * Publishers send high quality + simulcast ladders.
+ * Publishers send 1080p 16:9 + lower simulcast ladders.
  * Each viewer only downloads the layer their bandwidth / tile size can sustain.
  * Mic: browser AEC + noise suppress + AGC (set on getUserMedia / LiveKit capture).
+ * Optional enhanced DTLN is attached after publish when the user enables Noise On.
  */
 export function createLiveKitRoomOptions(): RoomOptions {
   return {
@@ -205,7 +223,8 @@ export function createLiveKitRoomOptions(): RoomOptions {
     },
     dynacast: true,
     stopLocalTrackOnUnpublish: false,
-    audioCaptureDefaults: microphoneEnableCaptureOptions(),
+    // Baseline browser DSP; enhanced NC toggles constraints at mic-enable time.
+    audioCaptureDefaults: microphoneEnableCaptureOptions({ enhancedNoiseCancel: false }),
     videoCaptureDefaults: cameraEnableCaptureOptions(),
     publishDefaults: {
       simulcast: true,
@@ -218,12 +237,14 @@ export function createLiveKitRoomOptions(): RoomOptions {
       forceStereo: false,
       videoEncoding: VideoPresets.h1080.encoding,
       videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360, VideoPresets.h720],
+      screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
       // Let WebRTC trade resolution/framerate under congestion (best overall quality for bandwidth).
       degradationPreference: "balanced",
     },
   };
 }
 
+/** Simulcast ladder: 180 → 360 → 720 → 1080p 16:9. */
 const LAYER_DIMS = [
   VideoPresets.h180.resolution,
   VideoPresets.h360.resolution,
@@ -231,27 +252,44 @@ const LAYER_DIMS = [
   VideoPresets.h1080.resolution,
 ] as const;
 
+/** Highest layer index — host + large/featured tiles (1080p). */
+export const HD_LAYER_INDEX = 3;
+
 /**
  * Ask LiveKit for the best simulcast layer per visible gallery slot.
+ * Host always gets 1080p 16:9 (quality-capped). Other HD slots also prefer 1080p.
  * Dimensions take precedence over adaptiveStream's CSS-tile estimate; the SFU
  * still steps down when bandwidth cannot sustain the request.
- * `connectionQuality` further caps layers when the local link is congested.
  */
 export function applyRemoteSimulcastPreferences(
   room: Room,
   visibleOrderedIds: string[],
   tier: GalleryVideoTier,
   connectionQuality: ConnectionQuality = ConnectionQuality.Unknown,
+  opts?: { hostParticipantId?: string },
 ): void {
   const qualityCap = receiveLayerCapForQuality(connectionQuality);
   const visible = new Set(visibleOrderedIds);
+  const hostId = opts?.hostParticipantId;
   let slot = 0;
 
+  const setLayer = (participant: RemoteParticipant, layer: number) => {
+    const pub = cameraPublication(participant);
+    if (!pub) return;
+    const capped = Math.min(layer, LAYER_DIMS.length - 1, qualityCap);
+    pub.setVideoDimensions(LAYER_DIMS[capped]);
+  };
+
+  // Host first — always 1080p 16:9 when link allows (large / stage spotlight).
+  if (hostId && visible.has(hostId)) {
+    const host = room.remoteParticipants.get(hostId);
+    if (host) setLayer(host, HD_LAYER_INDEX);
+  }
+
   for (const identity of visibleOrderedIds) {
+    if (hostId && identity === hostId) continue;
     const participant = room.remoteParticipants.get(identity);
     if (!participant) continue;
-    const pub = cameraPublication(participant);
-    if (!pub) continue;
 
     const layer = Math.min(
       substreamForVideoSlot(slot, tier),
@@ -259,8 +297,7 @@ export function applyRemoteSimulcastPreferences(
       qualityCap,
     );
     slot += 1;
-    // Prefer HD for small rooms (gallery HD slots); medium/low for large galleries.
-    pub.setVideoDimensions(LAYER_DIMS[layer]);
+    setLayer(participant, layer);
   }
 
   for (const participant of room.remoteParticipants.values()) {

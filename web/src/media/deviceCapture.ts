@@ -1,7 +1,7 @@
 /**
  * Detect capture device class before getUserMedia so we request:
- * - mobile phone → full-sensor portrait 720×1280 or landscape 1280×720 (no hardware crop)
- * - tablet + laptop → landscape 1280×720
+ * - mobile phone → portrait 720×1280 (9:16) when upright; landscape when sideways
+ * - tablet + laptop → landscape 1920×1080 (1080p 16:9)
  */
 
 export type CaptureDeviceClass = "mobile" | "tablet" | "laptop";
@@ -9,8 +9,11 @@ export type CaptureDeviceClass = "mobile" | "tablet" | "laptop";
 /** Phone upright target — 720×1280 (9:16). */
 export const PORTRAIT_CAPTURE = { width: 720, height: 1280 } as const;
 
-/** Tablet / laptop / phone landscape target — 1280×720 (16:9). */
-export const LANDSCAPE_CAPTURE = { width: 1280, height: 720 } as const;
+/** Phone landscape target — 1280×720 (16:9). */
+export const MOBILE_LANDSCAPE_CAPTURE = { width: 1280, height: 720 } as const;
+
+/** Tablet / laptop publish target — 1920×1080 (16:9 1080p). */
+export const LANDSCAPE_CAPTURE = { width: 1920, height: 1080 } as const;
 
 function hasCoarsePointer(): boolean {
   return (
@@ -83,8 +86,8 @@ export function isHandheldCaptureDevice(device = detectCaptureDeviceClass()): bo
 
 /**
  * Capture size for this device:
- * - Mobile phone → match current orientation (portrait 9:16 / landscape 16:9)
- * - Tablet + laptop → landscape 1280×720
+ * - Mobile phone → portrait 720×1280 when upright; landscape 1280×720 when sideways
+ * - Tablet + laptop → 1920×1080
  */
 export function resolveCaptureDimensions(device = detectCaptureDeviceClass()): {
   width: number;
@@ -105,8 +108,8 @@ export function resolveCaptureDimensions(device = detectCaptureDeviceClass()): {
       };
     }
     return {
-      width: LANDSCAPE_CAPTURE.width,
-      height: LANDSCAPE_CAPTURE.height,
+      width: MOBILE_LANDSCAPE_CAPTURE.width,
+      height: MOBILE_LANDSCAPE_CAPTURE.height,
       portrait: false,
       aspectRatio: 16 / 9,
       device,

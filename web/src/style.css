@@ -45,21 +45,25 @@
   --pk-radius: 10px;
   --pk-shadow: 0 2px 12px rgba(15, 23, 42, 0.08);
 
-  /* ── Room side panel (shared; themes override on .rsp) ── */
-  --rsp-ink: #e8eef4;
-  --rsp-ink-dim: #8490a3;
-  --rsp-paper: rgba(12, 18, 26, 0.92);
-  --rsp-paper-2: rgba(16, 22, 32, 0.88);
-  --rsp-line: rgba(255, 255, 255, 0.08);
-  --rsp-line-strong: rgba(61, 207, 182, 0.28);
-  --rsp-accent: #3dcfb6;
-  --rsp-accent-deep: #1f9e8a;
-  --rsp-accent-soft: rgba(61, 207, 182, 0.14);
-  --rsp-self: rgba(31, 158, 138, 0.18);
-  --rsp-self-border: rgba(61, 207, 182, 0.32);
+  /* ── Room side panel (white floating chat) ── */
+  --rsp-ink: #111827;
+  --rsp-ink-dim: #6b7280;
+  --rsp-paper: #ffffff;
+  --rsp-paper-2: #f4f6f8;
+  --rsp-line: rgba(17, 24, 39, 0.08);
+  --rsp-line-strong: rgba(17, 24, 39, 0.12);
+  --rsp-accent: #12b89a;
+  --rsp-accent-deep: #0d9a82;
+  --rsp-accent-soft: rgba(18, 184, 154, 0.12);
+  --rsp-self: #12b89a;
+  --rsp-self-border: rgba(18, 184, 154, 0.22);
+  --rsp-badge: #22c55e;
   --rsp-font: "Outfit", "Segoe UI", sans-serif;
   --rsp-display: "Sora", "Outfit", sans-serif;
-  --rsp-radius: 18px;
+  --rsp-radius: 22px;
+  --meeting-sidebar-width: 352px;
+  --chat-gutter: 28px;
+  --stage-side-gutter: calc(var(--meeting-sidebar-width) / 2);
 
   font-family: "Outfit", "Segoe UI", sans-serif;
   line-height: 1.5;
@@ -412,11 +416,12 @@ h1, h2, h3, h4 {
 
 .meeting-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(300px, 380px);
+  grid-template-columns: minmax(0, 1fr);
   gap: 0.75rem;
   flex: 1;
   min-height: 0;
   align-items: stretch;
+  position: relative;
 }
 
 .meeting-stage {
@@ -533,6 +538,10 @@ h1, h2, h3, h4 {
   background: var(--tile-bg, #ffffff);
 }
 
+.meeting-app.stage-theme-dark .mm-stage {
+  background: #0b1220;
+}
+
 .meeting-app.stage-theme-light .video-stage .video-tile.is-speaking,
 .meeting-app.stage-theme-light .video-featured .video-tile {
   border-color: var(--tile-speak, #1a73e8);
@@ -561,19 +570,19 @@ h1, h2, h3, h4 {
 /* --- Video stage - Breathing Mosaic (equal tiles, aspect-aware) --- */
 .video-stage {
   --stage-gap: 8px;
-  --stage-pad-x: 12px;
+  --stage-pad-x: var(--stage-side-gutter, 170px);
   --stage-pad-y: 12px;
   --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px));
-  --tile-radius: 16px;
-  --tile-bg: #ffffff;
-  --tile-border: rgba(15, 23, 42, 0.08);
-  --tile-shadow: 0 2px 10px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.06);
+  --tile-radius: 14px;
+  --tile-bg: #0b1220;
+  --tile-border: transparent;
+  --tile-shadow: none;
   --tile-speak: #1a73e8;
-  --tile-label: #0f172a;
-  --tile-label-bg: rgba(255, 255, 255, 0.88);
-  --tile-muted-bg: #f1f5f9;
+  --tile-label: #f8fafc;
+  --tile-label-bg: rgba(15, 23, 42, 0.72);
+  --tile-muted-bg: #151b2b;
   --tile-feed-fallback: transparent;
-  --stage-empty-border: rgba(15, 23, 42, 0.12);
+  --stage-empty-border: rgba(255, 255, 255, 0.12);
   --mosaic-cols: 1;
   display: grid;
   gap: var(--stage-gap);
@@ -585,7 +594,7 @@ h1, h2, h3, h4 {
   padding: var(--stage-pad-y) var(--stage-pad-x) var(--stage-pad-bottom);
   overflow: hidden;
   box-sizing: border-box;
-  background: var(--tile-bg, #ffffff);
+  background: #ffffff;
   contain-intrinsic-size: 1px 1px;
   place-items: stretch;
   align-content: stretch;
@@ -635,10 +644,7 @@ h1, h2, h3, h4 {
   .video-stage[data-layout="mosaic"][data-count="1"],
   .video-stage[data-layout="mosaic"].has-featured .mosaic-featured-row,
   .video-stage[data-layout="mosaic"].has-featured .mosaic-peers,
-  .video-stage.equal-grid,
-  .video-stage.jitsi-grid,
-  .video-stage.layout-active-speaker,
-  .video-stage.layout-stage {
+  .mm-stage {
     container-type: size;
   }
 }
@@ -1547,16 +1553,7 @@ h1, h2, h3, h4 {
   display: none;
 }
 
-.chat-panel.side-panel {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.chat-panel .side-panel-body {
-  overflow: hidden;
-}
-
-/* ── Room side panel: chat + participants ── */
+/* ── Room side panel: white chat + people ── */
 .rsp {
   flex: 1 1 auto;
   min-height: 0;
@@ -1564,25 +1561,89 @@ h1, h2, h3, h4 {
   flex-direction: column;
   font-family: var(--rsp-font);
   color: var(--rsp-ink);
-  background:
-    radial-gradient(ellipse 80% 40% at 50% 0%, rgba(31, 158, 138, 0.1), transparent 55%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.03), transparent 24%),
-    var(--rsp-paper);
-  border: 1px solid var(--rsp-line);
+  background: var(--rsp-paper);
+  border: 1px solid rgba(255, 255, 255, 0.85);
   border-radius: var(--rsp-radius);
-  backdrop-filter: blur(16px);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 18px 50px rgba(15, 23, 42, 0.1),
+    0 4px 16px rgba(15, 23, 42, 0.05);
   overflow: hidden;
 }
 
 .rsp-head {
   flex-shrink: 0;
-  border-bottom: 1px solid var(--rsp-line);
+  display: flex;
+  flex-direction: column;
+  padding: 0.85rem 1rem 0;
+  border-bottom: none;
+  background: #fff;
+}
+
+.rsp-solo-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.1rem;
+}
+
+.rsp-solo-title svg {
+  flex: 0 0 auto;
+  color: var(--rsp-accent);
+}
+
+.rsp-solo-title h2 {
+  margin: 0;
+  flex: 1 1 auto;
+  font-family: var(--rsp-display);
+  font-size: 1.12rem;
+  font-weight: 720;
+  letter-spacing: -0.03em;
+  color: var(--rsp-ink);
+}
+
+.rsp-live-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.35rem;
+  height: 1.35rem;
+  padding: 0 0.38rem;
+  border-radius: 999px;
+  background: var(--rsp-badge);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.35);
+}
+
+.rsp-close {
+  margin-left: 0.15rem;
+  width: 2rem;
+  height: 2rem;
+  border: none;
+  border-radius: 999px;
   background: var(--rsp-paper-2);
+  color: var(--rsp-ink-dim);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
+}
+
+.rsp-close:hover {
+  background: #eceff3;
+  color: var(--rsp-ink);
+  transform: scale(1.04);
 }
 
 .rsp-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  align-items: stretch;
+  gap: 0.1rem;
+  margin: 0.3rem -0.25rem 0;
+  border-bottom: 1px solid var(--rsp-line);
 }
 
 .rsp-tab {
@@ -1590,51 +1651,52 @@ h1, h2, h3, h4 {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
+  gap: 0.4rem;
   margin: 0;
   border: none;
   border-radius: 0;
-  padding: 0.85rem 0.75rem 0.75rem;
+  padding: 0.62rem 0.85rem 0.72rem;
   background: transparent;
   color: var(--rsp-ink-dim);
   font-family: var(--rsp-font);
-  font-size: 0.78rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 780;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
-  transition: color 160ms ease, background 160ms ease;
+  transition: color 160ms ease;
 }
 
 .rsp-tab:hover {
   color: var(--rsp-ink);
-  background: rgba(255, 255, 255, 0.04);
+  background: transparent;
 }
 
 .rsp-tab.is-active {
-  color: var(--rsp-accent);
+  color: var(--rsp-accent-deep);
 }
 
 .rsp-tab.is-active::after {
   content: "";
   position: absolute;
-  left: 20%;
-  right: 20%;
-  bottom: 0;
-  height: 2px;
-  border-radius: 2px 2px 0 0;
-  background: linear-gradient(90deg, var(--rsp-accent-deep), var(--rsp-accent));
+  left: 0.7rem;
+  right: 0.7rem;
+  bottom: -1px;
+  height: 2.5px;
+  border-radius: 99px;
+  background: var(--rsp-accent);
 }
 
 .rsp-tab-count {
-  min-width: 1.25rem;
-  height: 1.15rem;
-  padding: 0 0.35rem;
+  min-width: 1.1rem;
+  height: 1.1rem;
+  padding: 0 0.28rem;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--rsp-ink);
-  font-size: 0.68rem;
-  font-weight: 700;
+  background: var(--rsp-paper-2);
+  border: none;
+  color: var(--rsp-ink-dim);
+  font-size: 0.62rem;
+  font-weight: 800;
   letter-spacing: 0;
   text-transform: none;
   display: inline-flex;
@@ -1644,8 +1706,8 @@ h1, h2, h3, h4 {
 
 .rsp-tab.is-active .rsp-tab-count {
   background: var(--rsp-accent-soft);
-  color: var(--rsp-accent);
-  border: 1px solid rgba(61, 207, 182, 0.35);
+  color: var(--rsp-accent-deep);
+  border-color: transparent;
 }
 
 .rsp-body {
@@ -1655,46 +1717,54 @@ h1, h2, h3, h4 {
   flex-direction: column;
   justify-content: flex-start;
   overflow: hidden;
+  background: #fff;
 }
 
 .rsp-lanes {
   display: flex;
-  gap: 0;
+  gap: 0.4rem;
   overflow-x: auto;
   flex-shrink: 0;
-  border-bottom: 1px solid var(--rsp-line);
-  scrollbar-width: thin;
+  padding: 0.7rem 0.95rem 0.55rem;
+  border-bottom: none;
+  background: #fff;
+  scrollbar-width: none;
+}
+
+.rsp-lanes::-webkit-scrollbar {
+  display: none;
 }
 
 .rsp-lane {
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
+  gap: 0.35rem;
   flex-shrink: 0;
   margin: 0;
-  border: none;
-  border-right: 1px solid var(--rsp-line);
-  border-radius: 0;
-  background: transparent;
+  border: 1px solid var(--rsp-line);
+  border-radius: 999px;
+  background: var(--rsp-paper-2);
   color: var(--rsp-ink-dim);
-  padding: 0.55rem 0.85rem;
+  padding: 0.35rem 0.75rem;
   font-family: var(--rsp-font);
   font-size: 0.78rem;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
-  transition: color 160ms ease, background 160ms ease;
+  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
 
 .rsp-lane:hover {
   color: var(--rsp-ink);
-  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--rsp-line-strong);
+  background: #fff;
 }
 
 .rsp-lane.is-active {
-  color: var(--rsp-accent);
-  background: var(--rsp-accent-soft);
-  box-shadow: inset 0 -2px 0 var(--rsp-accent);
+  color: #fff;
+  background: var(--rsp-accent);
+  border-color: var(--rsp-accent);
+  box-shadow: 0 8px 16px rgba(18, 184, 154, 0.28);
 }
 
 .rsp-lane-mark {
@@ -1707,7 +1777,7 @@ h1, h2, h3, h4 {
   font-size: 0.58rem;
   font-weight: 700;
   color: #fff;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
 }
 
 .rsp-lane-label {
@@ -1720,7 +1790,7 @@ h1, h2, h3, h4 {
   min-width: 1rem;
   height: 1rem;
   border-radius: 999px;
-  background: linear-gradient(135deg, #e53945, #c62828);
+  background: #e53945;
   color: #fff;
   font-size: 0.62rem;
   font-weight: 700;
@@ -1737,7 +1807,7 @@ h1, h2, h3, h4 {
   flex-shrink: 0;
   padding: 0.65rem 0.85rem;
   border-bottom: 1px solid var(--rsp-line);
-  background: rgba(31, 158, 138, 0.1);
+  background: var(--rsp-accent-soft);
 }
 
 .rsp-dm-copy {
@@ -1750,7 +1820,7 @@ h1, h2, h3, h4 {
 
 .rsp-dm-copy strong {
   font-family: var(--rsp-display);
-  font-size: 0.95rem;
+  font-size: 0.9rem;
   font-weight: 650;
   color: var(--rsp-ink);
   line-height: 1.15;
@@ -1768,7 +1838,7 @@ h1, h2, h3, h4 {
   margin: 0;
   color: var(--rsp-accent);
   font-family: var(--rsp-font);
-  font-size: 0.75rem;
+  font-size: 0.78rem;
   font-weight: 650;
   cursor: pointer;
   white-space: nowrap;
@@ -1792,61 +1862,82 @@ h1, h2, h3, h4 {
   overflow-x: hidden;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  padding: 0.5rem 0.65rem;
+  gap: 0.85rem;
+  padding: 0.7rem 0.95rem 0.9rem;
+  background:
+    radial-gradient(120% 42% at 50% -8%, rgba(18, 184, 154, 0.07), transparent 58%),
+    linear-gradient(180deg, #f7f8fa 0%, #ffffff 40%);
   scrollbar-width: thin;
 }
 
 .rsp-empty {
-  padding: 2rem 1.1rem;
+  margin: auto;
+  padding: 1.5rem 1rem;
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.rsp-empty-icon {
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--rsp-accent-soft);
+  color: var(--rsp-accent);
+  margin-bottom: 0.25rem;
 }
 
 .rsp-empty p {
   margin: 0;
   font-family: var(--rsp-display);
   font-size: 0.95rem;
-  font-weight: 600;
-  line-height: 1.4;
+  font-weight: 650;
+  line-height: 1.35;
+  color: var(--rsp-ink);
+}
+
+.rsp-empty-hint {
+  font-size: 0.8rem;
   color: var(--rsp-ink-dim);
+  line-height: 1.4;
+  max-width: 16rem;
 }
 
 .rsp-msg {
   display: grid;
-  grid-template-columns: 2.15rem minmax(0, 1fr);
-  gap: 0.65rem;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  gap: 0.55rem;
   align-items: start;
-  padding: 0.55rem 0.65rem;
-  border-radius: 14px;
-  border: 1px solid transparent;
-  transition: background 160ms ease, border-color 160ms ease;
+  max-width: 100%;
 }
 
 .rsp-msg.is-other {
-  background: rgba(255, 255, 255, 0.02);
+  align-self: stretch;
 }
 
 .rsp-msg.is-self {
-  background: linear-gradient(135deg, rgba(31, 158, 138, 0.22), rgba(61, 207, 182, 0.1));
-  border-color: var(--rsp-self-border);
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-self: stretch;
+  max-width: 100%;
 }
 
-.rsp-msg:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.rsp-msg.is-self:hover {
-  background: linear-gradient(135deg, rgba(31, 158, 138, 0.28), rgba(61, 207, 182, 0.14));
+.rsp-msg.is-self .rsp-msg-main {
+  align-items: flex-start;
 }
 
 .rsp-face {
-  width: 2.15rem;
-  height: 2.15rem;
+  width: 2rem;
+  height: 2rem;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: none;
   color: #fff;
   font-family: var(--rsp-font);
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   display: inline-flex;
@@ -1855,6 +1946,7 @@ h1, h2, h3, h4 {
   flex-shrink: 0;
   padding: 0;
   cursor: pointer;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
 }
 
 button.rsp-face:disabled {
@@ -1868,21 +1960,14 @@ button.rsp-face:disabled {
 }
 
 .rsp-face-self {
-  background: rgba(31, 158, 138, 0.35);
-  border-color: rgba(61, 207, 182, 0.4);
-  color: var(--rsp-accent);
-  font-size: 0.58rem;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: default;
+  display: inline-flex;
 }
 
 .rsp-msg-main {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.22rem;
-  padding-top: 0.05rem;
+  gap: 0.2rem;
 }
 
 .rsp-msg-meta {
@@ -1890,6 +1975,7 @@ button.rsp-face:disabled {
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
+  padding: 0 0.15rem;
 }
 
 .rsp-msg-name {
@@ -1897,8 +1983,8 @@ button.rsp-face:disabled {
   background: none;
   padding: 0;
   margin: 0;
-  font-family: var(--rsp-display);
-  font-size: 0.92rem;
+  font-family: var(--rsp-font);
+  font-size: 0.78rem;
   font-weight: 650;
   line-height: 1.15;
   color: var(--rsp-ink);
@@ -1917,29 +2003,50 @@ button.rsp-face:disabled {
 .rsp-msg-name:disabled,
 .rsp-msg-name.is-you {
   cursor: default;
-  color: var(--rsp-accent);
-  font-size: 0.78rem;
-  font-family: var(--rsp-font);
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .rsp-msg-time {
   flex-shrink: 0;
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   color: var(--rsp-ink-dim);
   font-variant-numeric: tabular-nums;
 }
 
+.rsp-bubble {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.62rem 0.88rem;
+  border-radius: 16px;
+  background: #fff;
+  border: none;
+  box-shadow: none;
+}
+
+.rsp-msg.is-other .rsp-bubble {
+  border-radius: 16px;
+  background: #eef1f4;
+  border-color: transparent;
+}
+
+.rsp-msg.is-self .rsp-bubble {
+  border-radius: 16px;
+  background: linear-gradient(180deg, #1fd0b0 0%, var(--rsp-accent-deep) 100%);
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(18, 184, 154, 0.22);
+}
+
 .rsp-msg-body {
   margin: 0;
-  font-size: 0.86rem;
+  font-size: 0.88rem;
   font-weight: 450;
   line-height: 1.45;
   color: var(--rsp-ink);
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+.rsp-msg.is-self .rsp-msg-body {
+  color: #fff;
 }
 
 .rsp-composer {
@@ -1948,9 +2055,9 @@ button.rsp-face:disabled {
   gap: 0.55rem;
   align-items: center;
   flex-shrink: 0;
-  padding: 0.75rem 0.85rem 0.9rem;
+  padding: 0.8rem 0.9rem 0.95rem;
   border-top: 1px solid var(--rsp-line);
-  background: var(--rsp-paper-2);
+  background: linear-gradient(180deg, #fafbfc 0%, #fff 100%);
 }
 
 .rsp-composer input {
@@ -1958,14 +2065,14 @@ button.rsp-face:disabled {
   min-width: 0;
   border: 1px solid var(--rsp-line);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--rsp-paper-2);
   color: var(--rsp-ink);
-  padding: 0.6rem 0.95rem;
+  padding: 0.75rem 1rem;
   font-family: var(--rsp-font);
-  font-size: 0.88rem;
+  font-size: 0.9rem;
   line-height: 1.35;
   outline: none;
-  transition: border-color 160ms ease, box-shadow 160ms ease;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
 .rsp-composer input::placeholder {
@@ -1973,35 +2080,41 @@ button.rsp-face:disabled {
 }
 
 .rsp-composer input:focus {
-  border-color: var(--rsp-accent);
-  box-shadow: 0 0 0 2px rgba(61, 207, 182, 0.18);
+  border-color: rgba(18, 184, 154, 0.45);
+  background: #fff;
+  box-shadow: 0 0 0 3px var(--rsp-accent-soft);
 }
 
 .rsp-composer button {
   border: none;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--rsp-accent-deep) 0%, var(--rsp-accent) 100%);
-  color: #062018;
-  min-width: 4.25rem;
-  height: 2.35rem;
-  padding: 0 1rem;
+  background: linear-gradient(180deg, #1fd0b0 0%, var(--rsp-accent-deep) 100%);
+  color: #fff;
+  width: auto;
+  height: 2.65rem;
+  min-width: 4.7rem;
+  padding: 0 1.05rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   font-family: var(--rsp-font);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   cursor: pointer;
-  box-shadow: 0 4px 14px rgba(31, 158, 138, 0.35);
-  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease;
+  box-shadow: 0 10px 18px rgba(18, 184, 154, 0.28);
+  transition: transform 160ms ease, box-shadow 160ms ease, opacity 160ms ease, background 160ms ease;
 }
 
 .rsp-composer button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #24d8b8 0%, #0c8f79 100%);
   transform: translateY(-1px);
-  box-shadow: 0 6px 18px rgba(61, 207, 182, 0.4);
+  box-shadow: 0 12px 22px rgba(18, 184, 154, 0.35);
 }
 
 .rsp-composer button:disabled {
-  opacity: 0.4;
+  opacity: 0.35;
   cursor: not-allowed;
   transform: none;
   box-shadow: none;
@@ -2026,7 +2139,7 @@ button.rsp-face:disabled {
   width: 100%;
   border: 1px solid var(--rsp-line);
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--rsp-paper-2);
   color: var(--rsp-ink);
   padding: 0.55rem 0.85rem;
   font-family: var(--rsp-font);
@@ -2040,14 +2153,15 @@ button.rsp-face:disabled {
 }
 
 .rsp-search input:focus {
-  border-color: var(--rsp-accent);
-  box-shadow: 0 0 0 2px rgba(61, 207, 182, 0.16);
+  border-color: rgba(59, 102, 245, 0.45);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(59, 102, 245, 0.12);
 }
 
 .rsp-tool-btn {
   border: 1px solid var(--rsp-line);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.03);
+  background: #fff;
   color: var(--rsp-ink);
   padding: 0 0.75rem;
   font-family: var(--rsp-font);
@@ -2060,14 +2174,14 @@ button.rsp-face:disabled {
 }
 
 .rsp-tool-btn:hover:not(:disabled) {
-  border-color: var(--rsp-accent);
+  border-color: rgba(59, 102, 245, 0.35);
   color: var(--rsp-accent);
   background: var(--rsp-accent-soft);
 }
 
 .rsp-tool-btn.active {
-  border-color: rgba(61, 207, 182, 0.45);
-  background: rgba(31, 158, 138, 0.22);
+  border-color: rgba(59, 102, 245, 0.35);
+  background: var(--rsp-accent-soft);
   color: var(--rsp-accent);
 }
 
@@ -2089,7 +2203,7 @@ button.rsp-face:disabled {
   padding: 0.6rem 0.75rem;
   border-left: 2px solid var(--rsp-accent);
   border-radius: 0 12px 12px 0;
-  background: rgba(31, 158, 138, 0.1);
+  background: var(--rsp-accent-soft);
 }
 
 .rsp-queue-label {
@@ -2121,7 +2235,7 @@ button.rsp-face:disabled {
   width: 1.1rem;
   height: 1.1rem;
   border-radius: 50%;
-  background: rgba(61, 207, 182, 0.2);
+  background: rgba(59, 102, 245, 0.14);
   color: var(--rsp-accent);
   font-size: 0.68rem;
   font-weight: 700;
@@ -2181,17 +2295,19 @@ button.rsp-face:disabled {
   height: auto;
   min-height: 0;
   flex: 0 0 auto;
-  padding: 0.7rem 0.9rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  margin: 0.2rem 0.55rem;
+  padding: 0.7rem 0.75rem;
+  border-bottom: none;
+  border-radius: 14px;
   transition: background 160ms ease;
 }
 
 .rsp-person:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--rsp-paper-2);
 }
 
 .rsp-person.is-self {
-  background: rgba(31, 158, 138, 0.12);
+  background: var(--rsp-accent-soft);
 }
 
 .rsp-person-copy {
@@ -2316,15 +2432,6 @@ button.rsp-person-name:hover {
 .rsp-more:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-/* Legacy standalone ChatPanel / ParticipantsPanel (unused in room shell) */
-.chat-panel.side-panel {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.chat-panel .side-panel-body {
-  overflow: hidden;
 }
 
 .sr-only {
@@ -3862,7 +3969,7 @@ html:has(.auth-page) body {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 5;
+  z-index: 8;
   pointer-events: none;
   display: flex;
   justify-content: center;
@@ -4026,29 +4133,57 @@ html:has(.auth-page) body {
 
 .meeting-app.meeting-v2 .host-end-row .btn-danger {
   width: 100%;
-  border-radius: 12px;
+  border-radius: 999px;
+}
+
+.meeting-app.meeting-light .host-end-row {
+  padding: 0;
+}
+
+.meeting-app.meeting-light .host-end-row .btn-danger {
+  height: 2.45rem;
+  font-weight: 700;
+  box-shadow: 0 10px 20px rgba(229, 57, 69, 0.18);
 }
 
 @media (max-width: 960px) {
   .meeting-app.meeting-v2 .meeting-v2-control-bar-wrap {
     position: fixed;
-    left: 50%;
-    transform: translateX(-50%);
-    width: calc(100% - 1.25rem);
-    max-width: 520px;
-    bottom: calc(0.35rem + env(safe-area-inset-bottom, 0));
-    padding: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    /* Bar sits in the padded area above system nav (matches mobile-view.jpg) */
+    padding: 0.4rem max(0.65rem, env(safe-area-inset-left, 0px))
+      max(0.45rem, env(safe-area-inset-bottom, 0px))
+      max(0.65rem, env(safe-area-inset-right, 0px));
+    box-sizing: border-box;
+    z-index: 80;
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
   }
 
   .meeting-app.meeting-v2 .meeting-v2-control-bar {
     width: 100%;
+    max-width: 420px;
     justify-content: center;
     flex-wrap: nowrap;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.4rem 0.55rem;
+    border-radius: 999px;
+    max-height: none;
+    box-sizing: border-box;
+    pointer-events: auto;
   }
 
   .meeting-app.meeting-v2 .meeting-stage .conference-root,
   .meeting-app.meeting-v2 .meeting-stage .lk-room-container {
-    padding-bottom: 5.5rem;
+    padding-bottom: calc(var(--dock-height, 4.75rem) + env(safe-area-inset-bottom, 0px));
   }
 
   .meeting-app.meeting-v2 .video-filmstrip {
@@ -4075,17 +4210,17 @@ html:has(.auth-page) body {
     display: none;
   }
 
-  /* Horizontal tool row + End Call centered underneath (not a vertical button stack) */
+  /* Single-row dock like mobile-view.jpg — tools + End on one line above system nav */
   .meeting-v2-control-bar {
-    flex-direction: column;
+    flex-direction: row;
     flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
-    gap: 0.4rem;
-    padding: 0.5rem 0.55rem 0.55rem;
-    border-radius: 22px;
+    gap: 0.3rem;
+    padding: 0.35rem 0.45rem;
+    border-radius: 999px;
     width: 100%;
-    max-width: calc(100vw - 1.25rem);
+    max-width: min(420px, calc(100vw - 1.25rem));
   }
 
   .meeting-v2-ctrl-main,
@@ -4095,16 +4230,20 @@ html:has(.auth-page) body {
     flex-wrap: nowrap;
     align-items: center;
     justify-content: center;
-    gap: 0.28rem;
-    width: 100%;
+    gap: 0.22rem;
+    min-height: 0;
+    width: auto;
   }
 
   .meeting-v2-ctrl-main {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow-x: auto;
     overflow-y: hidden;
     scrollbar-width: none;
     -webkit-overflow-scrolling: touch;
-    padding: 0.1rem 0.15rem;
+    padding: 0;
+    justify-content: flex-start;
   }
 
   .meeting-v2-ctrl-main::-webkit-scrollbar {
@@ -4112,32 +4251,34 @@ html:has(.auth-page) body {
   }
 
   .meeting-v2-ctrl-end-row {
+    flex: 0 0 auto;
     justify-content: center;
-    padding-top: 0.05rem;
+    padding-top: 0;
   }
 
   .meeting-v2-ctrl-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
     flex: 0 0 auto;
   }
 
   .meeting-v2-ctrl-end {
-    min-width: 120px;
-    width: auto;
-    height: 40px;
-    border-radius: 999px;
-    padding: 0 1.1rem;
-    margin-left: 0;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    margin-left: 0.15rem;
   }
 
   .meeting-v2-ctrl-end .meeting-v2-end-label {
-    display: inline;
+    display: none;
   }
 
   .meeting-app.meeting-v2 .meeting-stage .conference-root,
   .meeting-app.meeting-v2 .meeting-stage .lk-room-container {
-    padding-bottom: 7rem;
+    padding-bottom: calc(var(--dock-height, 4.75rem) + env(safe-area-inset-bottom, 0px));
   }
 
   .meeting-app.meeting-v2 .video-filmstrip .video-tile {
@@ -4260,10 +4401,183 @@ html:has(.auth-page) body {
   padding: 0.45rem 1rem;
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(59, 102, 245, 0.28);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .meeting-app.meeting-light .meeting-v2-share:hover {
   filter: brightness(1.05);
+}
+
+.meeting-app.meeting-light .meeting-v2-share.is-open {
+  filter: brightness(1.08);
+  box-shadow: 0 0 0 2px rgba(59, 102, 245, 0.35);
+}
+
+.meeting-v2-share-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Compact share / invite popover */
+.mm-share-pop {
+  position: absolute;
+  top: calc(100% + 0.45rem);
+  right: 0;
+  z-index: 40;
+  width: min(18.5rem, calc(100vw - 1.5rem));
+  padding: 0.75rem 0.8rem 0.85rem;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.16);
+  color: var(--mm-ink, #0f172a);
+}
+
+.mm-share-pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.55rem;
+}
+
+.mm-share-pop-title {
+  margin: 0;
+  font-family: "Sora", "Outfit", sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.mm-share-pop-close {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 1.25rem;
+  line-height: 1;
+  padding: 0.1rem 0.35rem;
+  cursor: pointer;
+  opacity: 0.65;
+}
+
+.mm-share-pop-close:hover {
+  opacity: 1;
+}
+
+.mm-share-pop-form,
+.mm-share-pop-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mm-share-pop-result {
+  margin-top: 0.65rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.mm-share-pop-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--mm-ink-dim, #64748b);
+}
+
+.mm-share-pop-input {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  color: inherit;
+  background: #f8fafc;
+}
+
+.mm-share-pop-input:focus {
+  outline: none;
+  border-color: rgba(59, 102, 245, 0.55);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(59, 102, 245, 0.15);
+}
+
+.mm-share-pop-link {
+  font-size: 0.72rem;
+  min-width: 0;
+}
+
+.mm-share-pop-btn,
+.mm-share-pop-copy {
+  border: none;
+  border-radius: 8px;
+  background: var(--mm-blue, #3b66f5);
+  color: #fff;
+  font-family: inherit;
+  font-weight: 650;
+  font-size: 0.8rem;
+  padding: 0.42rem 0.7rem;
+  cursor: pointer;
+}
+
+.mm-share-pop-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.mm-share-pop-row {
+  display: flex;
+  gap: 0.35rem;
+  align-items: stretch;
+}
+
+.mm-share-pop-row .mm-share-pop-input {
+  flex: 1;
+}
+
+.mm-share-pop-copy {
+  flex-shrink: 0;
+  padding-inline: 0.65rem;
+}
+
+.mm-share-pop-room {
+  margin: 0.15rem 0 0;
+  font-size: 0.74rem;
+  color: var(--mm-ink-dim, #64748b);
+}
+
+.mm-share-pop-room code {
+  font-size: 0.72rem;
+  word-break: break-all;
+}
+
+.mm-share-pop-error {
+  margin: 0.45rem 0 0;
+  font-size: 0.75rem;
+  color: #b91c1c;
+}
+
+@media (max-width: 960px) {
+  .mm-share-pop {
+    position: fixed;
+    top: auto;
+    right: auto;
+    left: 50%;
+    bottom: calc(var(--dock-height, 5.75rem) + 0.75rem);
+    transform: translateX(-50%);
+    width: min(18.5rem, calc(100vw - 1.5rem));
+  }
+}
+
+.join-meeting-title {
+  margin: -0.35rem 0 0.85rem;
+  font-family: "Sora", "Outfit", sans-serif;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--mm-blue, #3b66f5);
 }
 
 .meeting-app.meeting-light .meeting-v2-avatar {
@@ -4275,7 +4589,6 @@ html:has(.auth-page) body {
 }
 
 .meeting-app.meeting-light .meeting-body {
-  grid-template-columns: minmax(0, 1fr);
   position: relative;
   padding: 0;
   gap: 0;
@@ -4303,11 +4616,77 @@ html:has(.auth-page) body {
   --tile-muted-bg: #f1f5f9;
 }
 
-.meeting-app.meeting-light .video-stage .video-tile {
-  background: var(--tile-bg);
-  border-color: var(--tile-border);
-  border-radius: var(--tile-radius, 16px);
-  box-shadow: var(--tile-shadow);
+/* Immersive / stage grids keep side gutters (= half chat width) + rounded tiles */
+.meeting-app.meeting-light .mm-stage {
+  --stage-pad-x: var(--stage-side-gutter, 170px);
+  --stage-pad-y: 12px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 12px);
+  --stage-gap: 8px;
+  --tile-radius: 12px;
+  --tile-border: transparent;
+  --tile-shadow: none;
+  --tile-bg: #0f172a;
+  background: #ffffff;
+}
+
+.meeting-app.meeting-light .mm-stage--small {
+  --stage-pad-x: max(1.25rem, calc(var(--stage-side-gutter, 170px) * 0.45));
+  --stage-gap: 12px;
+  --tile-radius: 14px;
+}
+
+.meeting-app.meeting-light .mm-stage--equal.mm-stage--locked,
+.meeting-app.meeting-light .mm-stage--host.mm-stage--locked {
+  --stage-pad-x: 0px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Chat/participants panel open: inset ALL stages so tiles never meet the chat panel. */
+.meeting-app.meeting-light.sidebar-open:not(.viewport-mobile-portrait):not(.viewport-mobile-landscape) {
+  --stage-right-inset: var(--meeting-sidebar-width, 352px);
+}
+
+.meeting-app.meeting-light.sidebar-open:not(.viewport-mobile-portrait):not(.viewport-mobile-landscape)
+  .mm-stage:not(.mm-stage--gallery) {
+  padding-right: calc(
+    var(--stage-pad-x, 16px) + var(--chat-gutter, 28px) + var(--stage-right-inset, 0px)
+  );
+}
+
+.meeting-app.meeting-light.sidebar-open:not(.viewport-mobile-portrait):not(.viewport-mobile-landscape)
+  .meeting-sidebar {
+  right: var(--stage-pad-x, 16px);
+}
+
+.meeting-app.meeting-light .mm-stage--filmstrip-row,
+.meeting-app.meeting-light .mm-stage--filmstrip.mm-stage--filmstrip-row {
+  --stage-pad-x: max(12px, calc(var(--stage-side-gutter, 170px) * 0.35));
+  --stage-side-gutter: var(--stage-pad-x);
+}
+
+/* Mobile fill-bleed wins over desktop white stage chrome */
+.meeting-app.meeting-light .mm-stage--bleed,
+.meeting-app.meeting-light.viewport-mobile-portrait .mm-stage,
+.meeting-app.meeting-light.viewport-mobile-landscape .mm-stage {
+  --stage-pad-x: 0px;
+  --stage-pad-y: 0px;
+  --stage-side-gutter: 0px;
+  --tile-radius: 0px;
+  background: #0b1220;
+}
+
+.meeting-app.meeting-light .mm-stage--small.mm-stage--bleed {
+  --tile-radius: 10px;
+  background: #0b1220;
+}
+
+.meeting-app.meeting-light .mm-stage .video-tile {
+  background: #0f172a;
+  border: none;
+  outline: none;
+  border-radius: var(--tile-radius, 12px);
+  box-shadow: none;
 }
 
 .meeting-app.meeting-light .video-stage[data-layout="mosaic"] .video-spotlight .video-tile {
@@ -4476,65 +4855,59 @@ html:has(.auth-page) body {
   color: #fff;
 }
 
-/* Overlay side panel */
+/* Right chat / people / invite — overlay (stage + dock stay full width) */
+.meeting-app.meeting-light .meeting-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  align-items: stretch;
+  position: relative;
+}
+
+.meeting-app.meeting-light .meeting-stage {
+  position: relative;
+  grid-column: 1;
+  width: 100%;
+  min-width: 0;
+}
+
 .meeting-app.meeting-light .meeting-sidebar {
   position: absolute;
-  top: 0.65rem;
-  right: 0.9rem;
-  bottom: 5.5rem;
-  width: min(360px, calc(100vw - 2rem));
-  display: none;
-  z-index: 5;
-  max-height: none;
+  top: 1rem;
+  right: 1.15rem;
+  bottom: calc(var(--dock-height, 5.75rem) + 1.05rem);
+  width: var(--meeting-sidebar-width, 352px);
+  max-width: calc(100% - 2.2rem);
   height: auto;
+  max-height: none;
+  display: none;
+  z-index: 6;
+  padding: 0;
+  box-sizing: border-box;
+  pointer-events: none;
 }
 
 .meeting-app.meeting-light .meeting-sidebar.open {
   display: flex;
+  pointer-events: auto;
   animation: stage-in 280ms ease both;
 }
 
+.meeting-app.meeting-light .meeting-sidebar .room-side-panel-wrap {
+  min-height: 0;
+  height: 100%;
+}
+
+.meeting-app.meeting-light .meeting-sidebar .rsp {
+  height: 100%;
+  border-radius: var(--rsp-radius, 22px);
+}
+
 .meeting-app.meeting-light .rsp {
-  --rsp-ink: #1e293b;
-  --rsp-ink-dim: #64748b;
-  --rsp-paper: rgba(255, 255, 255, 0.92);
-  --rsp-paper-2: rgba(248, 250, 252, 0.96);
-  --rsp-line: rgba(15, 23, 42, 0.08);
-  --rsp-line-strong: rgba(15, 23, 42, 0.14);
-  --rsp-accent: #3b66f5;
-  --rsp-accent-deep: #2d52c9;
-  --rsp-accent-soft: rgba(59, 102, 245, 0.12);
-  --rsp-self: #e2e8f0;
-  --rsp-self-border: rgba(59, 102, 245, 0.22);
-  box-shadow: 0 18px 48px rgba(15, 23, 42, 0.14);
-}
-
-.meeting-app.meeting-light .rsp-msg.is-other {
-  background: rgba(15, 23, 42, 0.03);
-}
-
-.meeting-app.meeting-light .rsp-msg.is-self {
-  background: rgba(59, 102, 245, 0.1);
-  border-color: rgba(59, 102, 245, 0.22);
-}
-
-.meeting-app.meeting-light .rsp-msg-body {
-  color: var(--rsp-ink);
-}
-
-.meeting-app.meeting-light .rsp-msg.is-self .rsp-msg-body {
-  display: inline-block;
-  max-width: 100%;
-  padding: 0.45rem 0.7rem;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #3b66f5, #5b82f7);
-  color: #fff;
-}
-
-.meeting-app.meeting-light .rsp-composer button {
-  background: var(--mm-blue);
-  color: #fff;
-  border: none;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.8) inset,
+    0 22px 56px rgba(15, 23, 42, 0.12),
+    0 6px 18px rgba(15, 23, 42, 0.06);
 }
 
 .meeting-app.meeting-light .join-banner.info {
@@ -4545,6 +4918,14 @@ html:has(.auth-page) body {
 
 .meeting-app.meeting-light .mobile-sidebar-toggle {
   display: none;
+}
+
+/* Keep the dock centered on the full stage — never reflow with the side panel */
+.meeting-app.meeting-light .meeting-v2-control-bar-wrap {
+  left: 0;
+  right: 0;
+  width: 100%;
+  justify-content: center;
 }
 
 @media (max-width: 960px) {
@@ -4559,10 +4940,23 @@ html:has(.auth-page) body {
       "pager pager";
   }
 
+  .meeting-app.meeting-light .meeting-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .meeting-app.meeting-light .meeting-sidebar {
-    right: 0.65rem;
-    left: 0.65rem;
-    width: auto;
+    top: 0.85rem;
+    right: 0.85rem;
+    left: auto;
+    bottom: calc(var(--dock-height, 5.5rem) + 0.9rem);
+    width: min(360px, calc(100vw - 2.2rem));
+    height: auto;
+    padding: 0;
+  }
+
+  .meeting-app.meeting-light .meeting-sidebar.open {
+    left: auto;
+    width: min(360px, calc(100vw - 2.2rem));
   }
 }
 
@@ -4577,31 +4971,31 @@ html:has(.auth-page) body {
   }
 
   .meeting-app.meeting-light .meeting-v2-ctrl-btn {
-    min-width: 42px;
-    width: 42px;
-    height: 42px;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
     border-radius: 50%;
     padding: 0;
     flex-direction: row;
   }
 
   .meeting-app.meeting-light .meeting-v2-ctrl-end {
-    min-width: 120px;
-    width: auto;
-    height: 42px;
-    border-radius: 999px;
-    padding: 0 1.1rem;
-    margin-left: 0;
+    min-width: 44px;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    padding: 0;
+    margin-left: 0.15rem;
   }
 
   .meeting-app.meeting-light .meeting-v2-ctrl-end .meeting-v2-ctrl-label,
   .meeting-app.meeting-light .meeting-v2-ctrl-end .meeting-v2-end-label {
-    display: inline;
-    color: #fff;
+    display: none;
   }
 
   .meeting-app.meeting-light {
-    --dock-height: 7.25rem;
+    /* Single-row pill dock (mobile-view.jpg) */
+    --dock-height: 4.75rem;
   }
 }
 
@@ -4617,13 +5011,14 @@ html:has(.auth-page) body {
   background: inherit;
 }
 
-.video-stage-shell > .video-stage {
+.video-stage-shell > .video-stage,
+.video-stage-shell > .mm-stage {
   flex: 1;
   min-height: 0;
   height: 100%;
 }
 
-/* ---------- Layout picker (floating stage corner) ---------- */
+/* ---------- Layout picker (named Grid button) ---------- */
 .layout-picker {
   position: absolute;
   top: calc(0.65rem + env(safe-area-inset-top, 0px));
@@ -4631,12 +5026,123 @@ html:has(.auth-page) body {
   z-index: 40;
 }
 
+.layout-picker--dock {
+  position: relative;
+  top: auto;
+  right: auto;
+  z-index: 50;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.meeting-v2-control-bar:has(.layout-picker.is-open),
+.meeting-v2-ctrl-main:has(.layout-picker.is-open) {
+  overflow: visible;
+}
+
+.gallery-sim {
+  position: absolute;
+  top: calc(0.65rem + env(safe-area-inset-top, 0px));
+  left: calc(0.65rem + env(safe-area-inset-left, 0px));
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.4rem;
+}
+
+.gallery-sim-toggle,
+.gallery-sim-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 2.5rem;
+  padding: 0 0.75rem;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+  font: 650 0.78rem/1 "Outfit", "Segoe UI", sans-serif;
+  backdrop-filter: blur(12px);
+}
+
+.gallery-sim-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: min(420px, calc(100vw - 2rem));
+  padding: 0.55rem;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
+}
+
+.gallery-sim-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 650;
+  color: #334155;
+}
+
+.gallery-sim-field input {
+  width: 3.6rem;
+  height: 2rem;
+  border: 1px solid rgba(15, 23, 42, 0.14);
+  border-radius: 8px;
+  padding: 0 0.4rem;
+  font: 650 0.85rem/1 inherit;
+}
+
+.gallery-sim-btn--ghost {
+  background: #f8fafc;
+  box-shadow: none;
+}
+
+.gallery-sim-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.gallery-sim-meta {
+  flex: 1 0 100%;
+  margin: 0.15rem 0 0;
+  font-size: 0.7rem;
+  color: #64748b;
+}
+
+.meeting-app.stage-theme-dark .gallery-sim-toggle,
+.meeting-app.stage-theme-dark .gallery-sim-btn,
+.meeting-app.stage-theme-dark .gallery-sim-panel {
+  background: rgba(15, 23, 42, 0.92);
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.meeting-app.stage-theme-dark .gallery-sim-field,
+.meeting-app.stage-theme-dark .gallery-sim-meta {
+  color: #cbd5e1;
+}
+
+.meeting-app.stage-theme-dark .gallery-sim-field input {
+  background: #0f172a;
+  color: #f8fafc;
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
 .layout-picker-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 2.5rem;
+  gap: 0.4rem;
+  min-width: 2.5rem;
   height: 2.5rem;
+  padding: 0 0.7rem 0 0.55rem;
   border: 1px solid rgba(15, 23, 42, 0.12);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.94);
@@ -4645,6 +5151,16 @@ html:has(.auth-page) body {
   cursor: pointer;
   backdrop-filter: blur(12px);
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.layout-picker-btn-label {
+  font-family: "Outfit", "Segoe UI", sans-serif;
+  font-size: 0.78rem;
+  font-weight: 650;
+  white-space: nowrap;
+  max-width: 7.5rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .layout-picker-btn:hover {
@@ -4657,11 +5173,19 @@ html:has(.auth-page) body {
   color: #1a73e8;
 }
 
+.layout-picker--dock .layout-picker-menu {
+  top: auto;
+  bottom: calc(100% + 0.55rem);
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+
 .layout-picker-menu {
   position: absolute;
   top: calc(100% + 0.4rem);
   right: 0;
-  width: min(17.5rem, calc(100vw - 1.5rem));
+  width: min(18.5rem, calc(100vw - 1.5rem));
   padding: 0.35rem;
   border-radius: 14px;
   border: 1px solid rgba(15, 23, 42, 0.1);
@@ -4676,6 +5200,15 @@ html:has(.auth-page) body {
 @keyframes layout-picker-in {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: none; }
+}
+
+.layout-picker--dock .layout-picker-menu {
+  animation-name: layout-picker-dock-in;
+}
+
+@keyframes layout-picker-dock-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(6px); }
+  to { opacity: 1; transform: translateX(-50%); }
 }
 
 .layout-picker-option {
@@ -4732,1103 +5265,1700 @@ html:has(.auth-page) body {
   color: #3b82f6;
 }
 
-/* ---------- Equal grids: Gallery / Standard / Extended ----------
- * Width from column count (no CQ flash). Tile aspect follows stream.
- * Video uses contain-blur — never crops faces.
- */
-.video-stage.equal-grid {
-  --grid-cols: 1;
-  --grid-rows: 1;
-  --mosaic-cols: 1;
-  --mosaic-rows: 1;
-  --cols: var(--grid-cols, 1);
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-content: center;
-  align-items: center;
-  column-gap: var(--stage-gap);
-  row-gap: var(--stage-gap);
-  min-width: 1px;
-  min-height: 1px;
-  contain-intrinsic-size: 1px 1px;
-  container-name: equal-grid-stage;
+@media (max-width: 520px) {
+  .layout-picker-btn-label {
+    display: none;
+  }
+
+  .layout-picker-btn {
+    padding: 0;
+    width: 2.5rem;
+  }
 }
 
-/* Prevent mosaic .has-featured column flex from leaking onto equal grids */
-.video-stage.equal-grid.has-featured {
-  flex-direction: row;
-  flex-wrap: wrap;
-  align-content: center;
-  justify-content: center;
-}
+/* ============================================================================
+ * MeetingMax stage (.mm-stage)
+ * Gallery view (index1.html) + Host stage (index.html sidebar).
+ * ============================================================================ */
 
-.video-stage.equal-grid[data-cols="1"] {
-  justify-content: center;
-}
-
-.video-stage.equal-grid[data-density="roomy"] {
+.mm-stage {
   --stage-gap: 8px;
-  --tile-radius: 14px;
-  --stage-pad-x: 8px;
-  --stage-pad-y: 10px;
-}
-
-.video-stage.equal-grid[data-density="cozy"] {
-  --stage-gap: 6px;
-  --tile-radius: 12px;
-  --stage-pad-x: 6px;
-  --stage-pad-y: 8px;
-}
-
-.video-stage.equal-grid[data-density="dense"] {
-  --stage-gap: 4px;
-  --tile-radius: 10px;
-  --stage-pad-x: 4px;
-  --stage-pad-y: 6px;
-}
-
-.video-stage.equal-grid[data-layout="standard"] {
-  --stage-gap: 10px;
-  --tile-radius: 16px;
-  --stage-pad-x: 10px;
+  --stage-pad-x: var(--stage-side-gutter, 170px);
   --stage-pad-y: 12px;
-}
-
-.video-stage.equal-grid[data-layout="extended"] {
-  --stage-gap: 4px;
-  --tile-radius: 10px;
-  --stage-pad-x: 4px;
-  --stage-pad-y: 6px;
-}
-
-.video-stage.equal-grid .grid-cell,
-.video-stage.equal-grid .mosaic-cell {
-  flex: 0 0 auto;
-  box-sizing: border-box;
-  width: calc(
-    (100% - (var(--cols, var(--grid-cols, 2)) - 1) * var(--stage-gap)) /
-      var(--cols, var(--grid-cols, 2))
-  );
-  max-width: 100%;
-  max-height: calc(100% - 4px);
-  /* Default landscape — uniform grid; blur fills mismatch */
-  aspect-ratio: 16 / 9;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  align-items: stretch;
-  justify-content: stretch;
-  position: relative;
-  overflow: hidden;
-  border-radius: var(--tile-radius, 14px);
-  background: #14181f;
-}
-
-/*
- * Desktop + mobile-landscape viewers: keep 16:9 cells for every stream.
- * Portrait phone video sits inside with contain; blur fills the sides.
- */
-.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
-.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"],
-.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
-.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
-.meeting-app.viewport-desktop .video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
-.meeting-app.viewport-desktop .video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"] {
-  aspect-ratio: 16 / 9;
-}
-
-/*
- * Mobile portrait viewer: tall tiles for phone streams so video fills edge-to-edge.
- */
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell[data-stream-aspect="portrait"] {
-  aspect-ratio: 9 / 16;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell:has(.video-tile[data-stream-aspect="square"]),
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell:has(.video-tile[data-stream-aspect="square"]),
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .grid-cell[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid .mosaic-cell[data-stream-aspect="square"] {
-  aspect-ratio: 1 / 1;
-}
-
-.video-stage.equal-grid .grid-cell .video-tile,
-.video-stage.equal-grid .grid-cell .lk-participant-tile {
-  box-sizing: border-box;
-  width: 100%;
-  height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: auto;
-  flex: 1 1 auto;
-  border-radius: inherit;
-  overflow: hidden;
-  background: #0b1220;
-  border: none;
-  box-shadow: none;
-}
-
-.video-stage.equal-grid[data-count="1"] {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  align-content: center;
-}
-
-.video-stage.equal-grid[data-count="1"] .grid-cell {
-  width: min(100%, calc((100% - 24px) * 16 / 9), calc((100cqh - 24px) * 16 / 9));
-  max-width: 100%;
-  max-height: 100%;
-  height: auto;
-  aspect-ratio: 16 / 9;
-  border-radius: 20px;
-}
-
-/* Solo on mobile portrait: match phone stream for edge-to-edge fill */
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"] {
-  width: min(100%, calc((100% - 24px) * 9 / 16), calc((100cqh - 24px) * 9 / 16));
-  aspect-ratio: 9 / 16;
-}
-
-/* Desktop solo with portrait stream: keep 16:9; blur fills sides */
-.meeting-app.viewport-desktop .video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-desktop .video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-count="1"] .grid-cell:has(.video-tile[data-stream-aspect="portrait"]),
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-count="1"] .grid-cell[data-stream-aspect="portrait"] {
-  width: min(100%, calc((100% - 24px) * 16 / 9), calc((100cqh - 24px) * 16 / 9));
-  aspect-ratio: 16 / 9;
-}
-
-.video-stage.equal-grid .video-tile .video-feed:not(.video-feed-blur),
-.video-stage.equal-grid .video-tile video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: transparent;
-}
-
-.video-stage.equal-grid .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
-.video-stage.equal-grid .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: #0b1220;
-}
-
-.video-stage.equal-grid .grid-cell[data-kind="screen"] .video-feed-blur {
-  display: none;
-}
-
-.video-stage.equal-grid .video-chrome,
-.video-stage.layout-active-speaker .video-chrome,
-.video-stage.layout-stage .video-chrome {
-  left: 0.5rem;
-  right: auto;
-  bottom: 0.5rem;
-}
-
-/* ---------- Jitsi-style tile view (fill-stage equal cells, web + mobile) ---------- */
-.video-stage.jitsi-grid {
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 12px);
+  --tile-radius: 12px;
+  --lock-cols: 4;
+  --lock-rows: 4;
   --grid-cols: 1;
   --grid-rows: 1;
   display: grid;
+  gap: var(--stage-gap);
+  width: 100%;
+  height: 100%;
+  min-width: 1px;
+  min-height: 1px;
+  padding: var(--stage-pad-y) var(--stage-pad-x) var(--stage-pad-bottom);
+  overflow: hidden;
+  box-sizing: border-box;
+  background: #ffffff;
+  container-type: size;
+  container-name: mm-stage;
+}
+
+.meeting-app.meeting-light .mm-stage,
+.meeting-app.stage-theme-light .mm-stage {
+  background: #ffffff;
+}
+
+.mm-stage .video-tile,
+.mm-stage .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  border: none;
+  box-shadow: none;
+  background: #0f172a;
+}
+
+.mm-stage .video-tile .video-feed:not(.video-feed-blur),
+.mm-stage .video-tile video:not(.video-feed-blur) {
+  object-fit: cover;
+  object-position: center center;
+}
+
+.mm-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
+.mm-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
+  object-fit: contain;
+  background: #0b1220;
+}
+
+.mm-stage .video-chrome {
+  left: 0.55rem;
+  bottom: 0.55rem;
+}
+
+/* ---- Mixed-aspect slots: two portraits share one landscape footprint ---- */
+.mm-slot {
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.mm-slot--pair {
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  background: transparent;
+}
+
+.mm-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: max(4px, calc(var(--stage-gap) * 0.5));
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  aspect-ratio: 16 / 9;
+}
+
+.mm-pair__cell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: calc(var(--tile-radius) - 2px);
+  background: #0f172a;
+}
+
+.mm-pair__cell .video-tile,
+.mm-pair__cell .lk-participant-tile {
+  width: auto;
+  height: 100%;
+  max-width: 100%;
+  aspect-ratio: 9 / 16;
+  border-radius: inherit;
+}
+
+/* ---- Edge scrollbar: full-bleed scroller + inner gutter track ---- */
+.mm-stage__scroll {
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+}
+
+.mm-stage__scroll[data-scroll="1"],
+.mm-stage[data-scroll="1"] > .mm-stage__scroll {
+  overflow-y: scroll;
+}
+
+.mm-stage__track {
+  --lock-cell-w: calc(
+    (
+        100cqi - var(--stage-side-gutter, 170px) * 2 - (var(--lock-cols) - 1) * var(--stage-gap) -
+          14px
+      ) / var(--lock-cols)
+  );
+  --lock-cell-h: calc(
+    (100cqh - (var(--lock-rows) - 1) * var(--stage-gap) - var(--stage-pad-y) - var(--stage-pad-bottom)) /
+      var(--lock-rows)
+  );
+  display: grid;
+  grid-template-columns: repeat(var(--lock-cols), var(--lock-cell-w));
+  grid-auto-rows: var(--lock-cell-h);
+  gap: var(--stage-gap);
+  justify-content: center;
+  align-content: start;
+  width: 100%;
+  min-height: 100%;
+  box-sizing: border-box;
+  padding-left: var(--stage-side-gutter, 170px);
+  padding-right: calc(var(--stage-side-gutter, 170px) - 6px);
+}
+
+.mm-stage__track .mm-slot,
+.mm-stage__track .mm-stage__cell,
+.mm-stage__track .mm-stage__peer {
+  width: var(--lock-cell-w);
+  height: var(--lock-cell-h);
+  min-width: var(--lock-cell-w);
+  min-height: var(--lock-cell-h);
+  max-width: var(--lock-cell-w);
+  max-height: var(--lock-cell-h);
+}
+
+/* ---- Solo: fill stage; portrait phone = edge-to-edge; landscape = landscape box ---- */
+.mm-stage--solo {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  place-items: stretch;
+  padding: var(--stage-pad-y) var(--stage-pad-x) var(--stage-pad-bottom);
+}
+
+.mm-stage--solo .mm-stage__cell {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.mm-stage--solo[data-orientation="portrait"] {
+  --stage-pad-x: 0px;
+  --stage-pad-y: 0px;
+  --stage-pad-bottom: 0px;
+  --tile-radius: 0px;
+  padding: 0;
+  background: #000;
+}
+
+.mm-stage--solo[data-orientation="portrait"] .mm-stage__cell,
+.mm-stage--solo[data-orientation="portrait"] .video-tile,
+.mm-stage--solo[data-orientation="portrait"] .lk-participant-tile {
+  border-radius: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.meeting-app.viewport-mobile-portrait .mm-stage--solo,
+.meeting-app.viewport-mobile-landscape .mm-stage--solo[data-orientation="portrait"] {
+  --stage-pad-x: 0px;
+  --stage-pad-y: 0px;
+  --stage-pad-bottom: 0px;
+  --tile-radius: 0px;
+  padding: 0;
+  background: #000;
+}
+
+.meeting-app.viewport-mobile-landscape .mm-stage--solo .mm-stage__cell {
+  width: 100%;
+  height: 100%;
+}
+
+/* ---- Small group 2–3: equal 16:9 pyramid ---- */
+.mm-stage--small {
+  --sg-cell-w: min(
+    calc((100cqi - var(--stage-gap)) / 2),
+    calc((100cqh - var(--stage-gap)) * 16 / 18)
+  );
+  --sg-cell-h: calc(var(--sg-cell-w) * 9 / 16);
+  --stage-pad-x: max(1.25rem, calc(var(--stage-side-gutter, 170px) * 0.45));
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: var(--stage-gap);
+}
+
+.mm-stage--small[data-count="2"] {
+  --sg-cell-w: min(
+    calc((100cqi - var(--stage-gap)) / 2),
+    calc(92cqh * 16 / 9)
+  );
+  --sg-cell-h: calc(var(--sg-cell-w) * 9 / 16);
+}
+
+.mm-stage__row {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--stage-gap);
+  width: auto;
+  max-width: 100%;
+  min-height: 0;
+  flex: 0 0 auto;
+}
+
+.mm-stage--small .mm-stage__cell {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: var(--sg-cell-w);
+  height: var(--sg-cell-h);
+  min-width: var(--sg-cell-w);
+  min-height: var(--sg-cell-h);
+  max-width: var(--sg-cell-w);
+  max-height: var(--sg-cell-h);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+/* ---- Immersive equal grid (Meet tiled) ---- */
+.mm-stage--equal:not(.mm-stage--locked) {
   grid-template-columns: repeat(var(--grid-cols), minmax(0, 1fr));
   grid-template-rows: repeat(var(--grid-rows), minmax(0, 1fr));
-  gap: var(--stage-gap);
   align-content: stretch;
   justify-content: stretch;
   place-items: stretch;
-  min-width: 1px;
-  min-height: 1px;
-  contain-intrinsic-size: 1px 1px;
-  --stage-gap: 4px;
-  --stage-pad-x: 4px;
-  --stage-pad-y: 4px;
-  --tile-radius: 8px;
-  background: #1e1e1e;
 }
 
-.video-stage.jitsi-grid[data-density="roomy"] {
-  --stage-gap: 6px;
-  --tile-radius: 10px;
+.mm-stage--equal:not(.mm-stage--locked) .mm-stage__cell,
+.mm-stage--equal:not(.mm-stage--locked) .mm-slot {
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #0f172a;
+  aspect-ratio: auto;
 }
 
-.video-stage.jitsi-grid[data-density="dense"] {
-  --stage-gap: 3px;
-  --tile-radius: 6px;
+/*
+ * Upgraded equal grid — maximize equal 16:9 footprints, center in stage
+ * (no ultra-wide stretch). Portrait pairs keep one landscape unit.
+ */
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: center;
+  align-items: center;
+  gap: var(--stage-gap);
+  grid-template-columns: unset;
+  grid-template-rows: unset;
+  --eq-cols: var(--grid-cols, 1);
+  --eq-rows: var(--grid-rows, 1);
+  --eq-pad-x: var(--stage-pad-x, 12px);
+  --eq-avail-w: max(
+    160px,
+    calc(100cqi - 2 * var(--eq-pad-x) - var(--stage-right-inset, 0px))
+  );
+  --eq-avail-h: max(
+    120px,
+    calc(100cqh - var(--stage-pad-y, 12px) - var(--stage-pad-bottom, 5rem))
+  );
+  --eq-gap-x: calc((var(--eq-cols) - 1) * var(--stage-gap));
+  --eq-gap-y: calc((var(--eq-rows) - 1) * var(--stage-gap));
+  --eq-cell-w: calc((var(--eq-avail-w) - var(--eq-gap-x)) / var(--eq-cols));
+  --eq-cell-h: calc((var(--eq-avail-h) - var(--eq-gap-y)) / var(--eq-rows));
+  --eq-tile-w: min(var(--eq-cell-w), calc(var(--eq-cell-h) * 16 / 9));
+  --eq-tile-h: min(var(--eq-cell-h), calc(var(--eq-cell-w) * 9 / 16));
 }
 
-.video-stage.jitsi-grid .jitsi-cell {
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-slot,
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-stage__cell {
+  flex: 0 0 auto;
+  width: var(--eq-tile-w);
+  height: var(--eq-tile-h);
+  min-width: var(--eq-tile-w);
+  max-width: var(--eq-tile-w);
+  min-height: var(--eq-tile-h);
+  max-height: var(--eq-tile-h);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--tile-radius, 12px);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row)
+  .mm-slot[data-stream-aspect="portrait"]:not(.mm-slot--pair) {
+  width: calc(var(--eq-tile-w) / 2);
+  min-width: calc(var(--eq-tile-w) / 2);
+  max-width: calc(var(--eq-tile-w) / 2);
+  height: var(--eq-tile-h);
+  min-height: var(--eq-tile-h);
+  max-height: var(--eq-tile-h);
+  aspect-ratio: auto;
+}
+
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-slot--pair {
+  width: var(--eq-tile-w);
+  height: var(--eq-tile-h);
+}
+
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-pair {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-slot .video-tile,
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-slot .lk-participant-tile,
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-stage__cell .video-tile,
+.mm-stage--equal.mm-stage--balanced:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) .mm-stage__cell .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+}
+
+/* Mobile portrait equal grid: prefer tall fill when bleeding */
+.mm-stage--equal.mm-stage--balanced.mm-stage--portrait.mm-stage--bleed:not(.mm-stage--locked):not(.mm-stage--filmstrip-row) {
+  --eq-tile-w: var(--eq-cell-w);
+  --eq-tile-h: var(--eq-cell-h);
+}
+
+.mm-stage--equal.mm-stage--balanced.mm-stage--portrait.mm-stage--bleed:not(.mm-stage--locked):not(.mm-stage--filmstrip-row)
+  .mm-slot,
+.mm-stage--equal.mm-stage--balanced.mm-stage--portrait.mm-stage--bleed:not(.mm-stage--locked):not(.mm-stage--filmstrip-row)
+  .mm-stage__cell {
+  aspect-ratio: auto;
+  border-radius: 0;
+}
+
+.mm-stage--equal.mm-stage--locked {
+  --stage-pad-x: 0px;
+  display: block;
+  padding: var(--stage-pad-y) 0 var(--stage-pad-bottom);
+  overflow: hidden;
+}
+
+.mm-stage--equal.mm-stage--locked > .mm-stage__scroll {
+  height: 100%;
+}
+
+/* ---- Stage host-large (Zoom spotlight / Meet sidebar) ---- */
+.mm-stage--host:not(.mm-stage--locked) {
+  --side-cols: 2;
+  --side-rows: 2;
+  --bottom-cols: 4;
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 2fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main side"
+    "bottom bottom";
+  place-items: stretch;
+}
+
+.mm-stage--host:not(.mm-stage--locked)[data-side="0"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "main"
+    "bottom";
+}
+
+.mm-stage--host:not(.mm-stage--locked)[data-bottom="0"] {
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "main side";
+}
+
+.mm-stage--host:not(.mm-stage--locked)[data-side="0"][data-bottom="0"] {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  grid-template-areas: "main";
+}
+
+.mm-stage--host .mm-stage__focus {
+  grid-area: main;
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.mm-stage--host .mm-stage__side {
+  grid-area: side;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--side-cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--side-rows), minmax(0, 1fr));
+  gap: var(--stage-gap);
+}
+
+.mm-stage--host .mm-stage__bottom {
+  grid-area: bottom;
+  min-width: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(var(--bottom-cols), minmax(0, 1fr));
+  gap: var(--stage-gap);
+}
+
+.mm-stage--host .mm-stage__peer {
+  min-width: 0;
+  min-height: 0;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #0f172a;
+}
+
+/* ---- Google Meet filmstrip: one row, fixed 16:9 footprints (no horizontal stretch) ---- */
+.mm-stage--filmstrip:not(.mm-stage--locked) {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "main"
+    "strip";
+  place-items: stretch;
+  align-content: stretch;
+}
+
+/* Small call / single-row gallery: only the filmstrip row (no empty "main" area) */
+.mm-stage--filmstrip.mm-stage--small,
+.mm-stage--equal.mm-stage--filmstrip-row:not(.mm-stage--locked) {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  grid-template-rows: unset;
+  grid-template-areas: unset;
+}
+
+.mm-stage--filmstrip .mm-stage__focus {
+  grid-area: main;
   min-width: 0;
   min-height: 0;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--tile-radius);
   overflow: hidden;
-  background: #0b1220;
-  border-radius: var(--tile-radius, 8px);
+  background: #0f172a;
 }
 
-.video-stage.jitsi-grid .jitsi-cell .video-tile,
-.video-stage.jitsi-grid .jitsi-cell .lk-participant-tile {
+.mm-stage--filmstrip .mm-stage__focus .video-tile,
+.mm-stage--filmstrip .mm-stage__focus .lk-participant-tile {
   width: 100%;
   height: 100%;
   max-width: 100%;
   max-height: 100%;
-  border-radius: inherit;
+}
+
+.mm-stage__filmstrip {
+  --strip-slots: 1;
+  --strip-units: 1;
+  --film-strip-inset: calc(var(--stage-pad-x, 12px) + var(--stage-right-inset, 0px));
+  --film-strip-gaps: calc(max(0, var(--strip-slots) - 1) * var(--stage-gap));
+  /* Intermediate vars — do NOT redefine --film-cell-w after --film-cell-h (circular → 0 size). */
+  --film-avail-w: max(
+    120px,
+    calc(100cqi - var(--film-strip-inset) - var(--stage-pad-x, 12px) - var(--film-strip-gaps))
+  );
+  --film-cell-h: min(
+    calc((var(--film-avail-w) / max(0.5, var(--strip-units))) * 9 / 16),
+    clamp(88px, 28cqh, 220px)
+  );
+  --film-cell-w: calc(var(--film-cell-h) * 16 / 9);
+  grid-area: strip;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  justify-content: center;
+  align-items: stretch;
+  gap: var(--stage-gap);
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--film-cell-h);
+  padding: var(--stage-gap) var(--stage-pad-x, 12px) 0;
+  padding-right: var(--film-strip-inset);
+  box-sizing: border-box;
+}
+
+.mm-stage--filmstrip.mm-stage--small .mm-stage__filmstrip,
+.mm-stage--equal.mm-stage--filmstrip-row .mm-stage__filmstrip {
+  flex: 0 0 auto;
+  padding-top: 0;
+  /* Roomier tiles for 2–4 person Meet-style row */
+  --film-cell-h: min(
+    calc((var(--film-avail-w) / max(0.5, var(--strip-units))) * 9 / 16),
+    clamp(140px, 42cqh, 360px)
+  );
+  --film-cell-w: calc(var(--film-cell-h) * 16 / 9);
+  min-height: var(--film-cell-h);
+}
+
+.mm-stage__filmstrip[data-orientation="row"] {
+  flex-wrap: nowrap;
   overflow: hidden;
-  background: #0b1220;
-  box-shadow: none;
-  border-color: rgba(255, 255, 255, 0.06);
 }
 
-.video-stage.jitsi-grid .jitsi-cell .video-tile .video-feed:not(.video-feed-blur),
-.video-stage.jitsi-grid .jitsi-cell .video-tile video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: transparent;
+.mm-stage__filmstrip[data-orientation="column"] {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1 1 auto;
+  padding-top: 0;
+  --film-cell-w: min(
+    calc(100cqi - 2 * var(--stage-pad-x, 12px)),
+    calc((100cqh - var(--stage-pad-bottom, 6rem)) * 0.46 * 16 / 9)
+  );
+  --film-cell-h: calc(var(--film-cell-w) * 9 / 16);
 }
 
-.video-stage.jitsi-grid .jitsi-cell .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
-.video-stage.jitsi-grid .jitsi-cell .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: #0b1220;
+.mm-stage__filmstrip[data-orientation="column"] .mm-slot[data-stream-aspect="portrait"]:not(.mm-slot--pair) {
+  width: min(72cqw, calc((100cqh - var(--stage-pad-bottom, 6rem)) * 0.36));
+  min-width: 0;
+  max-width: min(72cqw, calc((100cqh - var(--stage-pad-bottom, 6rem)) * 0.36));
+  height: calc(min(72cqw, calc((100cqh - var(--stage-pad-bottom, 6rem)) * 0.36)) * 16 / 9);
+  aspect-ratio: 9 / 16;
 }
 
-.video-stage.jitsi-grid .video-chrome {
-  left: 0.45rem;
-  right: auto;
-  bottom: 0.45rem;
+.mm-stage__filmstrip .mm-slot,
+.mm-stage__filmstrip .mm-stage__peer {
+  flex: 0 0 auto;
+  width: var(--film-cell-w, 240px);
+  height: var(--film-cell-h, 135px);
+  min-width: var(--film-cell-w, 240px);
+  max-width: var(--film-cell-w, 240px);
+  min-height: var(--film-cell-h, 135px);
+  max-height: var(--film-cell-h, 135px);
+  aspect-ratio: 16 / 9;
+  border-radius: var(--tile-radius, 12px);
+  overflow: hidden;
+  background: #0f172a;
 }
 
-.video-stage.jitsi-grid[data-count="1"] {
+.mm-stage__filmstrip .mm-slot .video-tile,
+.mm-stage__filmstrip .mm-slot .lk-participant-tile,
+.mm-stage__filmstrip .mm-stage__peer .video-tile,
+.mm-stage__filmstrip .mm-stage__peer .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+}
+
+/* Lone portrait phone = half a landscape footprint (two portraits = one landscape). */
+.mm-stage__filmstrip .mm-slot[data-stream-aspect="portrait"]:not(.mm-slot--pair) {
+  width: calc(var(--film-cell-w) / 2);
+  min-width: calc(var(--film-cell-w) / 2);
+  max-width: calc(var(--film-cell-w) / 2);
+  height: var(--film-cell-h);
+  min-height: var(--film-cell-h);
+  max-height: var(--film-cell-h);
+  aspect-ratio: auto;
+}
+
+.mm-stage__filmstrip .mm-slot--pair {
+  width: var(--film-cell-w);
+  height: var(--film-cell-h);
+  min-width: var(--film-cell-w);
+  max-width: var(--film-cell-w);
+}
+
+.mm-stage__filmstrip .mm-pair {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.mm-stage__filmstrip.mm-stage__scroll[data-orientation="row"] {
+  --film-cell-h: clamp(64px, 22cqh, 132px);
+  --film-cell-w: calc(var(--film-cell-h) * 16 / 9);
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+  scroll-padding-inline: var(--stage-pad-x, 12px);
+}
+
+.mm-stage__track--filmstrip {
+  display: inline-flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: center;
+  gap: var(--stage-gap);
+  min-width: min(100%, max-content);
+  padding: 0 var(--stage-pad-x, 12px);
+  box-sizing: border-box;
+}
+
+.mm-stage__track--filmstrip .mm-slot,
+.mm-stage__track--filmstrip .mm-stage__peer {
+  flex: 0 0 auto;
+}
+
+.mm-stage--host.mm-stage--filmstrip.mm-stage--locked {
+  --stage-pad-x: 0px;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  padding: var(--stage-pad-y) 0 var(--stage-pad-bottom);
+  overflow: hidden;
+}
+
+.mm-stage--host.mm-stage--filmstrip.mm-stage--locked .mm-stage__focus {
+  margin-left: var(--stage-pad-x, 12px);
+  margin-right: var(--stage-pad-x, 12px);
+}
+
+.meeting-app.meeting-light.sidebar-open:not(.viewport-mobile-portrait):not(.viewport-mobile-landscape)
+  .mm-stage--host.mm-stage--filmstrip.mm-stage--locked
+  .mm-stage__focus {
+  margin-right: calc(var(--stage-right-inset, 0px) + var(--stage-gap, 8px));
+}
+
+.mm-stage--host.mm-stage--filmstrip.mm-stage--locked .mm-stage__filmstrip {
+  padding-left: var(--stage-pad-x, 12px);
+  padding-right: calc(var(--stage-pad-x, 12px) + var(--stage-right-inset, 0px));
+}
+
+/* Mobile portrait: stack focus above peers (Zoom mobile pattern) */
+.mm-stage--host.mm-stage--stack:not(.mm-stage--locked) {
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.85fr);
+  grid-template-areas:
+    "main"
+    "side"
+    "bottom";
+}
+
+.mm-stage--host.mm-stage--stack:not(.mm-stage--locked)[data-side="0"] {
+  grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main"
+    "bottom";
+}
+
+.mm-stage--host.mm-stage--stack:not(.mm-stage--locked)[data-bottom="0"] {
+  grid-template-rows: minmax(0, 1.6fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main"
+    "side";
+}
+
+/* ≥16: focus + scrollable peers at locked 4×4 cell size */
+.mm-stage--host.mm-stage--locked {
+  --stage-pad-x: 0px;
+  display: grid;
+  grid-template-rows: minmax(160px, 34%) minmax(0, 1fr);
+  padding: var(--stage-pad-y) 0 var(--stage-pad-bottom);
+  overflow: hidden;
+}
+
+.mm-stage--host.mm-stage--locked .mm-stage__focus {
+  margin-left: var(--stage-side-gutter, 170px);
+  margin-right: var(--stage-side-gutter, 170px);
+}
+
+.mm-stage--host.mm-stage--locked .mm-stage__peers {
+  min-height: 0;
+}
+
+.mm-stage--host.mm-stage--locked .mm-stage__peers.mm-stage__scroll {
+  /* Peers band scrolls; scrollbar on stage right edge */
+  height: 100%;
+}
+
+/* ---- Responsive + mobile (restore previous immersive fill-stage feel) ---- */
+@media (max-width: 960px) {
+  .mm-stage {
+    --stage-pad-x: 12px;
+  }
+
+  .mm-stage--small {
+    --stage-pad-x: 0.75rem;
+    --stage-pad-y: 0.5rem;
+  }
+
+  .mm-stage--equal.mm-stage--locked .mm-stage__track,
+  .mm-stage--host.mm-stage--locked .mm-stage__track {
+    padding-left: 12px;
+    padding-right: 8px;
+    --lock-cell-w: calc(
+      (100cqi - 24px - (var(--lock-cols) - 1) * var(--stage-gap) - 10px) / var(--lock-cols)
+    );
+  }
+
+  .mm-stage--host.mm-stage--locked .mm-stage__focus {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+
+  .mm-stage--host.mm-stage--locked {
+    grid-template-rows: minmax(120px, 30%) minmax(0, 1fr);
+  }
+}
+
+/*
+ * Mobile Immersive / Stage — borderless fill-stage (previous equal-grid mobile look).
+ * Hairline gaps, no desktop chat gutters, portrait phones keep tall tiles.
+ */
+.mm-stage--bleed,
+.meeting-app.viewport-mobile-portrait .mm-stage,
+.meeting-app.viewport-mobile-landscape .mm-stage,
+
+.meeting-app.viewport-mobile-portrait .mm-stage--solo,
+.meeting-app.viewport-mobile-landscape .mm-stage--solo[data-orientation="portrait"],
+
+/* Immersive equal: stretch tiles edge-to-edge (no floating 16:9 cards). */
+.mm-stage--equal.mm-stage--bleed:not(.mm-stage--locked),
+.meeting-app.viewport-mobile-portrait .mm-stage--equal:not(.mm-stage--locked),
+.meeting-app.viewport-mobile-landscape .mm-stage--equal:not(.mm-stage--locked),
+
+.mm-stage--equal.mm-stage--bleed:not(.mm-stage--locked) .mm-stage__cell,
+.mm-stage--equal.mm-stage--bleed:not(.mm-stage--locked) .mm-slot,
+.meeting-app.viewport-mobile-portrait .mm-stage--equal:not(.mm-stage--locked) .mm-stage__cell,
+.meeting-app.viewport-mobile-portrait .mm-stage--equal:not(.mm-stage--locked) .mm-slot,
+.meeting-app.viewport-mobile-landscape .mm-stage--equal:not(.mm-stage--locked) .mm-stage__cell,
+.meeting-app.viewport-mobile-landscape .mm-stage--equal:not(.mm-stage--locked) .mm-slot {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  border-radius: 0;
+  aspect-ratio: auto;
+}
+
+/* Portrait phone Immersive: prefer tall cells when the grid isn't fill-stretching enough */
+.mm-stage--equal.mm-stage--portrait:not(.mm-stage--locked) .mm-slot:not(.mm-slot--pair),
+.mm-stage--equal.mm-stage--portrait:not(.mm-stage--locked) .mm-stage__cell {
+  /* Fill the CSS grid cell; cover crops landscape streams Meet-style */
+  place-self: stretch;
+}
+
+.mm-stage--equal.mm-stage--portrait .mm-slot .video-tile,
+.mm-stage--equal.mm-stage--portrait .mm-stage__cell .video-tile,
+.mm-stage--equal.mm-stage--portrait .mm-slot .lk-participant-tile,
+.mm-stage--equal.mm-stage--portrait .mm-stage__cell .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+  border-radius: 0;
+}
+
+/* Locked scroll track on phones: no side gutters, 2–3 cols from --lock-cols */
+.mm-stage--bleed.mm-stage--locked,
+.meeting-app.viewport-mobile-portrait .mm-stage--locked,
+.meeting-app.viewport-mobile-landscape .mm-stage--locked,
+
+.mm-stage--bleed.mm-stage--locked .mm-stage__track,
+.meeting-app.viewport-mobile-portrait .mm-stage--locked .mm-stage__track,
+.meeting-app.viewport-mobile-landscape .mm-stage--locked .mm-stage__track,
+
+.mm-stage--bleed.mm-stage--host.mm-stage--locked .mm-stage__focus,
+.meeting-app.viewport-mobile-portrait .mm-stage--host.mm-stage--locked .mm-stage__focus,
+.meeting-app.viewport-mobile-landscape .mm-stage--host.mm-stage--locked .mm-stage__focus {
+  margin-left: 0;
+  margin-right: 0;
+  border-radius: 0;
+}
+
+/* Stage on phone: stacked focus + peer strip, full bleed */
+.mm-stage--host.mm-stage--stack.mm-stage--bleed:not(.mm-stage--locked),
+.meeting-app.viewport-mobile-portrait .mm-stage--host.mm-stage--stack:not(.mm-stage--locked),
+.meeting-app.viewport-mobile-landscape .mm-stage--host.mm-stage--stack:not(.mm-stage--locked) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1.55fr) minmax(0, 1fr) minmax(0, 0.9fr);
+  grid-template-areas:
+    "main"
+    "side"
+    "bottom";
+  gap: var(--stage-gap);
+}
+
+.mm-stage--host.mm-stage--stack.mm-stage--bleed:not(.mm-stage--locked)[data-side="0"],
+.meeting-app.viewport-mobile-portrait .mm-stage--host.mm-stage--stack:not(.mm-stage--locked)[data-side="0"] {
+  grid-template-rows: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main"
+    "bottom";
+}
+
+.mm-stage--host.mm-stage--stack.mm-stage--bleed:not(.mm-stage--locked)[data-bottom="0"],
+.meeting-app.viewport-mobile-portrait .mm-stage--host.mm-stage--stack:not(.mm-stage--locked)[data-bottom="0"] {
+  grid-template-rows: minmax(0, 1.7fr) minmax(0, 1fr);
+  grid-template-areas:
+    "main"
+    "side";
+}
+
+.mm-stage--host.mm-stage--bleed .mm-stage__focus,
+.mm-stage--host.mm-stage--bleed .mm-stage__peer,
+.meeting-app.viewport-mobile-portrait .mm-stage--host .mm-stage__focus,
+.meeting-app.viewport-mobile-portrait .mm-stage--host .mm-stage__peer,
+.meeting-app.viewport-mobile-landscape .mm-stage--host .mm-stage__focus,
+.meeting-app.viewport-mobile-landscape .mm-stage--host .mm-stage__peer {
+  border-radius: 0;
+}
+
+.mm-stage--host.mm-stage--bleed.mm-stage--locked {
+  grid-template-rows: minmax(28%, 36%) minmax(0, 1fr);
+}
+
+/* Small group on phone: still centered but tighter, less gutter */
+.mm-stage--small.mm-stage--bleed {
+  --stage-pad-x: 8px;
+  --stage-pad-y: 6px;
+  --tile-radius: 10px;
+  background: #0b1220;
+  padding: var(--stage-pad-y) var(--stage-pad-x) var(--stage-pad-bottom);
+}
+
+.mm-stage--small.mm-stage--bleed .mm-stage__cell {
+  border-radius: var(--tile-radius);
+}
+
+.meeting-app.viewport-mobile-portrait .meeting-v2-control-bar-wrap,
+.meeting-app.viewport-mobile-landscape .meeting-v2-control-bar-wrap {
+  bottom: 0;
+  padding: 0.4rem max(0.65rem, env(safe-area-inset-left, 0px))
+    max(0.45rem, env(safe-area-inset-bottom, 0px))
+    max(0.65rem, env(safe-area-inset-right, 0px));
+  z-index: 80;
+  transform: none;
+  left: 0;
+  right: 0;
+  width: 100%;
+}
+
+.meeting-app.viewport-mobile-portrait,
+.meeting-app.viewport-mobile-landscape {
+  --dock-height: 4.75rem;
+}
+
+.meeting-app.viewport-mobile-portrait .meeting-v2-control-bar,
+.meeting-app.viewport-mobile-landscape .meeting-v2-control-bar {
+  flex-direction: row;
+  border-radius: 999px;
+}
+
+.meeting-app.viewport-mobile-portrait .meeting-body,
+.meeting-app.viewport-mobile-landscape .meeting-body,
+.meeting-app.viewport-mobile-portrait .meeting-stage,
+.meeting-app.viewport-mobile-landscape .meeting-stage {
+  padding-bottom: 0;
+  min-height: 0;
+}
+
+/*
+ * Host stage — large host left + right peer strip.
+ * When chat opens, stage insets so host/peers never sit under the panel.
+ */
+.mm-stage--sidebar {
+  --sidebar-width: var(--meeting-sidebar-width, 352px);
+  --stage-gap: 16px;
+  --stage-pad-x: 16px;
+  --stage-pad-y: 16px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 16px);
+  --stage-side-gutter: 0px;
+  --tile-radius: 12px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--sidebar-width);
+  grid-template-rows: minmax(0, 1fr);
+  gap: var(--stage-gap);
+  padding: var(--stage-pad-y) var(--stage-pad-x) var(--stage-pad-bottom);
+  background: #121418;
+  overflow: hidden;
+}
+
+.mm-stage--sidebar .mm-stage__host-tile {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  align-self: stretch;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #1f242d;
+  border: none;
+}
+
+.mm-stage--sidebar .mm-stage__host-tile .video-tile,
+.mm-stage--sidebar .mm-stage__host-tile .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  border-radius: inherit;
+}
+
+.mm-stage--sidebar .mm-stage__host-tile .video-tile .video-feed,
+.mm-stage--sidebar .mm-stage__host-tile .video-tile video:not(.video-feed-blur) {
+  object-fit: cover;
+}
+
+.mm-stage--sidebar .mm-stage__sidebar {
+  --peer-gap: 12px;
+  --peer-visible: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--peer-gap);
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  align-content: start;
+  container-type: size;
+}
+
+.mm-stage--sidebar[data-scroll="1"] .mm-stage__sidebar,
+.mm-stage--sidebar .mm-stage__sidebar[data-scroll="1"] {
+  overflow-y: auto;
+}
+
+.mm-stage--sidebar .mm-stage__sidebar-tile {
+  --peer-slot-h: calc(
+    (100cqh - (var(--peer-visible) - 1) * var(--peer-gap)) / var(--peer-visible)
+  );
+  flex: 0 0 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: var(--peer-slot-h);
+  max-height: var(--peer-slot-h);
+  aspect-ratio: auto;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: #1f242d;
+  border: none;
+}
+
+.mm-stage--sidebar .mm-stage__sidebar-tile .video-tile,
+.mm-stage--sidebar .mm-stage__sidebar-tile .lk-participant-tile {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  border-radius: inherit;
+  border: none;
+  box-shadow: none;
+}
+
+.meeting-app.meeting-light .mm-stage--sidebar {
+  background: #ffffff;
+}
+
+/* Chat sits in the stage's right inset — never over host or peer tiles */
+.meeting-app.meeting-light:has(.mm-stage--sidebar) .meeting-sidebar {
+  top: var(--stage-pad-y, 16px);
+  right: var(--stage-pad-x, 16px);
+  bottom: calc(var(--dock-height, 5.75rem) + env(safe-area-inset-bottom, 0px) + 16px);
+  width: var(--meeting-sidebar-width, 352px);
+  max-width: min(var(--meeting-sidebar-width, 352px), calc(100% - 2.4rem));
+}
+
+.meeting-app.meeting-light:has(.mm-stage--sidebar) .meeting-sidebar .rsp {
+  border-radius: var(--rsp-radius, 22px);
+}
+
+@media (max-width: 1024px) {
+  .mm-stage--sidebar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+    gap: 10px;
+    overflow: hidden;
+  }
+
+  .mm-stage--sidebar .mm-stage__host-tile {
+    position: relative;
+    min-height: 0;
+  }
+
+  .mm-stage--sidebar .mm-stage__sidebar {
+    flex-direction: row;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    overflow-y: hidden;
+    height: min(42vw, 220px);
+    max-height: min(42vw, 220px);
+    gap: 10px;
+    padding-bottom: 2px;
+    scroll-snap-type: x mandatory;
+    container-type: size;
+  }
+
+  .mm-stage--sidebar .mm-stage__sidebar-tile {
+    flex: 0 0 calc((100cqw - 10px) / 2);
+    width: calc((100cqw - 10px) / 2);
+    height: 100%;
+    max-height: none;
+    min-height: 0;
+    aspect-ratio: auto;
+    scroll-snap-align: start;
+  }
+}
+
+.mm-stage--sidebar.mm-stage--bleed {
+  --stage-pad-x: 8px;
+  --stage-pad-y: 8px;
+  --stage-gap: 8px;
+  --tile-radius: 10px;
+  --sidebar-width: min(42vw, 260px);
+  background: #0b1220;
+}
+
+.mm-stage--sidebar.mm-stage--bleed .mm-stage__host-tile {
+  border: none;
+}
+
+/* Gallery screen share uses the same Host-stage sidebar grid */
+.meeting-app.meeting-light .mm-stage--gallery-share {
+  background: #ffffff;
+}
+
+/*
+ * Gallery view — tile size is always computed as if the chat column is present.
+ * Chat open: pack sits on the left. Chat hidden: same boxes, centered.
+ * 4-up (2×2) and 15-up (host + 14 sim) sizes are the reference; 16–50 keep the 15-up box.
+ */
+.mm-stage--gallery.mm-stage--index1 {
+  --stage-gap: 12px;
+  --stage-pad-x: 12px;
+  --stage-pad-y: 12px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 12px);
+  --stage-side-gutter: 0px;
+  --tile-radius: 14px;
+  --gallery-chat-col: var(--meeting-sidebar-width, 352px);
+  --gallery-cols: 2;
+  --gallery-rows: 1;
+  --gallery-gap: 12px;
+  --gallery-size-cols: 2;
+  --gallery-size-rows: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: stretch;
+  gap: 0;
+  padding: var(--stage-pad-y) var(--stage-pad-x) var(--stage-pad-bottom);
+  overflow: hidden;
+  background: #0f1117;
+  container-type: size;
+}
+
+.meeting-app.meeting-light .mm-stage--gallery.mm-stage--index1 {
+  background: #ffffff;
+}
+
+.mm-stage--gallery.mm-stage--pretty {
+  overflow: hidden;
+}
+
+.mm-stage--gallery.mm-stage--pretty.mm-stage--scroll {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+/* 3+ : a little side margin; width does not change when chat opens/closes */
+.mm-stage--gallery.mm-stage--pretty[data-shape="invert"],
+.mm-stage--gallery.mm-stage--pretty[data-shape="quad"],
+.mm-stage--gallery.mm-stage--pretty[data-shape="grid"] {
+  --stage-pad-x: clamp(18px, 3.6vw, 40px);
+  padding-left: var(--stage-pad-x);
+  padding-right: var(--stage-pad-x);
+}
+
+.mm-stage--gallery.mm-stage--pretty .mm-gallery-flow {
+  --g-cols: var(--gallery-cols, 2);
+  --g-rows: var(--gallery-rows, 1);
+  --g-gap: var(--gallery-gap, 12px);
+  --chat-slot: var(--gallery-chat-col, 352px);
+  --pack-w: calc(100% - var(--chat-slot) - var(--chat-gutter, 28px));
+  display: grid;
+  grid-template-columns: repeat(var(--g-cols), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--g-rows), minmax(0, 1fr));
+  justify-content: center;
+  align-content: stretch;
+  justify-items: stretch;
+  align-items: stretch;
+  gap: var(--g-gap);
+  width: var(--pack-w);
+  max-width: 100%;
+  height: 100%;
+  min-height: 0;
+  flex: 0 1 auto;
+  margin-left: auto;
+  margin-right: auto;
+  box-sizing: border-box;
+}
+
+/* Chat open: same pack width, sit left of the menu. Chat hidden: stay centered. */
+.meeting-app.meeting-light.sidebar-open:not(.viewport-mobile-portrait):not(.viewport-mobile-landscape)
+  .mm-stage--gallery.mm-stage--pretty
+  .mm-gallery-flow {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.mm-stage--gallery.mm-stage--pretty[data-shape="solo"] .mm-gallery-flow {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  justify-items: center;
+  align-items: center;
+  width: var(--pack-w);
+  height: 86%;
+  max-height: 86%;
+  align-self: center;
+}
+
+.mm-stage--gallery.mm-stage--pretty[data-shape="solo"] .mm-gallery-flow > .mm-slot {
+  width: 86%;
+  height: 100%;
+  justify-self: center;
+  align-self: center;
+}
+
+/* Self-view: keep the box centered in the leftover stage (not left-pinned to chat). */
+.meeting-app.meeting-light.sidebar-open:not(.viewport-mobile-portrait):not(.viewport-mobile-landscape)
+  .mm-stage--gallery.mm-stage--pretty[data-shape="solo"]
+  .mm-gallery-flow {
+  margin-left: auto;
+  margin-right: calc(var(--chat-slot) + var(--chat-gutter, 28px));
+}
+
+.mm-stage--gallery.mm-stage--pretty[data-shape="pair"] .mm-gallery-flow {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
 }
 
-.meeting-app.viewport-mobile-portrait .video-stage.jitsi-grid,
-.meeting-app.viewport-mobile-landscape .video-stage.jitsi-grid {
-  --stage-pad-bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
-  --stage-gap: 3px;
-  --stage-pad-x: 3px;
-  --stage-pad-y: 3px;
-  --tile-radius: 6px;
-  overflow: hidden;
+/* Mobile portrait: 2 tiles stacked (not tall side-by-side portraits). */
+.meeting-app.viewport-mobile-portrait
+  .mm-stage--gallery.mm-stage--pretty[data-shape="pair"]
+  .mm-gallery-flow {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  gap: 8px;
 }
 
-.meeting-app.meeting-light .video-stage.jitsi-grid {
-  background: #e8edf3;
+/* Reverse triangle: 2 on top, 1 same-size centered below */
+.mm-stage--gallery.mm-stage--pretty[data-shape="invert"] .mm-gallery-flow {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-/* ---------- Active speaker + Stage (featured + filmstrip) ---------- */
-.video-stage.layout-active-speaker,
-.video-stage.layout-stage {
+.mm-stage--gallery.mm-stage--pretty[data-shape="invert"] .mm-gallery-flow > .mm-slot:last-child {
+  grid-column: 1 / -1;
+  width: calc((100% - var(--g-gap)) / 2);
+  justify-self: center;
+}
+
+.mm-stage--gallery.mm-stage--pretty[data-shape="quad"] .mm-gallery-flow {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* 5+: equal cells fill the stage; leftover row is centered */
+.mm-stage--gallery.mm-stage--pretty[data-shape="grid"] .mm-gallery-flow {
   display: flex;
-  flex-direction: column;
-  gap: var(--stage-gap);
-  --stage-gap: 6px;
-  --stage-pad-x: 8px;
-  --stage-pad-y: 8px;
-  min-width: 1px;
-  min-height: 1px;
-  contain-intrinsic-size: 1px 1px;
-}
-
-.video-stage.layout-stage.has-side-strip {
-  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: stretch;
   align-items: stretch;
 }
 
-.video-stage .spotlight-pane {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
+.mm-stage--gallery.mm-stage--pretty[data-shape="grid"] .mm-gallery-flow > .mm-slot {
+  flex: 0 0 calc((100% - (var(--g-cols) - 1) * var(--g-gap)) / var(--g-cols));
+  width: calc((100% - (var(--g-cols) - 1) * var(--g-gap)) / var(--g-cols));
+  height: calc((100% - (var(--g-rows) - 1) * var(--g-gap)) / var(--g-rows));
 }
 
-.video-stage .featured-row {
-  flex: 1 1 auto;
-  min-height: 0;
+/* 15-up (host + 14 sim) box size is locked through 50 — same cell, extra rows scroll */
+.mm-stage--gallery.mm-stage--pretty[data-size-lock][data-shape="grid"] .mm-gallery-flow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-content: start;
+  height: 100%;
+}
+
+.mm-stage--gallery.mm-stage--pretty[data-size-lock][data-shape="grid"] .mm-gallery-flow > .mm-slot {
+  --lock-cols: var(--gallery-size-cols, 4);
+  --lock-rows: var(--gallery-size-rows, 4);
+  flex: 0 0 calc((100% - (var(--lock-cols) - 1) * var(--g-gap)) / var(--lock-cols));
+  width: calc((100% - (var(--lock-cols) - 1) * var(--g-gap)) / var(--lock-cols));
+  /* Match the 15-up fill cell (content-box height ÷ 4). Do not subtract stage padding again. */
+  height: calc((100cqh - (var(--lock-rows) - 1) * var(--g-gap)) / var(--lock-rows));
+}
+
+.mm-stage--gallery.mm-stage--pretty[data-scroll="1"] .mm-gallery-flow,
+.mm-stage--gallery.mm-stage--pretty.mm-stage--scroll .mm-gallery-flow {
+  align-content: start;
+  height: auto;
+  min-height: 100%;
+  flex: 1 0 auto;
+}
+
+/* Equal landscape cells — portrait streams cover-crop inside the same box */
+.mm-stage--gallery.mm-stage--pretty .mm-slot--box-square,
+.mm-stage--gallery.mm-stage--pretty .free-tile[data-box="square"],
+.mm-stage--gallery.mm-stage--pretty .mm-slot--box-portrait,
+.mm-stage--gallery.mm-stage--pretty .free-tile[data-box="portrait"] {
+  position: relative;
   width: 100%;
   height: 100%;
-  display: flex;
-  flex-direction: row;
-  gap: var(--stage-gap);
-  align-items: stretch;
-}
-
-.video-stage .featured-cell {
-  flex: 1 1 0;
   min-width: 0;
   min-height: 0;
-  display: flex;
-  overflow: hidden;
-}
-
-.video-stage .featured-row[data-count="2"] .featured-cell[data-kind="screen"] {
-  flex: 1.35 1 0;
-}
-
-.video-stage .featured-cell .video-tile,
-.video-stage .featured-cell .lk-participant-tile {
-  width: 100%;
-  height: 100%;
+  max-width: none;
+  max-height: none;
+  aspect-ratio: auto;
+  box-sizing: border-box;
+  margin: 0;
   border-radius: var(--tile-radius, 14px);
   overflow: hidden;
-}
-
-.video-filmstrip {
-  display: flex;
-  gap: var(--stage-gap);
-  min-width: 0;
-  min-height: 0;
-}
-
-.video-filmstrip.is-bottom {
-  flex: 0 0 auto;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  max-height: 30%;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
-}
-
-.video-filmstrip.is-side {
-  flex: 0 0 clamp(7.5rem, 22%, 11rem);
-  flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  max-width: 11rem;
-  scrollbar-width: thin;
-}
-
-.video-filmstrip .filmstrip-cell {
-  flex: 0 0 auto;
-  min-width: 0;
-  min-height: 0;
-  display: flex;
-}
-
-.video-filmstrip.is-bottom .filmstrip-cell {
-  width: clamp(5.5rem, 18vw, 9.5rem);
-  height: clamp(4rem, 22cqh, 7.5rem);
-}
-
-.video-filmstrip.is-side .filmstrip-cell {
-  width: 100%;
-  height: clamp(4.5rem, 18%, 7rem);
-}
-
-.video-filmstrip .filmstrip-cell .video-tile,
-.video-filmstrip .filmstrip-cell .lk-participant-tile {
-  width: 100%;
-  height: 100%;
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.video-stage.layout-active-speaker .video-tile .video-feed:not(.video-feed-blur),
-.video-stage.layout-active-speaker .video-tile video:not(.video-feed-blur),
-.video-stage.layout-stage .video-tile .video-feed:not(.video-feed-blur),
-.video-stage.layout-stage .video-tile video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: transparent;
-}
-
-.video-stage.layout-active-speaker .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
-.video-stage.layout-active-speaker .video-tile[data-fit="contain"] video:not(.video-feed-blur),
-.video-stage.layout-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
-.video-stage.layout-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: #0b1220;
-}
-
-.video-stage .featured-cell .video-tile,
-.video-stage .filmstrip-cell .video-tile {
-  background: #0b1220;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid,
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid,
-.meeting-app.viewport-mobile-portrait .video-stage.layout-active-speaker,
-.meeting-app.viewport-mobile-landscape .video-stage.layout-active-speaker,
-.meeting-app.viewport-mobile-portrait .video-stage.layout-stage,
-.meeting-app.viewport-mobile-landscape .video-stage.layout-stage {
-  --stage-pad-bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
-  --stage-gap: 4px;
-  --stage-pad-x: 4px;
-  --stage-pad-y: 4px;
-}
-
-.meeting-app.viewport-mobile-portrait .layout-picker,
-.meeting-app.viewport-mobile-landscape .layout-picker {
-  top: calc(0.45rem + env(safe-area-inset-top, 0px));
-  right: calc(0.45rem + env(safe-area-inset-right, 0px));
-}
-
-.meeting-app.viewport-mobile-portrait .layout-picker-btn,
-.meeting-app.viewport-mobile-landscape .layout-picker-btn {
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: 10px;
-}
-
-/* Mobile viewports: dock sits lower; stage padding matches so tiles + bar align */
-.meeting-app.viewport-mobile-portrait .meeting-v2-control-bar-wrap,
-.meeting-app.viewport-mobile-landscape .meeting-v2-control-bar-wrap {
-  bottom: calc(0.2rem + env(safe-area-inset-bottom, 0px));
-  padding-bottom: 0;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage,
-.meeting-app.viewport-mobile-landscape .video-stage {
-  --stage-pad-bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
-  --stage-pad-x: 8px;
-  --stage-pad-y: 8px;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile,
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile {
-  border-color: rgba(15, 23, 42, 0.06);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile video {
-  object-position: center center;
-  background: transparent;
-}
-
-/* Mobile viewer: keep portrait cover; landscape laptop/tablet show full frame */
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="portrait"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="portrait"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="square"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="square"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="portrait"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="portrait"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="square"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="square"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="landscape"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="landscape"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="unknown"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-stream-aspect="unknown"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="landscape"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="landscape"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="unknown"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-stream-aspect="unknown"] video:not(.video-feed-blur) {
-  object-fit: contain;
-}
-
-.meeting-app.chrome-hidden .meeting-v2-header,
-.meeting-app.chrome-hidden .meeting-v2-control-bar-wrap,
-.meeting-app.chrome-hidden .meeting-sidebar:not(.open),
-.meeting-app.chrome-hidden .join-banner {
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-8px);
-  transition: opacity 220ms ease, transform 220ms ease;
-}
-
-.meeting-app.is-client-view .meeting-v2-header,
-.meeting-app.is-client-view .meeting-v2-control-bar-wrap,
-.meeting-app.is-client-view .join-banner,
-.meeting-app.viewport-mobile-landscape .meeting-v2-header,
-.meeting-app.viewport-mobile-landscape .meeting-v2-control-bar-wrap,
-.meeting-app.viewport-mobile-landscape .join-banner {
-  transition: opacity 220ms ease, transform 220ms ease;
-}
-
-.meeting-app.chrome-hidden .meeting-v2-control-bar-wrap {
-  transform: translate(-50%, 12px);
-}
-
-.meeting-app.is-client-view .meeting-body,
-.meeting-app.viewport-mobile-landscape .meeting-body {
-  grid-template-columns: minmax(0, 1fr);
-  padding: 0;
-  gap: 0;
-}
-
-.meeting-app.is-client-view .meeting-stage,
-.meeting-app.viewport-mobile-landscape .meeting-stage {
-  border-radius: 0;
+  background: #1f242d;
   border: none;
-}
-
-.meeting-app.is-client-view .conference-root,
-.meeting-app.viewport-mobile-landscape .conference-root {
-  padding-bottom: 0;
-}
-
-/* Keep dock clearance; only collapse when chrome is intentionally hidden */
-.meeting-app.chrome-hidden .video-stage {
-  --stage-pad-bottom: 0.75rem;
-}
-
-@media (orientation: landscape) and (max-height: 520px) {
-  .meeting-app .video-stage[data-layout="mosaic"] {
-    --stage-pad-x: 6px;
-    --stage-pad-y: 6px;
-    --stage-pad-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
-    --stage-gap: 8px;
-  }
-}
-
-/* Solo side panels: chat / participants / share each open alone */
-.rsp-solo-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  min-height: 3rem;
-  padding: 0 0.35rem 0 0.9rem;
-}
-
-.rsp-solo-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  color: var(--rsp-ink);
-}
-
-.rsp-solo-title h2 {
-  margin: 0;
-  font-family: var(--rsp-font);
-  font-size: 0.82rem;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.rsp-close {
-  flex-shrink: 0;
-  width: 2.5rem;
-  height: 2.5rem;
-  border: none;
-  background: transparent;
-  color: var(--rsp-ink-dim);
-  font-size: 1.4rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: color 160ms ease, background 160ms ease;
-}
-
-.rsp-close:hover {
-  color: var(--rsp-ink);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.meeting-app.meeting-light .rsp-close:hover {
-  background: rgba(15, 23, 42, 0.05);
-}
-
-.rsp-search-wrap {
-  position: relative;
-  flex: 1 1 100%;
-  min-width: 0;
-}
-
-.rsp-suggest {
-  position: absolute;
-  z-index: 8;
-  top: calc(100% + 0.35rem);
-  left: 0;
-  right: 0;
-  margin: 0;
-  padding: 0.35rem;
-  list-style: none;
-  border-radius: 14px;
-  border: 1px solid var(--rsp-line);
-  background: var(--rsp-paper-2);
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.35);
-  max-height: 240px;
-  overflow: auto;
-}
-
-.meeting-app.meeting-light .rsp-suggest {
-  background: #fff;
-  border-color: rgba(15, 23, 42, 0.1);
-  box-shadow: 0 16px 32px rgba(15, 23, 42, 0.14);
-}
-
-.rsp-suggest-empty {
-  padding: 0.65rem 0.75rem;
-  color: var(--rsp-ink-dim);
-  font-size: 0.78rem;
-}
-
-.rsp-suggest-item {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin: 0;
-  border: none;
-  border-radius: 10px;
-  padding: 0.45rem 0.5rem;
-  background: transparent;
-  color: var(--rsp-ink);
-  text-align: left;
-  cursor: pointer;
-  transition: background 140ms ease;
-}
-
-.rsp-suggest-item:hover,
-.rsp-suggest-item.is-active {
-  background: rgba(61, 207, 182, 0.14);
-}
-
-.meeting-app.meeting-light .rsp-suggest-item:hover,
-.meeting-app.meeting-light .rsp-suggest-item.is-active {
-  background: rgba(37, 99, 235, 0.08);
-}
-
-.rsp-suggest-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 0.1rem;
-  min-width: 0;
-}
-
-.rsp-suggest-copy strong {
-  font-size: 0.82rem;
-  font-weight: 650;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.rsp-suggest-copy em {
-  font-style: normal;
-  font-size: 0.7rem;
-  color: var(--rsp-ink-dim);
-}
-
-.rsp-invite {
-  gap: 0.75rem;
-  padding: 1rem 0.9rem;
-}
-
-.rsp-invite-hint {
-  margin: 0;
-  font-size: 0.82rem;
-  color: var(--rsp-ink-dim);
-}
-
-.rsp-invite-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 0.5rem;
-  align-items: center;
-}
-
-.rsp-invite-input {
-  width: 100%;
-  min-width: 0;
-  border: 1px solid var(--rsp-line);
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.22);
-  color: var(--rsp-ink);
-  padding: 0.55rem 0.85rem;
-  font-family: var(--rsp-font);
-  font-size: 0.82rem;
+  box-shadow: none;
   outline: none;
 }
 
-.meeting-app.meeting-light .rsp-invite-input {
-  background: rgba(15, 23, 42, 0.04);
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty,
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty {
+  --stage-pad-y: 8px;
+  --stage-pad-bottom: calc(
+    var(--dock-height, 4.75rem) + env(safe-area-inset-bottom, 0px) + 10px
+  );
+  --gallery-gap: 8px;
+  --tile-radius: 12px;
+  --gallery-chat-col: 0px;
 }
 
-.rsp-invite-copy {
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, var(--rsp-accent-deep, #1f9e8a) 0%, var(--rsp-accent) 100%);
-  color: #062018;
-  height: 2.25rem;
-  padding: 0 1rem;
-  font-family: var(--rsp-font);
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  cursor: pointer;
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty .mm-gallery-flow,
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty .mm-gallery-flow {
+  --chat-slot: 0px;
+  --pack-w: 100%;
+  width: 100%;
+  margin-left: 0;
+  margin-right: 0;
 }
 
-.meeting-app.meeting-light .rsp-invite-copy {
-  background: var(--mm-blue);
-  color: #fff;
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty[data-shape="solo"],
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty[data-shape="pair"],
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty[data-shape="solo"],
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty[data-shape="pair"] {
+  --stage-pad-x: 8px;
 }
 
-.rsp-invite-room {
-  margin: 0;
-  font-size: 0.75rem;
-  color: var(--rsp-ink-dim);
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty[data-shape="invert"],
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty[data-shape="quad"],
+.meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty[data-shape="grid"],
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty[data-shape="invert"],
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty[data-shape="quad"],
+.meeting-app.viewport-mobile-landscape .mm-stage--gallery.mm-stage--pretty[data-shape="grid"] {
+  --stage-pad-x: clamp(12px, 4vw, 28px);
 }
 
-.rsp-invite-room code {
-  color: var(--rsp-ink);
-  font-size: 0.78rem;
-}
-
-.meeting-app .audio-safety-exit-btn {
-  margin-left: 0.75rem;
-  padding: 0.25rem 0.65rem;
-  border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(0, 0, 0, 0.25);
-  color: inherit;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.meeting-app .audio-safety-exit-btn:hover {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-
-/* Layout simulator � fake joiners for grid QA */
-
-/* Mobile portrait / landscape ? equal grids keep 9:16 / 16:9 packing + cover */
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid,
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid,
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="gallery"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="gallery"],
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="standard"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="standard"],
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="extended"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="extended"],
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] {
-  --stage-pad-bottom: calc(5.85rem + env(safe-area-inset-bottom, 0px));
-  --stage-gap: 4px;
-  --stage-pad-x: 4px;
-  --stage-pad-y: 4px;
-  overflow-x: hidden;
-  overflow-y: auto;
-  align-content: flex-start;
-  justify-content: center;
-  column-gap: var(--stage-gap);
-  row-gap: var(--stage-gap);
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-cols="1"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-cols="1"],
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"][data-cols="1"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"][data-cols="1"] {
-  justify-content: center;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-density="roomy"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-density="roomy"],
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"][data-density="roomy"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"][data-density="roomy"] {
-  overflow: hidden;
-  align-content: center;
-  --stage-gap: 5px;
-  --stage-pad-x: 5px;
-  --stage-pad-y: 5px;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.equal-grid[data-density="dense"],
-.meeting-app.viewport-mobile-landscape .video-stage.equal-grid[data-density="dense"],
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"][data-density="dense"],
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"][data-density="dense"] {
-  --stage-gap: 4px;
-  --stage-pad-x: 4px;
-}
-
-.meeting-app.viewport-mobile-portrait .mosaic-cell,
-.meeting-app.viewport-mobile-landscape .mosaic-cell,
-.meeting-app.viewport-mobile-portrait .grid-cell,
-.meeting-app.viewport-mobile-landscape .grid-cell {
-  min-height: 120px;
-  align-items: center;
-  justify-content: center;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.has-featured .mosaic-cell.is-featured,
-.meeting-app.viewport-mobile-landscape .video-stage.has-featured .mosaic-cell.is-featured {
-  min-height: 0;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.has-featured .mosaic-featured-row,
-.meeting-app.viewport-mobile-landscape .video-stage.has-featured .mosaic-featured-row {
-  flex: 1.8 1 0;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.has-featured .mosaic-peers .mosaic-cell,
-.meeting-app.viewport-mobile-landscape .video-stage.has-featured .mosaic-peers .mosaic-cell {
-  min-height: 96px;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage.has-featured .mosaic-cell.is-featured .video-tile,
-.meeting-app.viewport-mobile-landscape .video-stage.has-featured .mosaic-cell.is-featured .video-tile,
-.meeting-app.viewport-mobile-portrait .video-stage.has-featured .mosaic-cell.is-featured .video-tile[data-stream-aspect],
-.meeting-app.viewport-mobile-landscape .video-stage.has-featured .mosaic-cell.is-featured .video-tile[data-stream-aspect] {
+.mm-stage--gallery.mm-stage--pretty .mm-slot .video-tile,
+.mm-stage--gallery.mm-stage--pretty .mm-slot .lk-participant-tile,
+.mm-stage--gallery.mm-stage--pretty .free-tile .video-tile {
   width: 100%;
   height: 100%;
-  max-width: 100%;
-  max-height: 100%;
-  aspect-ratio: auto;
+  border-radius: inherit;
+  border: none;
+  box-shadow: none;
+  outline: none;
 }
 
-.meeting-app.viewport-mobile-portrait .video-stage.has-featured,
-.meeting-app.viewport-mobile-landscape .video-stage.has-featured {
-  overflow: hidden;
-  align-content: stretch;
-  justify-content: flex-start;
+.mm-stage--gallery.mm-stage--pretty .mm-slot .video-tile .video-feed,
+.mm-stage--gallery.mm-stage--pretty
+  .mm-slot
+  .video-tile
+  video:not(.video-feed-blur),
+.mm-stage--gallery.mm-stage--pretty .free-tile .video-tile .video-feed,
+.mm-stage--gallery.mm-stage--pretty
+  .free-tile
+  .video-tile
+  video:not(.video-feed-blur) {
+  object-fit: cover;
 }
 
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile,
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile,
-.meeting-app.viewport-mobile-portrait .grid-cell .video-tile,
-.meeting-app.viewport-mobile-landscape .grid-cell .video-tile {
-  border-color: rgba(15, 23, 42, 0.06);
-  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+/* Gallery chat column alignment */
+.meeting-app.meeting-light:has(.mm-stage--gallery.mm-stage--index1) .meeting-sidebar {
+  top: var(--stage-pad-y, 16px);
+  right: var(--stage-pad-x, 16px);
+  bottom: calc(var(--dock-height, 5.75rem) + env(safe-area-inset-bottom, 0px) + 16px);
+  width: var(--meeting-sidebar-width, 352px);
+  max-width: min(var(--meeting-sidebar-width, 352px), calc(100% - 2.4rem));
+}
+
+.meeting-app.meeting-light:has(.mm-stage--gallery.mm-stage--index1) .meeting-sidebar .rsp {
+  border-radius: var(--rsp-radius, 22px);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.mm-stage--gallery.mm-stage--index1.mm-stage--bleed,
+.mm-stage--gallery.mm-stage--pretty.mm-stage--bleed {
+  --stage-pad-y: 8px;
+  --tile-radius: 10px;
   background: #0b1220;
 }
 
-/* Portrait phones — aspect lives on the cell; tile fills it (contain-blur, no crop) */
-.meeting-app.viewport-mobile-portrait .equal-grid .mosaic-cell .video-tile,
-.meeting-app.viewport-mobile-portrait .equal-grid .grid-cell .video-tile,
-.meeting-app.viewport-mobile-landscape .equal-grid .mosaic-cell .video-tile,
-.meeting-app.viewport-mobile-landscape .equal-grid .grid-cell .video-tile {
+.mm-stage--gallery.mm-stage--pretty.mm-stage--bleed[data-shape="solo"],
+.mm-stage--gallery.mm-stage--pretty.mm-stage--bleed[data-shape="pair"] {
+  --stage-pad-x: 8px;
+}
+
+/* ============================================================================
+ * Mobile responsive upgrade — safe areas, touch targets, overlays
+ * ============================================================================ */
+
+html,
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+html:has(.meeting-app),
+html:has(.meeting-app) body {
   height: 100%;
-  width: 100%;
-  max-width: 100%;
-  aspect-ratio: auto;
-  flex: 1 1 auto;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-portrait .grid-cell .video-tile[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-portrait .grid-cell .video-tile[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-landscape .grid-cell .video-tile[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-landscape .grid-cell .video-tile[data-stream-aspect="square"] {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
-  aspect-ratio: 9 / 16;
-  flex: 0 0 auto;
+html:has(.meeting-app.sidebar-open),
+html:has(.meeting-app.sidebar-open) body,
+html:has(.meeting-app.share-open),
+html:has(.meeting-app.share-open) body {
+  overflow: hidden;
+  touch-action: none;
 }
 
-.meeting-app.viewport-mobile-portrait .equal-grid .mosaic-cell .video-tile[data-stream-aspect],
-.meeting-app.viewport-mobile-portrait .equal-grid .grid-cell .video-tile[data-stream-aspect],
-.meeting-app.viewport-mobile-landscape .equal-grid .mosaic-cell .video-tile[data-stream-aspect],
-.meeting-app.viewport-mobile-landscape .equal-grid .grid-cell .video-tile[data-stream-aspect] {
-  width: 100%;
-  height: 100%;
-  aspect-ratio: auto;
-  flex: 1 1 auto;
+.meeting-app.meeting-v2 {
+  min-height: 100dvh;
+  min-height: 100svh;
+  padding-top: env(safe-area-inset-top, 0);
+  padding-left: env(safe-area-inset-left, 0);
+  padding-right: env(safe-area-inset-right, 0);
 }
 
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="landscape"],
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="unknown"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="landscape"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="unknown"],
-.meeting-app.viewport-mobile-portrait .grid-cell .video-tile[data-stream-aspect="landscape"],
-.meeting-app.viewport-mobile-portrait .grid-cell .video-tile[data-stream-aspect="unknown"],
-.meeting-app.viewport-mobile-landscape .grid-cell .video-tile[data-stream-aspect="landscape"],
-.meeting-app.viewport-mobile-landscape .grid-cell .video-tile[data-stream-aspect="unknown"] {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
-  aspect-ratio: 16 / 9;
-  flex: 0 0 auto;
+.meeting-app.meeting-v2 .meeting-v2-header {
+  padding-top: calc(0.6rem + env(safe-area-inset-top, 0));
+  padding-left: calc(1rem + env(safe-area-inset-left, 0));
+  padding-right: calc(1rem + env(safe-area-inset-right, 0));
 }
 
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile video:not(.video-feed-blur) {
-  object-fit: contain;
-  background: transparent;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-fit="contain"] .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur) {
-  object-fit: contain;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] .video-feed,
-.meeting-app.viewport-mobile-portrait .video-stage .video-tile[data-fit="contain"] video,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-fit="contain"] .video-feed,
-.meeting-app.viewport-mobile-landscape .video-stage .video-tile[data-fit="contain"] video {
-  object-fit: contain;
-  background: #0b1220;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage .video-chrome,
-.meeting-app.viewport-mobile-landscape .video-stage .video-chrome {
-  left: 0.45rem;
-  right: auto;
-  bottom: 0.45rem;
-}
-
-/* Portrait phones ? keep 9:16 cover */
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="square"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="portrait"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="square"] {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
-  aspect-ratio: 9 / 16;
-  flex: 0 0 auto;
-}
-
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="landscape"],
-.meeting-app.viewport-mobile-portrait .mosaic-cell .video-tile[data-stream-aspect="unknown"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="landscape"],
-.meeting-app.viewport-mobile-landscape .mosaic-cell .video-tile[data-stream-aspect="unknown"] {
-  height: 100%;
-  width: auto;
-  max-width: 100%;
-  aspect-ratio: 16 / 9;
-  flex: 0 0 auto;
-}
-
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-portrait .video-stage[data-layout="mosaic"] .video-tile video:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile .video-feed:not(.video-feed-blur),
-.meeting-app.viewport-mobile-landscape .video-stage[data-layout="mosaic"] .video-tile video:not(.video-feed-blur) {
-  object-fit: contain;
-  object-position: center center;
-  background: transparent;
-}
-
-@media (orientation: landscape) and (max-height: 520px) {
-  .meeting-app .video-stage[data-layout="mosaic"] {
-    --stage-pad-x: 6px;
-    --stage-pad-y: 6px;
-    --stage-pad-bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
-    --stage-gap: 6px;
+@media (max-width: 960px) {
+  .meeting-app.meeting-v2.chrome-hidden .meeting-v2-header {
+    transform: translateY(calc(-100% - env(safe-area-inset-top, 0)));
+    opacity: 0;
+    pointer-events: none;
   }
 
-  .meeting-app .video-stage[data-layout="mosaic"] .mosaic-cell {
-    min-height: 88px;
+  .meeting-app.meeting-v2 .meeting-v2-header {
+    transition: transform 0.28s ease, opacity 0.28s ease;
+  }
+
+  .meeting-app.meeting-light > .banner,
+  .meeting-app.meeting-light > .banner.warn,
+  .meeting-app.meeting-light > .banner.error,
+  .meeting-app.meeting-light > .banner.info {
+    position: absolute;
+    top: calc(3.35rem + env(safe-area-inset-top, 0));
+    left: calc(0.65rem + env(safe-area-inset-left, 0));
+    right: calc(0.65rem + env(safe-area-inset-right, 0));
+    z-index: 12;
+    margin: 0;
+    font-size: 0.82rem;
+    padding: 0.55rem 0.75rem;
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  }
+
+  .meeting-app.meeting-light .meeting-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
   }
 }
 
-.layout-sim-panel {
-  position: absolute;
-  top: 0.65rem;
-  left: 0.65rem;
-  z-index: 12;
-  width: min(280px, calc(100vw - 1.5rem));
-  padding: 0.65rem 0.75rem 0.7rem;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.94);
-  border: 1px solid rgba(15, 23, 42, 0.1);
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.14);
-  backdrop-filter: blur(12px);
-  color: #0f172a;
-  pointer-events: auto;
+.meeting-sidebar-backdrop {
+  display: none;
 }
 
-.layout-sim-panel-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.45rem;
-}
-
-.layout-sim-panel-head strong {
-  font-family: "Sora", "Outfit", sans-serif;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-.layout-sim-panel-meta {
-  font-size: 0.68rem;
-  color: #64748b;
-}
-
-.layout-sim-panel-row {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-}
-
-.layout-sim-field {
-  flex: 1;
-  min-width: 0;
-}
-
-.layout-sim-field input {
-  width: 100%;
-  box-sizing: border-box;
-  height: 2.1rem;
-  padding: 0 0.55rem;
-  border-radius: 10px;
-  border: 1px solid rgba(15, 23, 42, 0.14);
-  background: #fff;
-  color: #0f172a;
-  font: inherit;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.layout-sim-btn {
-  flex: 0 0 auto;
-  height: 2.1rem;
-  padding: 0 0.7rem;
-  border-radius: 10px;
-  border: none;
-  background: #1a73e8;
-  color: #fff;
-  font: inherit;
-  font-size: 0.78rem;
-  font-weight: 650;
-  cursor: pointer;
-}
-
-.layout-sim-btn:hover {
-  filter: brightness(1.05);
-}
-
-.layout-sim-btn-ghost {
-  background: rgba(15, 23, 42, 0.06);
-  color: #0f172a;
-}
-
-.layout-sim-btn-ghost:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.layout-sim-hint {
-  margin: 0.45rem 0 0;
-  font-size: 0.65rem;
-  line-height: 1.35;
-  color: #64748b;
+.mm-share-backdrop {
+  display: none;
 }
 
 @media (max-width: 768px) {
-  .layout-sim-panel {
+  .meeting-sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: rgba(15, 23, 42, 0.55);
+    backdrop-filter: blur(4px);
+    cursor: pointer;
+    animation: mm-fade-in 0.2s ease both;
+  }
+
+  /* Mobile chat: full-screen cover over video + dock */
+  .meeting-app.meeting-light .meeting-sidebar,
+  .meeting-app.meeting-light .meeting-sidebar.open {
+    position: fixed;
+    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    max-height: 100dvh;
+    z-index: 95;
+    border-radius: 0;
+    overflow: hidden;
+    box-shadow: none;
+    padding: env(safe-area-inset-top, 0) env(safe-area-inset-right, 0)
+      env(safe-area-inset-bottom, 0) env(safe-area-inset-left, 0);
+    animation: mm-sheet-up 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .meeting-app.meeting-light .meeting-sidebar .rsp {
+    border-radius: 0;
+    height: 100%;
+    max-height: none;
+  }
+
+  .meeting-app:not(.meeting-light) .meeting-sidebar {
+    inset: 0;
+    width: 100%;
+    max-width: none;
+    right: 0;
+    border-radius: 0;
+    z-index: 95;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-header {
+    padding-top: calc(0.45rem + env(safe-area-inset-top, 0));
+    padding-bottom: 0.45rem;
+    gap: 0.35rem;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-header-left,
+  .meeting-app.meeting-light .meeting-v2-header-right {
+    gap: 0.4rem;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-meta {
+    padding: 0.22rem 0.5rem;
+    gap: 0.4rem;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-mode {
+    font-size: 0.72rem;
+    padding: 0.12rem 0.45rem;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-share-label {
+    display: none;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-share {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .meeting-app.meeting-light .meeting-v2-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 0.72rem;
+  }
+
+  .meeting-app.meeting-v2 .meeting-v2-control-bar-wrap {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: none;
+    transform: none;
+    padding: 0.4rem max(0.65rem, env(safe-area-inset-left, 0px))
+      max(0.45rem, env(safe-area-inset-bottom, 0px))
+      max(0.65rem, env(safe-area-inset-right, 0px));
+    z-index: 80;
+  }
+
+  .mm-share-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: rgba(15, 23, 42, 0.38);
+    backdrop-filter: blur(2px);
+    cursor: pointer;
+    animation: mm-fade-in 0.2s ease both;
+  }
+
+  .mm-share-pop {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
     top: auto;
-    bottom: calc(6.5rem + env(safe-area-inset-bottom, 0px));
-    left: 0.5rem;
+    transform: none;
+    width: 100%;
+    max-width: none;
+    z-index: 40;
+    border-radius: 20px 20px 0 0;
+    padding: 1rem 1rem calc(1rem + env(safe-area-inset-bottom, 0));
+    box-shadow: 0 -16px 48px rgba(15, 23, 42, 0.2);
+    animation: mm-sheet-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .mm-share-pop-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mm-share-pop-copy {
+    min-height: 48px;
+    font-size: 0.92rem;
+  }
+
+  .mm-share-pop-input,
+  .mm-share-pop-link {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .guest-join-shell {
+    min-height: 100dvh;
+    min-height: 100svh;
+    align-items: flex-start;
+    padding:
+      max(1rem, env(safe-area-inset-top))
+      max(1rem, env(safe-area-inset-right))
+      max(1.25rem, env(safe-area-inset-bottom))
+      max(1rem, env(safe-area-inset-left));
+  }
+
+  .guest-join-panel {
+    width: 100%;
+    padding-top: 0.5rem;
+  }
+
+  .guest-join-shell .dashboard-form-card input,
+  .guest-join-shell .dashboard-form-card button,
+  .dashboard-form-card input,
+  .dashboard-form-card button,
+  .dashboard-form-card select {
+    min-height: 48px;
+    font-size: 16px;
+  }
+
+  .dashboard-header {
+    padding-left: calc(1rem + env(safe-area-inset-left, 0));
+    padding-right: calc(1rem + env(safe-area-inset-right, 0));
+  }
+
+  .dashboard-header-name {
+    max-width: 8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .dashboard-main {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0));
+  }
+
+  .dashboard-actions {
+    flex-direction: column;
+  }
+
+  .action-card {
+    min-width: 0;
+    width: 100%;
+  }
+}
+
+@media (max-width: 520px) {
+  .meeting-app.meeting-light .meeting-v2-brand .brand-logo-text {
+    display: none;
+  }
+
+  .meeting-v2-meta .meeting-v2-mode {
+    display: none;
+  }
+
+  .layout-picker {
+    top: calc(0.45rem + env(safe-area-inset-top, 0));
+    right: calc(0.45rem + env(safe-area-inset-right, 0));
+  }
+
+  .join-meeting-title {
+    font-size: 0.98rem;
+    line-height: 1.35;
+  }
+
+  .dashboard-sidebar {
+    width: 56px;
+  }
+
+  .dashboard-welcome {
+    padding: 1.15rem 1rem;
+  }
+
+  .dashboard-greeting {
+    font-size: 1.15rem;
+  }
+}
+
+@keyframes mm-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes mm-sheet-up {
+  from {
+    opacity: 0;
+    transform: translateY(12%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

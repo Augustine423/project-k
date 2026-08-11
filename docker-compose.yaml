@@ -156,29 +156,29 @@ services:
       timeout: 5s
       retries: 3
 
-  # Optional Vite HMR for local coding only — enable with: --profile dev
-  web-dev:
-    profiles: ["dev"]
-    image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-web:dev
-    pull_policy: ${PULL_POLICY:-missing}
-    build:
-      context: ./web
-      dockerfile: Dockerfile
-      target: dev
-    restart: unless-stopped
-    depends_on:
-      server:
-        condition: service_healthy
-    environment:
-      VITE_API_URL: "${PUBLIC_API_URL:-}"
-      VITE_PROXY_TARGET: "http://server:4000"
-      VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
-    ports:
-      - "${WEB_DEV_PORT:-5174}:5173"
-    volumes:
-      - ./web/src:/app/src
-      - ./web/index.html:/app/index.html
-      - ./web/vite.config.ts:/app/vite.config.ts
+  # # Optional Vite HMR for local coding only — enable with: --profile dev
+  # web-dev:
+  #   profiles: ["dev"]
+  #   image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-web:dev
+  #   pull_policy: ${PULL_POLICY:-missing}
+  #   build:
+  #     context: ./web
+  #     dockerfile: Dockerfile
+  #     target: dev
+  #   restart: unless-stopped
+  #   depends_on:
+  #     server:
+  #       condition: service_healthy
+  #   environment:
+  #     VITE_API_URL: "${PUBLIC_API_URL:-}"
+  #     VITE_PROXY_TARGET: "http://server:4000"
+  #     VITE_LIVEKIT_PROXY_TARGET: "http://livekit:7880"
+  #   ports:
+  #     - "${WEB_DEV_PORT:-5174}:5173"
+  #   volumes:
+  #     - ./web/src:/app/src
+  #     - ./web/index.html:/app/index.html
+  #     - ./web/vite.config.ts:/app/vite.config.ts
 
 volumes:
   redis-data:

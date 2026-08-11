@@ -30,10 +30,10 @@ export function GalleryPagination({
         {totalPages > 1 ? (
           <>
             <strong>
-              {page}/{totalPages}
+              Page {page}/{totalPages}
             </strong>
             {totalParticipants != null && totalParticipants > 1 ? (
-              <> · {totalParticipants} participants</>
+              <> · {totalParticipants.toLocaleString()} in room · 50/page</>
             ) : null}
           </>
         ) : (

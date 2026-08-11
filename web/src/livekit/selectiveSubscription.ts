@@ -15,7 +15,7 @@ export interface SubscriptionTargets {
 
 /**
  * Build who this client should subscribe to.
- * Video: current gallery page only (~50).
+ * Video: current gallery page only (50 people — scale path for 10k+ rooms).
  * Audio: visible page + active speakers + host (capped).
  */
 export function buildSubscriptionTargets(opts: {

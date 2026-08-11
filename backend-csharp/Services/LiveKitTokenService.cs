@@ -33,6 +33,8 @@ public sealed class LiveKitTokenService
             ["room"] = roomName,
             ["canPublish"] = canPublish,
             ["canSubscribe"] = canSubscribe,
+            // Needed so clients can publish device/aspect attributes (mm.videoAspect).
+            ["canUpdateOwnMetadata"] = true,
         };
         // Restrict publishable track kinds when set (e.g. webinar attendees → microphone only).
         if (canPublish && canPublishSources is { Count: > 0 })

@@ -91,18 +91,12 @@ public sealed class RoomService
         if (!string.IsNullOrEmpty(room.Pin) && room.Pin != (pin ?? ""))
             throw new RoomServiceException(RoomError.BadPin, "incorrect pin");
 
-        var existing = await _store.ListParticipantsAsync(roomId, ct);
         var name = displayName.Trim();
 
-        // Host re-opening the join link with the same name must reclaim the host seat
-        // (never mint a second "guest" copy of the host — that inflated counts to 3).
-        var host = existing.FirstOrDefault(p => p.Role == ParticipantRoles.Host);
-        if (host is not null &&
-            string.Equals(host.DisplayName.Trim(), name, StringComparison.OrdinalIgnoreCase))
-        {
-            var hostStats = await _store.GetMediaStatsAsync(roomId, ct);
-            return (BuildTicket(room, host, mediaHost, hostStats.Publishers), Array.Empty<string>());
-        }
+        // Always mint a new guest seat. Never reclaim the host by display-name match —
+        // that reused the host LiveKit identity, kicked the real host, and made the
+        // joiner invisible as a second person. Host refresh uses EnsureParticipantSeatAsync
+        // + the existing JWT / session ticket instead.
 
         // Re-join / second device with same guest name must not leave ghost seats in Redis.
         var replaced = await ReplaceGuestSessionsByNameAsync(roomId, name, ct);

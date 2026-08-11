@@ -49,6 +49,50 @@ export function MicIcon({ className, muted = false, size }: IconProps & { muted?
   );
 }
 
+/**
+ * Jitsi Meet noise-suppression toolbar icons
+ * (`noise-suppression-on.svg` / `noise-suppression-off.svg`).
+ * `off` = noise suppression currently enabled (slashed bars), matching Jitsi’s toggledIcon.
+ */
+export function NoiseCancelIcon({
+  className,
+  off = false,
+  size = 22,
+}: IconProps & { off?: boolean }) {
+  // Jitsi assets are 20×20 filled paths; scale via viewBox.
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 20 20"
+      width={size}
+      height={size}
+      aria-hidden="true"
+      fill="currentColor"
+    >
+      {off ? (
+        <>
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M6.06204 5.25986C5.92029 5.40926 5.83333 5.61114 5.83333 5.83333V14.1667C5.83333 14.6269 6.20643 15 6.66667 15C7.1269 15 7.5 14.6269 7.5 14.1667V6.69782L6.06204 5.25986ZM9.16667 8.36449V16.6667C9.16667 17.1269 9.53976 17.5 10 17.5C10.4602 17.5 10.8333 17.1269 10.8333 16.6667V10.0312L9.16667 8.36449ZM13.3016 12.4994C12.8666 12.4831 12.5169 12.1334 12.5006 11.6984L13.3016 12.4994ZM14.1667 10.9688L12.5 9.30218V8.33333C12.5 7.8731 12.8731 7.5 13.3333 7.5C13.7936 7.5 14.1667 7.8731 14.1667 8.33333V10.9688ZM17.4905 14.2927L15.8333 12.6355V5.83333C15.8333 5.3731 16.2064 5 16.6667 5C17.1269 5 17.5 5.3731 17.5 5.83333V14.1667C17.5 14.2095 17.4968 14.2516 17.4905 14.2927ZM10.8333 7.63551L9.16667 5.96884V3.33333C9.16667 2.8731 9.53976 2.5 10 2.5C10.4602 2.5 10.8333 2.8731 10.8333 3.33333V7.63551ZM3.33333 7.5C2.8731 7.5 2.5 7.8731 2.5 8.33333V11.6667C2.5 12.1269 2.8731 12.5 3.33333 12.5C3.79357 12.5 4.16667 12.1269 4.16667 11.6667V8.33333C4.16667 7.8731 3.79357 7.5 3.33333 7.5Z"
+          />
+          <path
+            fillRule="evenodd"
+            clipRule="evenodd"
+            d="M1.91469 1.91469C2.24546 1.58392 2.78183 1.58401 3.11271 1.91488L18.0851 16.8873C18.416 17.2182 18.4161 17.7545 18.0853 18.0853C17.7545 18.4161 17.2182 18.416 16.8873 18.0851L1.91488 3.11271C1.58401 2.78183 1.58392 2.24546 1.91469 1.91469Z"
+          />
+        </>
+      ) : (
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M10 2.5C9.53976 2.5 9.16667 2.8731 9.16667 3.33333V16.6667C9.16667 17.1269 9.53976 17.5 10 17.5C10.4602 17.5 10.8333 17.1269 10.8333 16.6667V3.33333C10.8333 2.8731 10.4602 2.5 10 2.5ZM6.66667 5C6.20643 5 5.83333 5.3731 5.83333 5.83333V14.1667C5.83333 14.6269 6.20643 15 6.66667 15C7.1269 15 7.5 14.6269 7.5 14.1667V5.83333C7.5 5.3731 7.1269 5 6.66667 5ZM2.5 8.33333C2.5 7.8731 2.8731 7.5 3.33333 7.5C3.79357 7.5 4.16667 7.8731 4.16667 8.33333V11.6667C4.16667 12.1269 3.79357 12.5 3.33333 12.5C2.8731 12.5 2.5 12.1269 2.5 11.6667V8.33333ZM12.5 8.33333C12.5 7.8731 12.8731 7.5 13.3333 7.5C13.7936 7.5 14.1667 7.8731 14.1667 8.33333V11.6667C14.1667 12.1269 13.7936 12.5 13.3333 12.5C12.8731 12.5 12.5 12.1269 12.5 11.6667V8.33333ZM15.8333 5.83333C15.8333 5.3731 16.2064 5 16.6667 5C17.1269 5 17.5 5.3731 17.5 5.83333V14.1667C17.5 14.6269 17.1269 15 16.6667 15C16.2064 15 15.8333 14.6269 15.8333 14.1667V5.83333Z"
+        />
+      )}
+    </svg>
+  );
+}
+
 export function CameraIcon({ className, off = false, size }: IconProps & { off?: boolean }) {
   return (
     <IconShell className={className} size={size}>
@@ -162,20 +206,6 @@ export function RaiseHandIcon({ className, size }: IconProps) {
         strokeWidth={STROKE}
         strokeLinecap="round"
         strokeLinejoin="round"
-      />
-    </IconShell>
-  );
-}
-
-export function SettingsIcon({ className, size }: IconProps) {
-  return (
-    <IconShell className={className} size={size}>
-      <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth={STROKE} />
-      <path
-        d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4l1.4-1.4M17 7l1.4-1.4"
-        stroke="currentColor"
-        strokeWidth={STROKE}
-        strokeLinecap="round"
       />
     </IconShell>
   );

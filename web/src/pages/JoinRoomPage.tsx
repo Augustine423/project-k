@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ApiRequestError, joinRoom } from "../api/client";
+import { readStoredMeetingName } from "../api/inviteLink";
 import { getTicket, saveTicket } from "../api/ticketStore";
 import { BrandLogo } from "../components/BrandLogo";
 import { DashboardLayout } from "../components/DashboardLayout";
@@ -40,6 +41,14 @@ function rememberGuestName(name: string) {
 
 export function JoinRoomPage() {
   const { roomId: routeRoomId } = useParams();
+  const [searchParams] = useSearchParams();
+  const resolvedRoomId = (routeRoomId ?? "").trim();
+  const meetingTitle = (
+    searchParams.get("meeting") ??
+    (resolvedRoomId ? readStoredMeetingName(resolvedRoomId) : "")
+  )
+    .trim()
+    .slice(0, 80);
   const navigate = useNavigate();
   const { isAuthenticated, user, ready } = useAuth();
   const [roomId, setRoomId] = useState(routeRoomId ?? "");
@@ -56,15 +65,10 @@ export function JoinRoomPage() {
     setNameReady(true);
   }, [ready, user?.username, user?.displayName]);
 
-  // Same tab already has a ticket — re-enter the room instead of minting another seat.
-  useEffect(() => {
-    const id = (routeRoomId ?? roomId).trim();
-    if (!id) return;
-    const existing = getTicket(id);
-    if (existing?.room?.id === id && existing.participantToken) {
-      navigate(`/room/${id}`, { replace: true });
-    }
-  }, [routeRoomId, roomId, navigate]);
+  const existingTicket =
+    resolvedRoomId && getTicket(resolvedRoomId)?.room?.id === resolvedRoomId
+      ? getTicket(resolvedRoomId)
+      : null;
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -90,9 +94,21 @@ export function JoinRoomPage() {
   const form = (
     <form className="form-card dashboard-form-card" onSubmit={onSubmit}>
       <h1>{routeRoomId ? "Join meeting" : "Join with room ID"}</h1>
+      {meetingTitle && (
+        <p className="join-meeting-title" aria-label="Meeting name">
+          {meetingTitle}
+        </p>
+      )}
+      {existingTicket && resolvedRoomId && (
+        <p className="form-field-note" style={{ marginTop: 0 }}>
+          Already joined as <strong>{existingTicket.participant.displayName}</strong>?{" "}
+          <Link to={`/room/${resolvedRoomId}`}>Continue to meeting</Link>
+        </p>
+      )}
       {!isAuthenticated && (
         <p className="muted form-lead">
           No account needed. Enter a name to join — we suggested one from this device.
+          Use a different name than the host so you appear as a separate person.
         </p>
       )}
       <label>

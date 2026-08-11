@@ -1,4 +1,5 @@
 import type { MeetingPanel } from "../components/ControlBar";
+import type { Participant } from "../api/types";
 import { LiveKitConference } from "../livekit/LiveKitConference";
 import type { MediaSession } from "./normalizeJoinTicket";
 
@@ -13,6 +14,9 @@ export interface MediaConferenceProps {
   onStatus?: (message: string) => void;
   onLeave: () => void;
   participantCount?: number;
+  /** Control-plane roster — seeds gallery boxes on refresh before LiveKit remotes arrive. */
+  seedParticipants?: Participant[];
+  selfParticipantId?: string;
   /** Guests-only count for the Participants dock badge (excludes host). */
   peopleBadgeCount?: number;
   chatBadge?: number | string;

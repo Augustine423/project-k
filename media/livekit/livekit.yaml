@@ -9,10 +9,9 @@ rtc:
   port_range_start: 52000
   port_range_end: 52099
   use_external_ip: false
-  # Must be the Wi‑Fi LAN IP phones can reach (same as PUBLIC_HOST / LIVEKIT_NODE_IP).
-  node_ip: 192.168.1.6
-  # Loopback ICE breaks phone joins on the LAN.
-  enable_loopback_candidate: false
+  # Advertised ICE IP comes from docker compose: livekit --node-ip ${LIVEKIT_NODE_IP}
+  # (must match PUBLIC_HOST — your Wi‑Fi LAN IP).
+  enable_loopback_candidate: true
 redis:
   address: redis:6379
 room:

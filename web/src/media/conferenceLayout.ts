@@ -1,17 +1,32 @@
 import type { ViewerViewportMode } from "../hooks/useViewerViewport";
+import { GALLERY_PAGE_SIZE } from "./galleryVideoPolicy";
+import {
+  packGalleryFreeformSlots,
+  galleryFreeformStripUnits,
+  type GalleryBoxKind,
+} from "./galleryFreeformLayout";
+import {
+  GALLERY_SIZE_LOCK,
+  resolveGalleryCountLayout,
+  type GalleryCountShape,
+} from "./galleryCountLayout";
+import {
+  meetPackSlots,
+  meetStripUnits,
+  meetUseSingleRow,
+  resolveMeetFilmstrip,
+} from "./meetFilmstripLayout";
 
 /**
- * Meet-like + Jitsi tile layouts — user picks via floating Grid button.
- * gallery / standard / extended = aspect mosaic; jitsi = fill-cell tile view;
- * activeSpeaker / stage = featured + strip.
+ * MeetingMax conference layouts — user picks via Grid button.
+ *
+ * References (project-k):
+ * - `gallery` — centered 1:1 / 9:16 pretty flex gallery (host + guest).
+ * - `sidebar` — project-k/index.html main-stage: large host + right participant
+ *   strip (chat/menu column width); chat overlays that strip.
  */
-export type ConferenceLayoutMode =
-  | "gallery"
-  | "standard"
-  | "extended"
-  | "jitsi"
-  | "activeSpeaker"
-  | "stage";
+
+export type ConferenceLayoutMode = "gallery" | "sidebar";
 
 export const LAYOUT_STORAGE_KEY = "mm.layoutMode";
 export const DEFAULT_LAYOUT_MODE: ConferenceLayoutMode = "gallery";
@@ -21,36 +36,99 @@ export const LAYOUT_MODE_OPTIONS: ReadonlyArray<{
   label: string;
   description: string;
 }> = [
-  { id: "gallery", label: "Gallery", description: "Equal tiles, balanced" },
-  { id: "standard", label: "Standard", description: "Fewer, larger tiles" },
-  { id: "extended", label: "Extended", description: "More people on screen" },
-  { id: "jitsi", label: "Jitsi grid", description: "Fill-the-stage equal tiles" },
-  { id: "activeSpeaker", label: "Active speaker", description: "Focus on who’s talking" },
-  { id: "stage", label: "Stage", description: "Host & share up front" },
+  {
+    id: "gallery",
+    label: "Gallery view",
+    description: "1:1 + 9:16 pretty gallery · web & mobile",
+  },
+  {
+    id: "sidebar",
+    label: "Host stage",
+    description: "Large host + right sidebar · index.html",
+  },
 ];
 
-export type StreamAspect = "portrait" | "landscape" | "square" | "unknown";
-
-/** How a tile should render a stream inside its cell. */
-export type TileFitMode = "cover" | "contain" | "contain-blur";
-
-export type GridDensity = "roomy" | "cozy" | "dense";
-
-/** @deprecated use GridDensity */
-export type MosaicDensity = GridDensity;
+/** index1.html `.video-gallery` min tile width. */
+export const GALLERY_MIN_TILE_PX = 260;
+/** index1.html `.video-gallery` min tile row height. */
+export const GALLERY_MIN_ROW_PX = 180;
+/** index1.html workspace chat column / `.chat-sidebar` width. */
+export const GALLERY_CHAT_COLUMN_PX = 340;
 
 const LAYOUT_MODES = new Set<string>(LAYOUT_MODE_OPTIONS.map((o) => o.id));
 
+/** Desktop tile-view lock (Jitsi-ish ~ visible tiles before scroll). */
+export const VIEWPORT_TILE_CAP = 16;
+/** @deprecated */
+export const GRID_VIEWPORT_LOCK = VIEWPORT_TILE_CAP;
+
+/** Desktop lock columns (Jitsi DEFAULT_MAX_COLUMNS prefers ~5; we use 4 for 4×4 lock). */
+export const LOCK_COLS = 4;
+/** @deprecated */
+export const GRID_LOCK_COLS = LOCK_COLS;
+
+/** Jitsi filmstrip / tile aspect. */
+export const TILE_ASPECT_RATIO = 16 / 9;
+
+/** Host-stage peer strip width — matches chat/menu column (`--meeting-sidebar-width`). */
+export const SIDEBAR_WIDTH_PX = 340;
+
+export type StreamAspect = "portrait" | "landscape" | "square" | "unknown";
+export type TileFitMode = "cover" | "contain" | "contain-blur";
+export type GridDensity = "roomy" | "cozy" | "dense";
+/** @deprecated */
+export type MosaicDensity = GridDensity;
+
+export function lockColumnsForViewer(viewerMode?: ViewerViewportMode): number {
+  if (viewerMode === "mobile-portrait") return 2;
+  if (viewerMode === "mobile-landscape") return 4;
+  return LOCK_COLS;
+}
+
+export function viewportTileCapForViewer(_viewerMode?: ViewerViewportMode): number {
+  return GALLERY_SIZE_LOCK;
+}
+
+export function shouldLockGridSize(
+  tileCount: number,
+  _viewerMode?: ViewerViewportMode,
+): boolean {
+  return tileCount >= GALLERY_SIZE_LOCK;
+}
+
+export function layoutPageSize(_mode?: ConferenceLayoutMode): number {
+  return GALLERY_PAGE_SIZE;
+}
+
+export function layoutRemotesPerPage(_mode?: ConferenceLayoutMode): number {
+  return Math.max(1, layoutPageSize() - 1);
+}
+
 export function isConferenceLayoutMode(value: string): value is ConferenceLayoutMode {
   return LAYOUT_MODES.has(value);
+}
+
+/** Map legacy gallery/stage/focus/tile ids → gallery | sidebar. */
+export function normalizeLayoutMode(mode?: string): ConferenceLayoutMode {
+  if (
+    mode === "sidebar" ||
+    mode === "stage" ||
+    mode === "focus" ||
+    mode === "activeSpeaker" ||
+    mode === "host"
+  ) {
+    return "sidebar";
+  }
+  // "tile" was the previous id for Gallery view
+  return "gallery";
 }
 
 export function readStoredLayoutMode(): ConferenceLayoutMode {
   if (typeof window === "undefined") return DEFAULT_LAYOUT_MODE;
   try {
     const raw = window.localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (raw === "mosaic") return DEFAULT_LAYOUT_MODE;
     if (raw && isConferenceLayoutMode(raw)) return raw;
+    if (raw) return normalizeLayoutMode(raw);
   } catch {
     /* ignore */
   }
@@ -67,219 +145,133 @@ export function persistLayoutMode(mode: ConferenceLayoutMode): void {
 }
 
 export function isEqualGridMode(mode: ConferenceLayoutMode): boolean {
-  return mode === "gallery" || mode === "standard" || mode === "extended";
+  return normalizeLayoutMode(mode) === "gallery";
 }
 
-export function isJitsiGridMode(mode: ConferenceLayoutMode): boolean {
-  return mode === "jitsi";
+/** @deprecated */
+export function isJitsiGridMode(_mode: ConferenceLayoutMode): boolean {
+  return false;
 }
 
-/** Max tiles per page (local + remotes). */
-export function layoutPageSize(mode: ConferenceLayoutMode): number {
-  switch (mode) {
-    case "standard":
-      return 16;
-    case "gallery":
-      return 25;
-    case "extended":
-    case "jitsi":
-      return 50;
-    case "activeSpeaker":
-    case "stage":
-      return 50;
-  }
-}
-
-/** Remotes allowed on one page so local + remotes ≤ page size. */
-export function layoutRemotesPerPage(mode: ConferenceLayoutMode): number {
-  return Math.max(1, layoutPageSize(mode) - 1);
-}
-
-/**
- * Prefer stored / explicit user choice. Legacy callers without a mode get Gallery.
- */
 export function resolveConferenceLayout(
   _viewerMode?: ViewerViewportMode,
   _tileCount = 1,
   preferred?: ConferenceLayoutMode,
 ): ConferenceLayoutMode {
-  return preferred ?? DEFAULT_LAYOUT_MODE;
+  return preferred ? normalizeLayoutMode(preferred) : DEFAULT_LAYOUT_MODE;
 }
 
-export function resolveGridDensity(
-  tileCount: number,
-  mode: ConferenceLayoutMode,
-): GridDensity {
-  if (mode === "standard") return "roomy";
-  if (mode === "extended" || mode === "jitsi") return "dense";
+export function resolveGridDensity(tileCount: number): GridDensity {
   const n = Math.max(1, tileCount);
   if (n <= 4) return "roomy";
-  if (n <= 16) return "cozy";
+  if (n <= VIEWPORT_TILE_CAP) return "cozy";
   return "dense";
 }
 
-/** @deprecated use resolveGridDensity */
+/** @deprecated */
 export function resolveMosaicDensity(tileCount: number): GridDensity {
-  return resolveGridDensity(tileCount, "gallery");
+  return resolveGridDensity(tileCount);
 }
 
 /**
- * Column count for equal grids — Standard fewer cols, Extended denser, Gallery balanced.
+ * Choose cols/rows that maximize equal 16:9 tile size in the stage
+ * (Google Meet / Jitsi TILE_VIEW packing).
  */
+export function resolveBalancedEqualGrid(
+  slotCount: number,
+  viewerMode?: ViewerViewportMode,
+): { cols: number; rows: number } {
+  const n = Math.max(1, Math.min(Math.round(slotCount), GALLERY_PAGE_SIZE));
+  if (n <= 1) return { cols: 1, rows: 1 };
+
+  // Approximate stage aspect by viewer (exact pixel measure happens in CSS via cqi/cqh).
+  const stageAspect =
+    viewerMode === "mobile-portrait"
+      ? 9 / 16
+      : viewerMode === "mobile-landscape"
+        ? 18 / 9
+        : 16 / 10;
+
+  const maxCols =
+    viewerMode === "mobile-portrait" ? Math.min(3, n) : viewerMode === "mobile-landscape" ? Math.min(5, n) : Math.min(6, n);
+
+  let bestCols = 1;
+  let bestRows = n;
+  let bestScore = -1;
+
+  for (let cols = 1; cols <= maxCols; cols++) {
+    const rows = Math.ceil(n / cols);
+    // Cell size in normalized stage units (width=stageAspect, height=1).
+    const cellW = stageAspect / cols;
+    const cellH = 1 / rows;
+    // Largest 16:9 footprint that fits in the cell.
+    const tileW = Math.min(cellW, cellH * (16 / 9));
+    const tileH = tileW * (9 / 16);
+    const area = tileW * tileH;
+    const unused = cols * rows - n;
+    const score = area * (1 - unused * 0.08);
+    if (score > bestScore) {
+      bestScore = score;
+      bestCols = cols;
+      bestRows = rows;
+    }
+  }
+
+  return { cols: bestCols, rows: bestRows };
+}
+
+/**
+ * Jitsi-style near-square columns (filmstrip `getNotResponsiveTileViewGridDimensions` idea).
+ * Caps by viewer: phone 2–4, landscape phone 6, desktop up to 5–8 within a page.
+ */
+export function resolveTileColumns(
+  tileCount: number,
+  viewerMode?: ViewerViewportMode,
+): number {
+  return resolveBalancedEqualGrid(tileCount, viewerMode).cols;
+}
+
+/** @deprecated aliases */
 export function resolveEqualGridColumns(
   tileCount: number,
-  mode: ConferenceLayoutMode,
+  _mode?: ConferenceLayoutMode,
   viewerMode?: ViewerViewportMode,
 ): number {
-  const pageCap = layoutPageSize(mode);
-  const n = Math.max(1, Math.min(Math.round(tileCount), pageCap));
-  if (n <= 1) return 1;
-
-  if (mode === "standard") {
-    if (viewerMode === "mobile-portrait") {
-      if (n <= 2) return 1;
-      if (n <= 4) return 2;
-      return 2;
-    }
-    if (n <= 2) return 2;
-    if (n <= 4) return 2;
-    if (n <= 9) return 3;
-    return 4;
-  }
-
-  if (mode === "extended") {
-    if (viewerMode === "mobile-portrait") {
-      if (n <= 2) return 2;
-      if (n <= 6) return 3;
-      return 4;
-    }
-    if (viewerMode === "mobile-landscape") {
-      if (n <= 4) return 4;
-      if (n <= 12) return 5;
-      return 6;
-    }
-    if (n <= 4) return 2;
-    if (n <= 9) return 3;
-    if (n <= 16) return 4;
-    if (n <= 25) return 5;
-    if (n <= 36) return 6;
-    if (n <= 49) return 7;
-    return 8;
-  }
-
-  // gallery (default balanced)
-  return resolveMosaicColumns(n, viewerMode);
+  return resolveTileColumns(tileCount, viewerMode);
 }
 
-/**
- * Jitsi-style columns: near-square packing that fills the stage.
- * Mobile portrait stays 1–2 cols; landscape/desktop scale with count.
- */
-export function resolveJitsiColumns(
-  tileCount: number,
-  viewerMode?: ViewerViewportMode,
-): number {
-  const n = Math.max(1, Math.min(Math.round(tileCount), 50));
-  if (n <= 1) return 1;
-
-  if (viewerMode === "mobile-portrait") {
-    if (n === 2) return 1;
-    if (n <= 4) return 2;
-    if (n <= 9) return 3;
-    return 3;
-  }
-
-  if (viewerMode === "mobile-landscape") {
-    if (n === 2) return 2;
-    if (n <= 4) return 2;
-    if (n <= 6) return 3;
-    if (n <= 12) return 4;
-    return 5;
-  }
-
-  // Desktop / tablet — classic Jitsi sqrt packing
-  if (n === 2) return 2;
-  if (n === 3) return 2;
-  if (n === 4) return 2;
-  if (n <= 6) return 3;
-  if (n <= 9) return 3;
-  if (n <= 12) return 4;
-  if (n <= 16) return 4;
-  if (n <= 20) return 5;
-  if (n <= 25) return 5;
-  if (n <= 30) return 6;
-  if (n <= 36) return 6;
-  if (n <= 42) return 7;
-  if (n <= 49) return 7;
-  return 8;
-}
-
-/**
- * Pick column count so the grid stays near-square and readable.
- * Used by Gallery and as a shared helper.
- */
 export function resolveMosaicColumns(
   tileCount: number,
   viewerMode?: ViewerViewportMode,
 ): number {
-  const n = Math.max(1, Math.min(Math.round(tileCount), 50));
-  if (n <= 1) return 1;
+  return resolveTileColumns(tileCount, viewerMode);
+}
 
-  if (viewerMode === "mobile-portrait") {
-    if (n <= 2) return 2;
-    if (n <= 4) return 2;
-    if (n <= 9) return 3;
-    return 4;
-  }
-
-  if (viewerMode === "mobile-landscape") {
-    if (n === 2) return 2;
-    if (n === 3) return 3;
-    if (n <= 6) return 3;
-    if (n <= 12) return 4;
-    if (n <= 20) return 5;
-    return 6;
-  }
-
-  if (n === 2) return 2;
-  if (n === 3) return 3;
-  if (n === 4) return 2;
-  if (n <= 6) return 3;
-  if (n <= 9) return 3;
-  if (n <= 12) return 4;
-  if (n <= 16) return 4;
-  if (n <= 20) return 5;
-  if (n <= 25) return 5;
-  if (n <= 30) return 6;
-  if (n <= 36) return 6;
-  if (n <= 42) return 7;
-  if (n <= 49) return 7;
-  return 8;
+export function resolveJitsiColumns(
+  tileCount: number,
+  viewerMode?: ViewerViewportMode,
+): number {
+  return resolveTileColumns(tileCount, viewerMode);
 }
 
 export function classifyStreamAspect(width: number, height: number): StreamAspect {
   if (width <= 0 || height <= 0) return "unknown";
   const ratio = width / height;
-  // Clear phone vs webcam bands (Meet-style). Mid band ≈ square tablets.
   if (ratio > 1.2) return "landscape";
   if (ratio < 0.85) return "portrait";
   return "square";
 }
 
-/**
- * Camera tiles use contain-blur so faces/content are never cropped.
- * A blurred cover layer fills letterbox bars (Meet-style).
- * Screen share still uses plain contain via fit override.
- */
+/** Tile + focus use cover; screen share overrides to contain in UI. */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
-  layout: ConferenceLayoutMode;
+  layout: ConferenceLayoutMode | string;
   size: "grid" | "spotlight" | "strip";
 }): TileFitMode {
   void opts.streamAspect;
   void opts.layout;
   void opts.size;
-  return "contain-blur";
+  return "cover";
 }
 
 export type StageParticipantTile = {
@@ -293,6 +285,8 @@ export type StageParticipantTile = {
   isSpeaking?: boolean;
   isScreenShare?: boolean;
   preferredAspect?: StreamAspect;
+  /** Publisher device from mm.device — gallery 9:16 only when `mobile` + portrait. */
+  sourceDevice?: "mobile" | "tablet" | "laptop" | string;
 };
 
 export function isHostTile(
@@ -308,7 +302,7 @@ export function isHostTile(
   return tile.roleBadge === "Host" || tile.roleBadge === "Co-host";
 }
 
-/** Prefer screen share alone when present (no camera+share duo). Else host. */
+/** Prefer live screen (Meet/Jitsi auto-pin), else host. */
 export function pickHostScreenFeatured(
   tiles: StageParticipantTile[],
   hostParticipantId?: string,
@@ -321,9 +315,92 @@ export function pickHostScreenFeatured(
   return [];
 }
 
-/**
- * Active speaker primary: screen alone if sharing; else speaking / host / first camera.
- */
+export function isPortraitTile(tile: StageParticipantTile): boolean {
+  return (
+    !tile.isScreenShare &&
+    tile.preferredAspect === "portrait" &&
+    (tile.sourceDevice === "mobile" || !tile.sourceDevice)
+  );
+}
+
+export function isSmallGroupCount(tileCount: number): boolean {
+  return tileCount === 2 || tileCount === 3;
+}
+
+export type LandscapePackSlot =
+  | { kind: "single"; tile: StageParticipantTile }
+  | { kind: "portrait-pair"; tiles: [StageParticipantTile, StageParticipantTile] }
+  | { kind: "freeform"; tile: StageParticipantTile; box: GalleryBoxKind };
+
+/** Pair consecutive portrait phones into one landscape-width slot (Meet dynamic row). */
+export function packLandscapeSlots(tiles: StageParticipantTile[]): LandscapePackSlot[] {
+  return meetPackSlots(tiles) as LandscapePackSlot[];
+}
+
+/** Host-stage / filmstrip: Meet portrait pairing. Gallery uses packGalleryFreeformSlots. */
+export function packSlotsForViewer(
+  tiles: StageParticipantTile[],
+  viewerMode?: ViewerViewportMode,
+): LandscapePackSlot[] {
+  void viewerMode;
+  return meetPackSlots(tiles) as LandscapePackSlot[];
+}
+
+/** Gallery freeform: individual 1:1 square + 9:16 portrait boxes. */
+export function packGallerySlots(tiles: StageParticipantTile[]): LandscapePackSlot[] {
+  return packGalleryFreeformSlots(tiles) as LandscapePackSlot[];
+}
+
+/** @deprecated use meetStripUnits */
+export function filmstripLandscapeUnits(slots: readonly LandscapePackSlot[]): number {
+  const meetSlots = slots
+    .filter((s) => s.kind !== "freeform")
+    .map((s) =>
+      s.kind === "portrait-pair"
+        ? s
+        : { kind: "single" as const, tile: s.tile },
+    );
+  return meetStripUnits(meetSlots);
+}
+
+/** @deprecated use meetUseSingleRow */
+export function shouldUseSingleTileRow(
+  slots: readonly LandscapePackSlot[],
+  viewerMode?: ViewerViewportMode,
+  sizeLocked = false,
+): boolean {
+  const meetSlots = slots
+    .filter((s) => s.kind !== "freeform")
+    .map((s) =>
+      s.kind === "portrait-pair"
+        ? s
+        : { kind: "single" as const, tile: s.tile },
+    );
+  return meetUseSingleRow(meetSlots, viewerMode, sizeLocked);
+}
+
+export function splitHostLargePeers(peers: StageParticipantTile[]): {
+  side: StageParticipantTile[];
+  bottom: StageParticipantTile[];
+  sideCols: number;
+  sideRows: number;
+} {
+  const n = peers.length;
+  if (n <= 0) return { side: [], bottom: [], sideCols: 1, sideRows: 1 };
+  const MAX_SIDE = 4;
+  const MAX_BOTTOM = 8;
+  if (n <= MAX_SIDE) {
+    const sideCols = n <= 2 ? 1 : 2;
+    return { side: peers, bottom: [], sideCols, sideRows: Math.max(1, Math.ceil(n / sideCols)) };
+  }
+  return {
+    side: peers.slice(0, MAX_SIDE),
+    bottom: peers.slice(MAX_SIDE, MAX_SIDE + MAX_BOTTOM),
+    sideCols: 2,
+    sideRows: 2,
+  };
+}
+
 export function pickActiveSpeakerFeatured(
   tiles: StageParticipantTile[],
   opts: {
@@ -335,10 +412,8 @@ export function pickActiveSpeakerFeatured(
 ): StageParticipantTile[] {
   const screen = tiles.find((t) => t.isScreenShare && t.hasVideo);
   if (screen) return [screen];
-
   const localId = opts.localId ?? "local";
-  const speakers = opts.activeSpeakerIds ?? [];
-  for (const id of speakers) {
+  for (const id of opts.activeSpeakerIds ?? []) {
     if (opts.localIdentity && id === opts.localIdentity) {
       const local = tiles.find((t) => t.id === localId && !t.isScreenShare);
       if (local) return [local];
@@ -346,14 +421,12 @@ export function pickActiveSpeakerFeatured(
     const byId = tiles.find((t) => !t.isScreenShare && t.id === id);
     if (byId) return [byId];
   }
-
   const host = tiles.find((t) => isHostTile(t, opts.hostParticipantId));
   if (host) return [host];
   const firstCam = tiles.find((t) => !t.isScreenShare);
   return firstCam ? [firstCam] : tiles.slice(0, 1);
 }
 
-/** Order tiles with screen first, then host, then self, then others. */
 export function orderStageTiles(
   tiles: StageParticipantTile[],
   opts: { hostParticipantId?: string; localId?: string } = {},
@@ -372,16 +445,252 @@ export function orderStageTiles(
   });
 }
 
-/** @deprecated alias */
 export const orderMosaicTiles = orderStageTiles;
-/** @deprecated alias */
 export const orderGalleryTiles = orderStageTiles;
 
-export function layoutDataCount(tileCount: number, maxPerPage = 50): number {
+export function layoutDataCount(tileCount: number, maxPerPage = GALLERY_PAGE_SIZE): number {
   return Math.min(Math.max(tileCount, 1), maxPerPage);
 }
 
-/** @deprecated use layoutDataCount */
-export function mosaicDataCount(tileCount: number, maxPerPage = 50): number {
+export function mosaicDataCount(tileCount: number, maxPerPage = GALLERY_PAGE_SIZE): number {
   return layoutDataCount(tileCount, maxPerPage);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Stage plan: Gallery view | Host stage (index.html) | auto focus on share      */
+/* -------------------------------------------------------------------------- */
+
+export type StagePlanKind = "solo" | "smallGroup" | "gallery" | "focus" | "sidebar";
+
+type StagePlanBase = {
+  kind: StagePlanKind;
+  layoutMode: ConferenceLayoutMode;
+  viewerMode?: ViewerViewportMode;
+  count: number;
+  tiles: StageParticipantTile[];
+};
+
+export type SoloStagePlan = StagePlanBase & {
+  kind: "solo";
+  orientation: "portrait" | "landscape";
+  tile: StageParticipantTile;
+};
+
+export type SmallGroupStagePlan = StagePlanBase & {
+  kind: "smallGroup";
+  /** Packed slots — one horizontal row (desktop) or column (mobile portrait). */
+  slots: LandscapePackSlot[];
+  stripUnits: number;
+  orientation: "row" | "column";
+};
+
+export type TileStagePlan = StagePlanBase & {
+  kind: "gallery";
+  cols: number;
+  rows: number;
+  density: GridDensity;
+  sizeLocked: boolean;
+  scroll: boolean;
+  slots: LandscapePackSlot[];
+  lockCols: number;
+  viewportCap: number;
+  portraitGrid: boolean;
+  fillBleed: boolean;
+  /** ≤4 landscape units in one Meet-style row (fixed footprints). */
+  singleRow: boolean;
+  stripUnits: number;
+  shape: GalleryCountShape;
+  sizeCols: number;
+  sizeRows: number;
+  sizeN: number;
+};
+
+/** @deprecated */
+export type EqualGridStagePlan = TileStagePlan;
+
+/** Auto focus filmstrip when screen-sharing inside Gallery view. */
+export type FocusStagePlan = StagePlanBase & {
+  kind: "focus";
+  focus: StageParticipantTile;
+  /** All camera tiles in one Meet-style horizontal strip (never side+bottom split). */
+  filmstripSlots: LandscapePackSlot[];
+  peerSlots: LandscapePackSlot[];
+  /** Width budget in landscape footprints (2 portraits = 1). */
+  stripUnits: number;
+  sizeLocked: boolean;
+  scroll: boolean;
+  lockCols: number;
+  viewportCap: number;
+  fillBleed: boolean;
+};
+
+/** @deprecated */
+export type HostLargeStagePlan = FocusStagePlan;
+
+/**
+ * project-k/index.html Host stage:
+ * large host left + vertical participants sidebar (~300px).
+ */
+export type SidebarStagePlan = StagePlanBase & {
+  kind: "sidebar";
+  focus: StageParticipantTile;
+  peerSlots: LandscapePackSlot[];
+  scroll: boolean;
+  fillBleed: boolean;
+};
+
+export type StagePlan =
+  | SoloStagePlan
+  | SmallGroupStagePlan
+  | TileStagePlan
+  | FocusStagePlan
+  | SidebarStagePlan;
+
+export type ResolveStagePlanInput = {
+  tiles: StageParticipantTile[];
+  /** User Grid button choice: gallery | sidebar */
+  layoutMode?: ConferenceLayoutMode | string;
+  viewerMode?: ViewerViewportMode;
+  hostParticipantId?: string;
+  maxPerPage?: number;
+  localId?: string;
+};
+
+function normalizeTiles(tiles: StageParticipantTile[]): StageParticipantTile[] {
+  return tiles.length > 0
+    ? tiles
+    : [{ id: "placeholder", label: "Waiting…", stream: null, hasVideo: false }];
+}
+
+function soloOrientation(viewerMode?: ViewerViewportMode): "portrait" | "landscape" {
+  return viewerMode === "mobile-portrait" ? "portrait" : "landscape";
+}
+
+/** LiveKit Meet / Jitsi: pin screen into focus while in Gallery view. */
+export function shouldUseFocusLayout(tiles: StageParticipantTile[]): boolean {
+  return tiles.some((t) => t.isScreenShare && t.hasVideo);
+}
+
+function pickFocusTile(
+  tiles: StageParticipantTile[],
+  hostParticipantId?: string,
+): StageParticipantTile {
+  const featured = pickHostScreenFeatured(tiles, hostParticipantId);
+  return featured[0] ?? tiles.find((t) => !t.isScreenShare) ?? tiles[0];
+}
+
+export function resolveStagePlan(input: ResolveStagePlanInput): StagePlan {
+  const preferred = normalizeLayoutMode(input.layoutMode);
+  const { viewerMode, hostParticipantId, localId = "local" } = input;
+  const pageSize = input.maxPerPage ?? layoutPageSize(preferred);
+  const tiles = orderStageTiles(normalizeTiles(input.tiles), {
+    hostParticipantId,
+    localId,
+  });
+  const count = layoutDataCount(tiles.length, pageSize);
+  const fillBleed =
+    viewerMode === "mobile-portrait" || viewerMode === "mobile-landscape";
+
+  // 1) Solo — Host stage only. Gallery keeps the large→small count ladder (1 = large self-view).
+  if (tiles.length === 1 && preferred !== "gallery") {
+    return {
+      kind: "solo",
+      layoutMode: preferred,
+      viewerMode,
+      count: 1,
+      tiles,
+      orientation: soloOrientation(viewerMode),
+      tile: tiles[0],
+    };
+  }
+
+  // 2) Host stage (project-k/index.html) — large host + right sidebar
+  if (preferred === "sidebar") {
+    const focus = pickFocusTile(tiles, hostParticipantId);
+    const peers = tiles.filter((t) => t.id !== focus.id);
+    const peerSlots = packSlotsForViewer(peers, viewerMode);
+    return {
+      kind: "sidebar",
+      layoutMode: "sidebar",
+      viewerMode,
+      count,
+      tiles,
+      focus,
+      peerSlots,
+      scroll: peerSlots.length > 2,
+      fillBleed,
+    };
+  }
+
+  // 3) Gallery view — equal grid for everyone (screen share handled below).
+  // Small calls (≤4 landscape units) stay one Meet-style row; larger use balanced equal grid.
+  // (No separate smallGroup pyramid — one equal-grid path.)
+
+  // 4) Gallery view + screen share → Host-stage style (large share + right peer sidebar)
+  if (shouldUseFocusLayout(tiles)) {
+    const focus = pickFocusTile(tiles, hostParticipantId);
+    const peers = tiles.filter((t) => t.id !== focus.id);
+    const meet = resolveMeetFilmstrip(peers, {
+      viewerMode,
+      sizeLocked: shouldLockGridSize(count, viewerMode),
+      withPresentation: true,
+    });
+    const viewportCap = viewportTileCapForViewer(viewerMode);
+    const lockCols = lockColumnsForViewer(viewerMode);
+    const sizeLocked = shouldLockGridSize(count, viewerMode);
+
+    return {
+      kind: "focus",
+      layoutMode: "gallery",
+      viewerMode,
+      count,
+      tiles,
+      focus,
+      filmstripSlots: meet.slots as LandscapePackSlot[],
+      peerSlots: meet.slots as LandscapePackSlot[],
+      stripUnits: meet.stripUnits,
+      sizeLocked,
+      scroll: meet.scroll,
+      lockCols,
+      viewportCap,
+      fillBleed,
+    };
+  }
+
+  // 5) Default Gallery view — large→small by count; lock tile size at 16; scroll to 50/page
+  const slots = packGallerySlots(tiles);
+  const stripUnits = galleryFreeformStripUnits(
+    slots.map((s) =>
+      s.kind === "freeform"
+        ? { box: s.box }
+        : { box: "square" as GalleryBoxKind },
+    ),
+  );
+  const pack = resolveGalleryCountLayout(tiles.length, viewerMode);
+  const viewportCap = GALLERY_SIZE_LOCK;
+  const lockCols = pack.sizeCols;
+
+  return {
+    kind: "gallery",
+    layoutMode: "gallery",
+    viewerMode,
+    count: pack.count,
+    tiles,
+    cols: pack.cols,
+    rows: pack.rows,
+    density: resolveGridDensity(Math.min(pack.count, viewportCap)),
+    sizeLocked: pack.sizeLocked,
+    scroll: pack.scroll,
+    slots,
+    lockCols,
+    viewportCap,
+    portraitGrid: viewerMode === "mobile-portrait",
+    fillBleed,
+    singleRow: pack.shape === "pair",
+    stripUnits,
+    shape: pack.shape,
+    sizeCols: pack.sizeCols,
+    sizeRows: pack.sizeRows,
+    sizeN: pack.sizeN,
+  };
 }

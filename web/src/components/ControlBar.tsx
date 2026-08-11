@@ -3,13 +3,15 @@ import {
   ChatIcon,
   EndCallIcon,
   MicIcon,
+  NoiseCancelIcon,
   ParticipantsIcon,
   RaiseHandIcon,
   ReactionsIcon,
-  SettingsIcon,
   ShareScreenIcon,
 } from "./MediaIcons";
 import type { SidePanelTab } from "./RoomSidePanel";
+import { LayoutPicker } from "./conference/LayoutPicker";
+import type { ConferenceLayoutMode } from "../media/conferenceLayout";
 
 export type MeetingPanel = SidePanelTab;
 
@@ -23,6 +25,10 @@ interface ControlBarProps {
   showScreenShare?: boolean;
   showAudioControl?: boolean;
   showVideoControl?: boolean;
+  /** Enhanced NC (DTLN) — Meet Krisp / Jitsi noise-suppress analogue. */
+  showNoiseCancel?: boolean;
+  noiseCancelEnabled?: boolean;
+  onToggleNoiseCancel?: () => void;
   showRaiseHand?: boolean;
   handRaised?: boolean;
   onToggleRaiseHand?: () => void;
@@ -35,6 +41,8 @@ interface ControlBarProps {
   onFocusParticipants?: () => void;
   onFocusInvite?: () => void;
   activePanel?: MeetingPanel | null;
+  layoutMode?: ConferenceLayoutMode;
+  onLayoutChange?: (mode: ConferenceLayoutMode) => void;
 }
 
 function Badge({ value }: { value: number | string }) {
@@ -70,6 +78,9 @@ export function ControlBar({
   showScreenShare = true,
   showAudioControl = true,
   showVideoControl = true,
+  showNoiseCancel = false,
+  noiseCancelEnabled = false,
+  onToggleNoiseCancel,
   showRaiseHand = false,
   handRaised = false,
   onToggleRaiseHand,
@@ -81,6 +92,8 @@ export function ControlBar({
   onFocusParticipants,
   onFocusInvite,
   activePanel = null,
+  layoutMode,
+  onLayoutChange,
 }: ControlBarProps) {
   const peopleBadge = peopleBadgeCount ?? participantCount;
   return (
@@ -100,6 +113,32 @@ export function ControlBar({
             >
               <MicIcon muted={!audioEnabled} size={22} />
               <span className="meeting-v2-ctrl-label">{audioEnabled ? "Mute" : "Unmute"}</span>
+            </button>
+          )}
+
+          {showAudioControl && showNoiseCancel && onToggleNoiseCancel && (
+            <button
+              type="button"
+              className={`meeting-v2-ctrl-btn ${noiseCancelEnabled ? "is-active" : ""}`}
+              onClick={onToggleNoiseCancel}
+              disabled={mediaBusy}
+              aria-pressed={noiseCancelEnabled}
+              aria-label={
+                noiseCancelEnabled
+                  ? "Disable extra noise suppression"
+                  : "Extra noise suppression"
+              }
+              title={
+                noiseCancelEnabled
+                  ? "Disable extra noise suppression"
+                  : "Extra noise suppression"
+              }
+            >
+              {/* Jitsi: full bars when off; slashed bars when on (toggledIcon). */}
+              <NoiseCancelIcon off={noiseCancelEnabled} size={22} />
+              <span className="meeting-v2-ctrl-label">
+                {noiseCancelEnabled ? "Noise On" : "Noise Off"}
+              </span>
             </button>
           )}
 
@@ -128,6 +167,14 @@ export function ControlBar({
               <ShareScreenIcon size={22} />
               <span className="meeting-v2-ctrl-label">Share Screen</span>
             </button>
+          )}
+
+          {layoutMode && onLayoutChange && (
+            <LayoutPicker
+              layoutMode={layoutMode}
+              onLayoutChange={onLayoutChange}
+              variant="dock"
+            />
           )}
 
           {showRaiseHand && onToggleRaiseHand && (
@@ -184,10 +231,11 @@ export function ControlBar({
               className={`meeting-v2-ctrl-btn ${activePanel === "invite" ? "is-active" : ""}`}
               onClick={onFocusInvite}
               aria-pressed={activePanel === "invite"}
-              aria-label={activePanel === "invite" ? "Hide invite" : "Share invite link"}
+              aria-label={activePanel === "invite" ? "Hide share" : "Share meeting link"}
+              data-share-toggle
             >
               <InviteIcon size={22} />
-              <span className="meeting-v2-ctrl-label">Invite</span>
+              <span className="meeting-v2-ctrl-label">Share</span>
             </button>
           )}
 
@@ -199,16 +247,6 @@ export function ControlBar({
           >
             <ReactionsIcon size={22} />
             <span className="meeting-v2-ctrl-label">React</span>
-          </button>
-
-          <button
-            type="button"
-            className="meeting-v2-ctrl-btn"
-            aria-label="Settings"
-            title="Settings — coming soon"
-          >
-            <SettingsIcon size={22} />
-            <span className="meeting-v2-ctrl-label">Settings</span>
           </button>
         </div>
 

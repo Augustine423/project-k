@@ -6,25 +6,52 @@ export function inviteLinkForRoom(roomId: string): string {
   const id = roomId.trim();
   if (!id) return "";
 
+  const path = `/join/${encodeURIComponent(id)}`;
+
   if (typeof window === "undefined") {
-    return `/join/${encodeURIComponent(id)}`;
+    return path;
   }
 
   const origin = window.location.origin.replace(/\/$/, "");
-  return `${origin}/join/${encodeURIComponent(id)}`;
+  return `${origin}${path}`;
 }
 
-export async function copyInviteLink(roomId: string): Promise<boolean> {
-  const link = inviteLinkForRoom(roomId);
-  if (!link) return false;
+export function meetingNameStorageKey(roomId: string): string {
+  return `mm.meetingName.${roomId.trim()}`;
+}
 
+export function readStoredMeetingName(roomId: string): string {
+  if (typeof window === "undefined" || !roomId.trim()) return "";
   try {
-    await navigator.clipboard.writeText(link);
+    return window.localStorage.getItem(meetingNameStorageKey(roomId))?.trim() ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function persistMeetingName(roomId: string, name: string): void {
+  if (typeof window === "undefined" || !roomId.trim()) return;
+  try {
+    const trimmed = name.trim().slice(0, 80);
+    if (trimmed) {
+      window.localStorage.setItem(meetingNameStorageKey(roomId), trimmed);
+    } else {
+      window.localStorage.removeItem(meetingNameStorageKey(roomId));
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function copyTextToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+  try {
+    await navigator.clipboard.writeText(text);
     return true;
   } catch {
     try {
       const input = document.createElement("textarea");
-      input.value = link;
+      input.value = text;
       input.style.position = "fixed";
       input.style.opacity = "0";
       document.body.appendChild(input);
@@ -36,4 +63,8 @@ export async function copyInviteLink(roomId: string): Promise<boolean> {
       return false;
     }
   }
+}
+
+export async function copyInviteLink(roomId: string): Promise<boolean> {
+  return copyTextToClipboard(inviteLinkForRoom(roomId));
 }

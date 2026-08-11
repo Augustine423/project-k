@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "./BrandLogo";
+import { ShareInvitePopover } from "./ShareInvitePopover";
 import { getInitials } from "../hooks/useAuth";
 
 interface MeetingHeaderProps {
@@ -9,7 +10,10 @@ interface MeetingHeaderProps {
   displayName?: string;
   participantCount?: number;
   roomMode?: string;
+  roomId?: string;
+  shareOpen?: boolean;
   onShare?: () => void;
+  onCloseShare?: () => void;
   searchValue?: string;
   onSearchChange?: (query: string) => void;
   onSearchFocus?: () => void;
@@ -28,13 +32,27 @@ function useClock() {
   return time;
 }
 
+function ShareIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none">
+      <circle cx="18" cy="5" r="2.5" stroke="currentColor" strokeWidth="2" />
+      <circle cx="6" cy="12" r="2.5" stroke="currentColor" strokeWidth="2" />
+      <circle cx="18" cy="19" r="2.5" stroke="currentColor" strokeWidth="2" />
+      <path d="M8.4 13.2l7.2 4.2M15.6 6.6l-7.2 4.2" stroke="currentColor" strokeWidth="2" />
+    </svg>
+  );
+}
+
 export function MeetingHeader({
   statusMessage,
   connected = true,
   displayName = "Guest",
   participantCount,
   roomMode,
+  roomId = "",
+  shareOpen = false,
   onShare,
+  onCloseShare,
   searchValue = "",
   onSearchChange,
   onSearchFocus,
@@ -87,9 +105,22 @@ export function MeetingHeader({
           />
         </label>
         {onShare && (
-          <button type="button" className="meeting-v2-share" onClick={onShare}>
-            Share
-          </button>
+          <div className="meeting-v2-share-wrap">
+            <button
+              type="button"
+              className={`meeting-v2-share ${shareOpen ? "is-open" : ""}`}
+              data-share-toggle
+              onClick={onShare}
+              aria-expanded={shareOpen}
+              aria-haspopup="dialog"
+            >
+              <ShareIcon />
+              <span className="meeting-v2-share-label">Share</span>
+            </button>
+            {roomId && (
+              <ShareInvitePopover roomId={roomId} open={shareOpen} onClose={() => onCloseShare?.()} />
+            )}
+          </div>
         )}
         <span className="meeting-v2-user-name">{displayName}</span>
         <div className="meeting-v2-avatar" aria-hidden="true">

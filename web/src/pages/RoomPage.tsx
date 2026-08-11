@@ -11,7 +11,7 @@ import {
   setRoomMode,
 } from "../api/client";
 import { sendRoomChat, sendDirectChat, raiseHand, lowerHand, syncRaisedHands, useRoomEvents } from "../api/useRoomEvents";
-import { clearTicket, getTicket, saveTicket } from "../api/ticketStore";
+import { clearTicket, getCachedRoster, getTicket, saveCachedRoster, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant, Room } from "../api/types";
 import type { ChatMessage } from "../components/chatTypes";
 import { MeetingHeader } from "../components/MeetingChrome";
@@ -48,12 +48,18 @@ export function RoomPage() {
   const [ticket, setTicket] = useState<JoinTicket | null>(() => getTicket(roomId));
   const [status, setStatus] = useState<"loading" | "connected" | "error" | "ended">("loading");
   const [statusMessage, setStatusMessage] = useState("Connecting…");
-  const [participantCount, setParticipantCount] = useState(1);
-  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [participantCount, setParticipantCount] = useState(() => {
+    const cached = getCachedRoster(roomId);
+    return Math.max(1, cached?.total ?? 1);
+  });
+  const [participants, setParticipants] = useState<Participant[]>(() => getCachedRoster(roomId)?.items ?? []);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [hostBusy, setHostBusy] = useState(false);
   const [mediaWarning, setMediaWarning] = useState<string | null>(() => mediaUnavailableReason() || null);
-  const [sidePanelOpen, setSidePanelOpen] = useState(false);
+  const [sidePanelOpen, setSidePanelOpen] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.matchMedia("(min-width: 961px)").matches;
+  });
   const [sideTab, setSideTab] = useState<SidePanelTab>("chat");
   const [peopleSearch, setPeopleSearch] = useState("");
   const [chromeVisible, setChromeVisible] = useState(true);
@@ -112,6 +118,11 @@ export function RoomPage() {
     void refreshCount();
     void refreshLiveParticipants();
   }, [roomId, refreshCount, refreshLiveParticipants]);
+
+  useEffect(() => {
+    if (!roomId) return;
+    saveCachedRoster(roomId, { total: Math.max(1, participantCount), items: participants });
+  }, [roomId, participantCount, participants]);
 
   useEffect(() => {
     if (!roomId) return;
@@ -189,9 +200,18 @@ export function RoomPage() {
     if (sidePanelOpen) setChromeVisible(true);
   }, [sidePanelOpen]);
 
+  const [shareOpen, setShareOpen] = useState(false);
+
   const shareInvite = useCallback(() => {
-    toggleSidePanel("invite");
-  }, [toggleSidePanel]);
+    setShareOpen((open) => !open);
+    setChromeVisible(true);
+    // Share uses a compact popover — close the side panel if it was on invite.
+    if (sideTabRef.current === "invite") {
+      setSidePanelOpen(false);
+    }
+  }, []);
+
+  const closeShare = useCallback(() => setShareOpen(false), []);
 
   const openDm = useCallback((peer: DmPeer) => {
     setOpenDmPeers((prev) =>
@@ -221,6 +241,7 @@ export function RoomPage() {
           } catch {
             // ws just opened; sync is best-effort
           }
+          void refreshLiveParticipants();
         }
         return;
       }
@@ -328,13 +349,15 @@ export function RoomPage() {
       if (evt.type === "room.participant_count") {
         const data = evt.data as { count?: number };
         if (typeof data.count === "number") setParticipantCount(Math.max(0, data.count));
+        // Count can arrive without a roster event (large rooms / missed join frames).
+        void refreshLiveParticipants();
         return;
       }
       if (evt.type === "participant.joined") {
         const joined = evt.data as Participant;
         if (joined?.id) {
           setParticipants((prev) => (prev.some((p) => p.id === joined.id) ? prev : [...prev, joined]));
-          void refreshCount();
+          void refreshLiveParticipants();
         }
         return;
       }
@@ -343,7 +366,7 @@ export function RoomPage() {
         if (data.participantId) {
           setParticipants((prev) => prev.filter((p) => p.id !== data.participantId));
           setRaisedHands((prev) => prev.filter((h) => h.participantId !== data.participantId));
-          void refreshCount();
+          void refreshLiveParticipants();
         }
         return;
       }
@@ -385,7 +408,7 @@ export function RoomPage() {
         );
       }
     },
-    [roomId, navigate, ticket?.participant.id, token, selfId, refreshCount],
+    [roomId, navigate, ticket?.participant.id, token, selfId, refreshLiveParticipants],
   );
 
   const { chatReady } = useRoomEvents(roomId, token, onRoomEvent);
@@ -537,12 +560,18 @@ export function RoomPage() {
   }, [refreshCount]);
 
   const handleDisconnected = useCallback(() => {
-    setStatus("error");
-    setStatusMessage("Disconnected from media server");
+    // LiveKit may reconnect; keep the room mounted and show a soft status (not a hard error).
+    setStatus("loading");
+    setStatusMessage("Reconnecting to media server…");
   }, []);
 
   const handleMediaError = useCallback((message: string) => {
     setMediaWarning(message);
+    // Duplicate-identity / hard media failures should not look like an endless spinner.
+    if (/seat was taken|another session|Failed to (join|reconnect)/i.test(message)) {
+      setStatus("error");
+      setStatusMessage(message);
+    }
   }, []);
 
   if (!ticket || !mediaConfig) {
@@ -580,6 +609,8 @@ export function RoomPage() {
       className={[
         "meeting-app meeting-v2 meeting-light",
         autoHideChrome && !chromeVisible ? "chrome-hidden" : "",
+        sidePanelOpen ? "sidebar-open" : "",
+        shareOpen ? "share-open" : "",
         isHost ? "is-host-view" : "is-client-view",
         `viewport-${viewport.mode}`,
         "layout-gallery",
@@ -595,7 +626,10 @@ export function RoomPage() {
         displayName={ticket.participant.displayName}
         participantCount={participantCount}
         roomMode={ticket.room.mode}
+        roomId={roomId}
+        shareOpen={shareOpen}
         onShare={shareInvite}
+        onCloseShare={closeShare}
         searchValue={peopleSearch}
         onSearchChange={handlePeopleSearchChange}
         onSearchFocus={handlePeopleSearchFocus}
@@ -610,6 +644,14 @@ export function RoomPage() {
       )}
 
       <div className="meeting-body">
+        {sidePanelOpen && viewport.isMobile && (
+          <button
+            type="button"
+            className="meeting-sidebar-backdrop"
+            aria-label="Close panel"
+            onClick={closeSidePanel}
+          />
+        )}
         <main className="meeting-stage">
           {status !== "ended" && (
             <MediaConference
@@ -623,11 +665,13 @@ export function RoomPage() {
               onError={handleMediaError}
               onLeave={leaveRoom}
               participantCount={participantCount}
+              seedParticipants={participants}
+              selfParticipantId={ticket.participant.id}
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
               onFocusChat={() => toggleSidePanel("chat")}
               onFocusParticipants={() => toggleSidePanel("participants")}
-              onFocusInvite={() => toggleSidePanel("invite")}
-              activePanel={sidePanelOpen ? sideTab : null}
+              onFocusInvite={shareInvite}
+              activePanel={shareOpen ? "invite" : sidePanelOpen ? sideTab : null}
               roomMode={ticket.room.mode}
               participantRole={ticket.participant.role}
               hostParticipantId={ticket.room.hostParticipantId}
@@ -666,6 +710,7 @@ export function RoomPage() {
               onKick={kick}
               hostBusy={hostBusy}
               activeTab={sideTab}
+              onTabChange={focusSidePanel}
               onClose={closeSidePanel}
               raisedHands={raisedHands}
               showRaisedHands={isWebinar}

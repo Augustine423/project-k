@@ -67,7 +67,7 @@ export function resolveDisplayAspect(opts: {
   if (opts.isScreenShare) {
     return opts.measured !== "unknown" ? opts.measured : "landscape";
   }
-  if (opts.preferred === "portrait" || opts.preferred === "landscape") {
+  if (opts.preferred === "portrait" || opts.preferred === "landscape" || opts.preferred === "square") {
     return opts.preferred;
   }
   return opts.measured;
@@ -148,7 +148,7 @@ export function StreamVideoTile({
     };
   }, [videoTrack, videoTrackId, trackSignature, useBlurFill, showVideo]);
 
-  // Push live aspect onto parent cell so CSS can size the box (desktop 16:9 / mobile 9:16).
+  // Push live aspect onto parent cell so CSS can size 1:1 / 9:16 / 16:9 boxes.
   useEffect(() => {
     const tileEl = tileRef.current;
     if (!tileEl) return;
@@ -157,9 +157,11 @@ export function StreamVideoTile({
     else delete tileEl.dataset.streamAspect;
 
     const cell = tileEl.closest(
-      ".mosaic-cell, .grid-cell, .jitsi-cell, .filmstrip-cell, .featured-cell",
+      ".mosaic-cell, .grid-cell, .jitsi-cell, .filmstrip-cell, .featured-cell, .mm-slot, .mm-pair__cell, .mm-stage__cell",
     );
     if (!(cell instanceof HTMLElement)) return;
+    // Freeform gallery locks box via data-box — don't override portrait/square unit.
+    if (cell.dataset.box === "portrait" || cell.dataset.box === "square") return;
     if (aspect) cell.dataset.streamAspect = aspect;
     else delete cell.dataset.streamAspect;
   }, [streamAspect]);
