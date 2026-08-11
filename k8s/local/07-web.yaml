@@ -17,17 +17,10 @@ spec:
       labels:
         app: kzys-web
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: DoesNotExist
       containers:
         - name: web
           image: kyawzayarsoe/project-k-web:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - name: http
               containerPort: 80
@@ -37,7 +30,7 @@ spec:
             - name: PUBLIC_HOST
               valueFrom:
                 configMapKeyRef:
-                  name: kzys-app-config
+                  name: kzys-config-host
                   key: PUBLIC_HOST
           volumeMounts:
             - name: nginx-config
@@ -80,7 +73,9 @@ metadata:
   name: kzys-web
   labels:
     app: kzys-web
+    project-k.io/lb: alb
 spec:
+  # Kind has no GCE ALB — host LB :80/:443 is the laptop frontend.
   type: LoadBalancer
   selector:
     app: kzys-web

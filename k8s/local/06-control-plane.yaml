@@ -16,19 +16,19 @@ spec:
       labels:
         app: kzys-control-plane
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: DoesNotExist
       containers:
         - name: api
           image: kyawzayarsoe/project-k-csharp:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 4000
+          envFrom:
+            - configMapRef:
+                name: kzys-config-app
+            - configMapRef:
+                name: kzys-config-coturn
+            - configMapRef:
+                name: kzys-config-livekit
           env:
             - name: PORT
               value: "4000"
@@ -54,96 +54,6 @@ spec:
                 secretKeyRef:
                   name: kzys-secrets
                   key: LIVEKIT_API_SECRET
-            - name: LIVEKIT_PUBLIC_URL
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: LIVEKIT_PUBLIC_URL
-            - name: CORS_ORIGIN
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: CORS_ORIGIN
-            - name: TURN_HOST
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: TURN_HOST
-            - name: TURN_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: TURN_PORT
-            - name: TURN_TLS_PORT
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: TURN_TLS_PORT
-            - name: TURN_USE_TLS
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: TURN_USE_TLS
-            - name: MAX_ROOM_PARTICIPANTS
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: MAX_ROOM_PARTICIPANTS
-            - name: WEBINAR_ENTER_LISTENERS
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: WEBINAR_ENTER_LISTENERS
-            - name: WEBINAR_ENTER_RATIO
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: WEBINAR_ENTER_RATIO
-            - name: WEBINAR_EXIT_LISTENERS
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: WEBINAR_EXIT_LISTENERS
-            - name: INTERACTIVE_MAX_PUBLISHERS
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: INTERACTIVE_MAX_PUBLISHERS
-            - name: WEBINAR_MAX_PUBLISHERS
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: WEBINAR_MAX_PUBLISHERS
-            - name: LARGE_ROOM_EVENT_THRESHOLD
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: LARGE_ROOM_EVENT_THRESHOLD
-            - name: PARTICIPANTS_PAGE_SIZE
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: PARTICIPANTS_PAGE_SIZE
-            - name: PARTICIPANTS_SEARCH_SCAN_CAP
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: PARTICIPANTS_SEARCH_SCAN_CAP
-            - name: SERVICE_NAME
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: SERVICE_NAME
-            - name: SFU_PUBLISHERS_PER_NODE
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: SFU_PUBLISHERS_PER_NODE
-            - name: KZYS_SFU_STANDBY_POOL
-              valueFrom:
-                configMapKeyRef:
-                  name: kzys-app-config
-                  key: KZYS_SFU_STANDBY_POOL
           livenessProbe:
             httpGet:
               path: /health
@@ -170,7 +80,9 @@ metadata:
   name: kzys-control-plane
   labels:
     app: kzys-control-plane
+    project-k.io/lb: clusterip
 spec:
+  type: ClusterIP
   selector:
     app: kzys-control-plane
   ports:

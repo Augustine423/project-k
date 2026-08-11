@@ -1,0 +1,23 @@
+# Topic: API / room / webinar limits (control-plane env).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-config-app
+  labels:
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: kind-local
+    app.kubernetes.io/component: app
+data:
+  SERVICE_NAME: "kzys-control-plane"
+  CORS_ORIGIN: "*"
+  MAX_ROOM_PARTICIPANTS: "10000"
+  LARGE_ROOM_EVENT_THRESHOLD: "500"
+  PARTICIPANTS_PAGE_SIZE: "50"
+  PARTICIPANTS_SEARCH_SCAN_CAP: "10000"
+  WEBINAR_ENTER_LISTENERS: "10000"
+  WEBINAR_ENTER_RATIO: "8.0"
+  WEBINAR_EXIT_LISTENERS: "50"
+  INTERACTIVE_MAX_PUBLISHERS: "10000"
+  WEBINAR_MAX_PUBLISHERS: "50"
+  SFU_PUBLISHERS_PER_NODE: "50"
+  KZYS_SFU_STANDBY_POOL: "0"

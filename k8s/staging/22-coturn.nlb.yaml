@@ -1,16 +1,21 @@
-# Coturn — hostNetwork so TURN relay UDP 20000-20100 is reachable (needed for stress/NAT).
-# TURN_HOST must be the node external IP (configure-public-ips.ps1 sets it).
+# Coturn: NLB only. Browsers use TURN_HOST = this NLB IP. Never ClusterIP.
+# HPA 2–4 across nodes. Same TURN_SHARED_SECRET + NLB IP.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: coturn
+  namespace: meetingmax-staging
   labels:
     app: coturn
     app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: staging
 spec:
-  replicas: 1
+  replicas: 2
   strategy:
-    type: Recreate
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
   selector:
     matchLabels:
       app: coturn
@@ -19,8 +24,22 @@ spec:
       labels:
         app: coturn
     spec:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: coturn
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: coturn
       containers:
         - name: coturn
           image: coturn/coturn:4.6.2
@@ -49,12 +68,13 @@ spec:
           ports:
             - name: turn-udp
               containerPort: 3478
-              hostPort: 3478
               protocol: UDP
             - name: turn-tcp
               containerPort: 3478
-              hostPort: 3478
               protocol: TCP
+            - name: relay-udp
+              containerPort: 20000
+              protocol: UDP
           readinessProbe:
             tcpSocket:
               port: 3478
@@ -67,11 +87,11 @@ spec:
             initialDelaySeconds: 15
           resources:
             requests:
-              cpu: 100m
-              memory: 128Mi
+              cpu: 50m
+              memory: 64Mi
             limits:
-              cpu: "1"
-              memory: 512Mi
+              cpu: 500m
+              memory: 256Mi
           volumeMounts:
             - name: config
               mountPath: /etc/coturn
@@ -81,14 +101,20 @@ spec:
           configMap:
             name: coturn-config
 ---
-# ClusterIP only — browsers reach TURN via node external IP (hostNetwork), not this Service.
 apiVersion: v1
 kind: Service
 metadata:
-  name: coturn
+  name: kzys-coturn-nlb
+  namespace: meetingmax-staging
   labels:
     app: coturn
+    project-k.io/lb: nlb
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
 spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
   selector:
     app: coturn
   ports:
@@ -100,3 +126,7 @@ spec:
       port: 3478
       targetPort: 3478
       protocol: TCP
+    - name: relay-udp
+      port: 20000
+      targetPort: 20000
+      protocol: UDP

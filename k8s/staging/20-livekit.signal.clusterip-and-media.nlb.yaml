@@ -1,21 +1,18 @@
-# LiveKit SFU cluster — distributed mode via Redis (see kzys-livekit-config).
-# hostNetwork: one pod per GKE node (anti-affinity). Scale replicas = media node count.
-# Signaling: nginx /livekit → kzys-livekit Service → any node (LiveKit routes to room node).
-# Media: UDP 50000-50999 + TCP 7881 on each node's external IP (firewall in configure-public-ips.ps1).
+# LiveKit: ClusterIP for WS signal (ALB → nginx → here).
+#           NLB for RTC TCP 7881 + one UDP media port (staging).
+# HPA 2–6. Prefer one pod per node. ICE still uses LIVEKIT_MEDIA_IP = NLB IP
+# (best-effort staging). Per-node public IPs are the production ICE model.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: livekit
+  namespace: meetingmax-staging
   labels:
     app: livekit
     app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: staging
 spec:
-  replicas: 3
-  strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 0
+  replicas: 2
   selector:
     matchLabels:
       app: livekit
@@ -24,20 +21,23 @@ spec:
       labels:
         app: livekit
     spec:
-      hostNetwork: true
-      dnsPolicy: ClusterFirstWithHostNet
       enableServiceLinks: false
-      # Optional: label GKE nodes with project-k.io/media-node=true and uncomment:
-      # nodeSelector:
-      #   project-k.io/media-node: "true"
       affinity:
         podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app: livekit
-              topologyKey: kubernetes.io/hostname
-      terminationGracePeriodSeconds: 600
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: livekit
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: livekit
       initContainers:
         - name: wait-redis
           image: redis:7-alpine
@@ -54,14 +54,15 @@ spec:
             - --keys
             - "$(LIVEKIT_API_KEY): $(LIVEKIT_API_SECRET)"
             - --node-ip
-            - $(NODE_IP)
+            - $(LIVEKIT_MEDIA_IP)
           env:
             - name: LIVEKIT_PORT
               value: "7880"
-            - name: NODE_IP
+            - name: LIVEKIT_MEDIA_IP
               valueFrom:
-                fieldRef:
-                  fieldPath: status.hostIP
+                configMapKeyRef:
+                  name: kzys-app-config
+                  key: LIVEKIT_MEDIA_IP
             - name: LIVEKIT_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -79,17 +80,20 @@ spec:
             - name: rtc-tcp
               containerPort: 7881
               protocol: TCP
+            - name: rtc-udp
+              containerPort: 50000
+              protocol: UDP
           volumeMounts:
             - name: config
               mountPath: /etc/livekit
               readOnly: true
           resources:
             requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
               cpu: "2"
               memory: 2Gi
-            limits:
-              cpu: "8"
-              memory: 8Gi
           readinessProbe:
             tcpSocket:
               port: 7880
@@ -108,43 +112,42 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  # Not named "livekit" — that injects LIVEKIT_PORT=tcp://... and breaks the server.
   name: kzys-livekit
+  namespace: meetingmax-staging
   labels:
     app: livekit
+    project-k.io/lb: clusterip
 spec:
+  type: ClusterIP
   selector:
     app: livekit
   ports:
     - name: signal
       port: 7880
       targetPort: 7880
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kzys-livekit-nlb
+  namespace: meetingmax-staging
+  labels:
+    app: livekit
+    project-k.io/lb: nlb
+  annotations:
+    cloud.google.com/l4-rbs: "enabled"
+    networking.gke.io/load-balancer-type: "External"
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  selector:
+    app: livekit
+  ports:
     - name: rtc-tcp
       port: 7881
       targetPort: 7881
----
-# Scale SFU on CPU — tune min/max to your GKE media node pool size.
-apiVersion: autoscaling/v2
-kind: HorizontalPodAutoscaler
-metadata:
-  name: livekit
-  labels:
-    app: livekit
-    app.kubernetes.io/part-of: project-k
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: livekit
-  minReplicas: 1
-  maxReplicas: 6
-  metrics:
-    - type: Resource
-      resource:
-        name: cpu
-        target:
-          type: Utilization
-          averageUtilization: 65
-  behavior:
-    scaleDown:
-      stabilizationWindowSeconds: 600
+      protocol: TCP
+    - name: rtc-udp
+      port: 50000
+      targetPort: 50000
+      protocol: UDP

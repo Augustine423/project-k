@@ -16,13 +16,6 @@ spec:
       labels:
         app: redis
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: DoesNotExist
       containers:
         - name: redis
           image: redis:7-alpine
@@ -64,7 +57,9 @@ metadata:
   name: redis
   labels:
     app: redis
+    project-k.io/lb: clusterip
 spec:
+  type: ClusterIP
   selector:
     app: redis
   ports:

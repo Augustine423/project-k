@@ -1,0 +1,11 @@
+# Topic: laptop LAN host (web TLS / PUBLIC_HOST). Stamped by apply-local.ps1.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-config-host
+  labels:
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: kind-local
+    app.kubernetes.io/component: host
+data:
+  PUBLIC_HOST: "192.168.1.3"

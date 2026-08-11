@@ -1,15 +1,15 @@
-# Frontend nginx on LoadBalancer :80/:443 (NOT Vite :5173).
-# Self-signed cert from image entrypoint + PUBLIC_HOST SAN (cam/mic need HTTPS).
-# Open https://<WEB_LB_IP>/ and accept the browser warning.
+# Frontend pods — ClusterIP only. Public HTTP(S) is the ALB Ingress.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kzys-web
+  namespace: meetingmax-staging
   labels:
     app: kzys-web
     app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: staging
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: kzys-web
@@ -18,6 +18,22 @@ spec:
       labels:
         app: kzys-web
     spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app: kzys-web
+                topologyKey: kubernetes.io/hostname
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: kzys-web
       containers:
         - name: web
           image: kyawzayarsoe/project-k-web:latest
@@ -25,10 +41,7 @@ spec:
           ports:
             - name: http
               containerPort: 80
-            - name: https
-              containerPort: 443
           env:
-            # Used by docker-entrypoint.sh to stamp cert SAN (IP or DNS).
             - name: PUBLIC_HOST
               valueFrom:
                 configMapKeyRef:
@@ -44,15 +57,13 @@ spec:
           readinessProbe:
             httpGet:
               path: /
-              port: 443
-              scheme: HTTPS
+              port: 80
             periodSeconds: 5
             initialDelaySeconds: 5
           livenessProbe:
             httpGet:
               path: /
-              port: 443
-              scheme: HTTPS
+              port: 80
             periodSeconds: 15
             initialDelaySeconds: 10
           resources:
@@ -73,19 +84,18 @@ apiVersion: v1
 kind: Service
 metadata:
   name: kzys-web
+  namespace: meetingmax-staging
   labels:
     app: kzys-web
+    project-k.io/lb: clusterip
   annotations:
-    cloud.google.com/l4-rbs: "enabled"
-    networking.gke.io/load-balancer-type: "External"
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "kzys-web-alb"}'
 spec:
-  type: LoadBalancer
+  type: ClusterIP
   selector:
     app: kzys-web
   ports:
     - name: http
       port: 80
       targetPort: 80
-    - name: https
-      port: 443
-      targetPort: 443

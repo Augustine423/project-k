@@ -1,5 +1,7 @@
-# LiveKit on both kind workers (2 replicas + anti-affinity).
-# --node-ip comes from ConfigMap LIVEKIT_NODE_IP (LAN IP for phone ICE), not docker hostIP.
+# Laptop: 1 LiveKit pod on the kind control-plane.
+# ClusterIP = WS signal (ALB/nginx /livekit). Media = hostNetwork on the node
+# (kind CNI does not honor hostPort). extraPortMappings or publish-media-ports.ps1
+# then expose 7881/7882 on the laptop.
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,12 +11,9 @@ metadata:
     app.kubernetes.io/part-of: project-k
     app.kubernetes.io/env: kind-local
 spec:
-  replicas: 2
+  replicas: 1
   strategy:
-    type: RollingUpdate
-    rollingUpdate:
-      maxUnavailable: 1
-      maxSurge: 0
+    type: Recreate
   selector:
     matchLabels:
       app: livekit
@@ -23,19 +22,14 @@ spec:
       labels:
         app: livekit
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: DoesNotExist
-        podAntiAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            - labelSelector:
-                matchLabels:
-                  app: livekit
-              topologyKey: kubernetes.io/hostname
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       enableServiceLinks: false
       terminationGracePeriodSeconds: 60
       initContainers:
@@ -54,15 +48,15 @@ spec:
             - --keys
             - "$(LIVEKIT_API_KEY): $(LIVEKIT_API_SECRET)"
             - --node-ip
-            - $(LIVEKIT_NODE_IP)
+            - $(LIVEKIT_MEDIA_IP)
           env:
             - name: LIVEKIT_PORT
               value: "7880"
-            - name: LIVEKIT_NODE_IP
+            - name: LIVEKIT_MEDIA_IP
               valueFrom:
                 configMapKeyRef:
-                  name: kzys-app-config
-                  key: LIVEKIT_NODE_IP
+                  name: kzys-config-livekit
+                  key: LIVEKIT_MEDIA_IP
             - name: LIVEKIT_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -80,6 +74,9 @@ spec:
             - name: rtc-tcp
               containerPort: 7881
               protocol: TCP
+            - name: rtc-udp
+              containerPort: 7882
+              protocol: UDP
           volumeMounts:
             - name: config
               mountPath: /etc/livekit
@@ -112,33 +109,12 @@ metadata:
   name: kzys-livekit
   labels:
     app: livekit
+    project-k.io/lb: clusterip
 spec:
+  type: ClusterIP
   selector:
     app: livekit
   ports:
     - name: signal
       port: 7880
       targetPort: 7880
-    - name: rtc-tcp
-      port: 7881
-      targetPort: 7881
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: kzys-livekit-lb
-  labels:
-    app: livekit
-spec:
-  type: LoadBalancer
-  selector:
-    app: livekit
-  ports:
-    - name: signal
-      port: 7880
-      targetPort: 7880
-      protocol: TCP
-    - name: rtc-tcp
-      port: 7881
-      targetPort: 7881
-      protocol: TCP

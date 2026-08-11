@@ -1,4 +1,4 @@
-# Coturn — 1 replica on a worker. LoadBalancer exposes TURN for phone/laptop NAT.
+# Laptop Coturn — hostNetwork on kind control-plane (kind CNI skips hostPort).
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -19,13 +19,14 @@ spec:
       labels:
         app: coturn
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                  - key: node-role.kubernetes.io/control-plane
-                    operator: DoesNotExist
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+        - key: node-role.kubernetes.io/control-plane
+          operator: Exists
+          effect: NoSchedule
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
       containers:
         - name: coturn
           image: coturn/coturn:4.6.2
@@ -39,12 +40,12 @@ spec:
             - name: TURN_REALM
               valueFrom:
                 configMapKeyRef:
-                  name: kzys-app-config
+                  name: kzys-config-coturn
                   key: TURN_REALM
             - name: TURN_HOST
               valueFrom:
                 configMapKeyRef:
-                  name: kzys-app-config
+                  name: kzys-config-coturn
                   key: TURN_HOST
             - name: TURN_SHARED_SECRET
               valueFrom:
@@ -58,6 +59,9 @@ spec:
             - name: turn-tcp
               containerPort: 3478
               protocol: TCP
+            - name: relay-udp
+              containerPort: 20000
+              protocol: UDP
           readinessProbe:
             tcpSocket:
               port: 3478
@@ -83,23 +87,3 @@ spec:
         - name: config
           configMap:
             name: coturn-config
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: coturn
-  labels:
-    app: coturn
-spec:
-  type: LoadBalancer
-  selector:
-    app: coturn
-  ports:
-    - name: turn-udp
-      port: 3478
-      targetPort: 3478
-      protocol: UDP
-    - name: turn-tcp
-      port: 3478
-      targetPort: 3478
-      protocol: TCP

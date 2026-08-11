@@ -1,0 +1,77 @@
+# Topic: frontend nginx (HTTPS UI + proxy /api /ws /livekit).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kzys-web-nginx
+  labels:
+    app.kubernetes.io/part-of: project-k
+    app.kubernetes.io/env: kind-local
+    app.kubernetes.io/component: nginx
+data:
+  default.conf: |
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+
+    server {
+        listen 80;
+        server_name _;
+        return 301 https://$host$request_uri;
+    }
+
+    server {
+        listen 443 ssl;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        ssl_certificate     /etc/nginx/tls/tls.crt;
+        ssl_certificate_key /etc/nginx/tls/tls.key;
+        ssl_protocols       TLSv1.2 TLSv1.3;
+
+        location /api/ {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto https;
+        }
+
+        location /ws/ {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 86400;
+        }
+
+        location /health {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location /ready {
+            proxy_pass http://kzys-control-plane:4000;
+            proxy_http_version 1.1;
+            proxy_set_header Host $host;
+        }
+
+        location /livekit/ {
+            proxy_pass http://kzys-livekit:7880/;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $host;
+            proxy_set_header X-Forwarded-Proto https;
+            proxy_read_timeout 86400;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }

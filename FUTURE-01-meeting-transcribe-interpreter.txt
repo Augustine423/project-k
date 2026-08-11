@@ -204,3 +204,6 @@ Recommendation: ship #2 with client-side detection first; Agent vision only if n
 ================================================================================
 END — FUTURE #2
 ================================================================================
+
+
+agent --resume=604afeff-7a2d-4a80-a129-047a514504e5

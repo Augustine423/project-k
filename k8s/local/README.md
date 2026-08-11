@@ -1,58 +1,70 @@
-# MeetingMax — kind local (2 workers)
+# MeetingMax — laptop kind local
 
-Your cluster shape (OK for this folder):
+Works with **1 node or many**. Media/TURN stay on the control-plane so laptop `hostPort` mappings still work.
 
-```text
-local-control-plane
-local-worker
-local-worker2
+| Traffic | How (test only) |
+|---|---|
+| UI + `/api` `/ws` `/livekit` | ALB / web LoadBalancer :80/:443 |
+| LiveKit signal | ClusterIP `kzys-livekit:7880` |
+| LiveKit media / Coturn | **hostNetwork** on the control-plane + extraPortMappings (or `publish-media-ports.ps1`) |
+| API / Redis / web | Any node (1-node kind is fine) |
+
+`cluster/kind.yaml` is **only** for `kind create cluster`. It is not a Kubernetes object. `kubectl apply -f .` in this folder will not apply it.
+
+## 1. Create kind (any worker count)
+
+Default is **1 control-plane**. Uncomment extra `- role: worker` lines in `cluster/kind.yaml` if you want more nodes.
+
+```powershell
+kind create cluster --name local --config C:\Users\kyawz\Desktop\project-k\MeetingMax\k8s\local\cluster\kind.yaml
 ```
 
-LiveKit runs **1 pod per worker** (2 replicas + anti-affinity). Other services prefer workers (not control-plane).
+If the cluster already exists **without** those `extraPortMappings`, you do **not** have to recreate it: `.\apply-local.ps1` starts `publish-media-ports.ps1` (Docker proxy for ICE/TURN). Recreate only if you want mappings on the kind node itself.
 
-## Apply (no scripts)
+**`could not establish pc connection` / Connecting to media server…** means HTTPS join worked but WebRTC ICE could not reach LiveKit. Typical laptop cause: 7881/3478 not published on Windows (kind `hostPort` is ignored; extraPortMappings missing). Fix is hostNetwork + published 7881/7882/3478.
 
-1. Edit `01-configmap.yaml` if your Wi‑Fi IP is not `192.168.1.5`:
-   - `PUBLIC_HOST`
-   - `TURN_HOST`
-   - `LIVEKIT_NODE_IP`
-   - `LIVEKIT_PUBLIC_URL` (`wss://<LAN_IP>/livekit`)
+## 2. Apply the app
 
-2. Deploy:
+Stamps your laptop LAN IP into the host / LiveKit / Coturn ConfigMaps, then runs `kubectl apply -f .`:
 
 ```powershell
 cd C:\Users\kyawz\Desktop\project-k\MeetingMax\k8s\local
+.\apply-local.ps1
+```
+
+After that, you can re-apply with:
+
+```powershell
 kubectl apply -f .
 ```
 
-3. Check:
+(IP is already in `01-configmap-host.yaml`, `01-configmap-livekit.yaml`, `01-configmap-coturn.yaml`. Re-run `.\apply-local.ps1` if Wi‑Fi IP changed.)
+
+| ConfigMap file | Object | Topic |
+|---|---|---|
+| `01-configmap-app.yaml` | `kzys-config-app` | Room / webinar / API limits |
+| `01-configmap-host.yaml` | `kzys-config-host` | Laptop `PUBLIC_HOST` |
+| `01-configmap-livekit.yaml` | `kzys-config-livekit` + `kzys-livekit-config` | ICE IPs, `livekit.yaml` |
+| `01-configmap-coturn.yaml` | `kzys-config-coturn` + `coturn-config` | TURN host/ports, `turnserver.conf` |
+| `01-configmap-nginx.yaml` | `kzys-web-nginx` | Frontend `/api` `/ws` `/livekit` proxy |
+
+Override IP:
 
 ```powershell
-kubectl get nodes -o wide
-kubectl get pods -o wide
-kubectl get svc
+.\apply-local.ps1 -LanIP 192.168.1.12
 ```
 
-Expect LiveKit on **two different workers**.
+Build images first: `docker compose build` in `MeetingMax/`.
 
-4. Phone (same Wi‑Fi as laptop):
+Open `https://<LAN_IP>/` and accept the self-signed cert.
 
-```text
-https://192.168.1.5/
-```
+If ICE still fails, allow inbound TCP 7881, UDP 7882, TCP/UDP 3478, UDP 20000 in Windows Firewall (run PowerShell as Administrator).
 
-Accept the self-signed cert warning (needed for mic/cam).
+## Media port forwarder (not Coturn)
 
-## LoadBalancer
-
-Keep your cloud-provider LB running so `kzys-web` / `coturn` / `kzys-livekit-lb` get EXTERNAL-IP.
-
-If web EXTERNAL-IP is only `127.0.0.1`, phone still uses the **LAN IP** in the ConfigMap (`https://192.168.1.5/`) once the LB forwards host ports 80/443.
-
-## Do not use
+`media-publish/` is Alpine + socat. It is **not** Coturn. `.\apply-local.ps1` builds and starts it when kind has no extraPortMappings.
 
 ```powershell
-kubectl apply -f ../   # GKE manifests (3 LiveKit / hostNetwork / heavy CPU)
+cd C:\Users\kyawz\Desktop\project-k\MeetingMax\k8s\local
+.\publish-media-ports.ps1
 ```
-
-Use **only** `k8s/local` for this kind laptop cluster.

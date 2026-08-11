@@ -47,7 +47,7 @@ Redis ──► room roster, LiveKit node registry, scaling metrics
 1. **GKE media node pool** — 3–6× `c2-standard-8` (or GPU-less compute), label `project-k.io/media-node=true`
 2. **Postgres** — multi-replica control plane (SQLite breaks with scale-out)
 3. **Redis HA** — Sentinel or Memorystore for LiveKit coord + control plane
-4. **Per-node RTC LoadBalancers** OR dedicated media IPs (hostNetwork pattern in `04-livekit.yaml`)
+4. **Per-node RTC** (staging NLB with 1 pod, or one SFU IP per node — see `k8s/staging` / `k8s/local`)
 5. **Coturn pool** — 2+ coturn pods on separate nodes
 6. **LiveKit Cloud fallback** — optional hybrid for rooms &gt; single-node SFU cap (~3000 per LiveKit docs self-hosted)
 7. **Geo DNS** — region-aware signaling (LiveKit `regionaware` node selector)

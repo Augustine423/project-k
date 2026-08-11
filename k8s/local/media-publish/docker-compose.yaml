@@ -1,0 +1,29 @@
+# Kind local media publish — not MeetingMax UI/API, not Coturn itself.
+#
+#   $env:CP_IP = "172.18.0.2"   # kind control-plane IP on the `kind` network
+#   docker compose up -d --build
+#
+# apply-local.ps1 / publish-media-ports.ps1 set CP_IP for you.
+name: kzys-media-publish
+
+services:
+  publish:
+    build: .
+    image: kzys-media-publish:local
+    container_name: kzys-media-publish
+    restart: unless-stopped
+    environment:
+      CP_IP: ${CP_IP:?set CP_IP to kind control-plane IP (publish-media-ports.ps1)}
+    ports:
+      - "7881:7881"
+      - "3478:3478"
+      - "3478:3478/udp"
+      - "7882:7882/udp"
+      - "20000:20000/udp"
+    networks:
+      - kind
+
+networks:
+  kind:
+    external: true
+    name: kind

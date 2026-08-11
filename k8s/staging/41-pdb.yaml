@@ -1,0 +1,43 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kzys-web
+  namespace: meetingmax-staging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kzys-web
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kzys-control-plane
+  namespace: meetingmax-staging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: kzys-control-plane
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: livekit
+  namespace: meetingmax-staging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: livekit
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: coturn
+  namespace: meetingmax-staging
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: coturn
