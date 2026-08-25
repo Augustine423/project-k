@@ -29,6 +29,14 @@ export interface TurnInfo {
   credential: string;
 }
 
+export interface DeviceBandwidthHint {
+  uplinkKbps: number;
+  downlinkKbps: number;
+  batterySaver: boolean;
+  isMobile: boolean;
+  isPortrait: boolean;
+}
+
 export interface JoinTicket {
   room: Room;
   participant: Participant;
@@ -39,6 +47,7 @@ export interface JoinTicket {
   mediaUrl?: string;
   mediaToken?: string;
   mediaProvider?: string;
+  deviceHint?: DeviceBandwidthHint;
   participantToken: string;
   turn: TurnInfo;
 }

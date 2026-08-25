@@ -13,9 +13,11 @@ import {
   SIDEBAR_WIDTH_PX,
   filmstripLandscapeUnits,
   resolveStagePlan,
+  selfPipAspect,
   type ConferenceLayoutMode,
   type FocusStagePlan,
   type LandscapePackSlot,
+  type PipStagePlan,
   type SidebarStagePlan,
   type SmallGroupStagePlan,
   type SoloStagePlan,
@@ -27,7 +29,8 @@ import {
   type GalleryFreeformPlacement,
 } from "../../media/galleryFreeformLayout";
 import type { ViewerViewportMode } from "../../hooks/useViewerViewport";
-import { useMemo } from "react";
+import { useDraggableSelfPip } from "../../hooks/useDraggableSelfPip";
+import { useMemo, useRef } from "react";
 
 type CommonProps = {
   tiles: StageParticipantTile[];
@@ -88,6 +91,42 @@ function streamAspectAttr(tile: StageParticipantTile): string | undefined {
   if (tile.isScreenShare) return "landscape";
   if (tile.preferredAspect && tile.preferredAspect !== "unknown") return tile.preferredAspect;
   return undefined;
+}
+
+/** Floating self-view — default bottom-right (self-view.png); drag to move freely. */
+function SelfViewPip({
+  tile,
+  layoutMode,
+}: {
+  tile: StageParticipantTile;
+  layoutMode: ConferenceLayoutMode;
+}) {
+  const aspect = selfPipAspect(tile);
+  const pipRef = useRef<HTMLDivElement>(null);
+  const { style, dragging, moved, onPointerDown } = useDraggableSelfPip(pipRef);
+
+  return (
+    <div
+      ref={pipRef}
+      className={[
+        "mm-self-pip",
+        dragging ? "is-dragging" : "",
+        moved ? "is-moved" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      data-aspect={aspect}
+      data-stream-aspect={streamAspectAttr(tile) ?? aspect}
+      data-kind="self"
+      data-dragging={dragging ? "1" : undefined}
+      aria-label="Self view — drag to move"
+      role="group"
+      style={style}
+      onPointerDown={onPointerDown}
+    >
+      <Tile tile={tile} layoutMode={layoutMode} size="strip" className="mm-self-pip__tile" />
+    </div>
+  );
 }
 
 function MmSlot({
@@ -177,6 +216,38 @@ function SoloStage({ plan }: { plan: SoloStagePlan }) {
           data-stream-aspect={streamAspectAttr(tile) ?? orientation}
         >
           <Tile tile={tile} layoutMode={layoutMode} size="spotlight" />
+        </div>
+      </div>
+    </StageShell>
+  );
+}
+
+/** 1:1 — remote fills the viewport; local PiP bottom-right inside that pane. */
+function PipStage({ plan }: { plan: PipStagePlan }) {
+  const { layoutMode, focus, self, fillBleed, viewerMode, count } = plan;
+
+  return (
+    <StageShell layoutMode={layoutMode}>
+      <div
+        className={[
+          "video-stage mm-stage mm-stage--pip",
+          fillBleed ? "mm-stage--bleed" : "",
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-layout="gallery"
+        data-count={String(count)}
+        data-viewer={viewerMode ?? "desktop"}
+      >
+        <div className="mm-stage__viewport" data-kind="main">
+          <div
+            className="mm-stage__focus mm-stage__host-tile"
+            data-kind={focus.isScreenShare ? "screen" : "camera"}
+            data-stream-aspect={streamAspectAttr(focus)}
+          >
+            <Tile tile={focus} layoutMode={layoutMode} size="spotlight" />
+          </div>
+          <SelfViewPip tile={self} layoutMode={layoutMode} />
         </div>
       </div>
     </StageShell>
@@ -326,6 +397,7 @@ function FocusStage({ plan }: { plan: FocusStagePlan }) {
     scroll,
     fillBleed,
     viewerMode,
+    selfPip,
   } = plan;
 
   const peerScroll = scroll || sizeLocked || filmstripSlots.length > 6;
@@ -352,11 +424,12 @@ function FocusStage({ plan }: { plan: FocusStagePlan }) {
         }
       >
         <div
-          className="mm-stage__focus mm-stage__host-tile"
+          className="mm-stage__focus mm-stage__host-tile mm-stage__viewport"
           data-kind={focus.isScreenShare ? "screen" : "host"}
           data-stream-aspect={streamAspectAttr(focus)}
         >
           <Tile tile={focus} layoutMode={layoutMode} size="spotlight" />
+          {selfPip ? <SelfViewPip tile={selfPip} layoutMode={layoutMode} /> : null}
         </div>
         {filmstripSlots.length > 0 && (
           <div
@@ -384,7 +457,7 @@ function FocusStage({ plan }: { plan: FocusStagePlan }) {
  * `.main-stage` → large host/share left + right participants sidebar (~300px).
  */
 function SidebarStage({ plan }: { plan: SidebarStagePlan }) {
-  const { layoutMode, count, focus, peerSlots, scroll, fillBleed, viewerMode } = plan;
+  const { layoutMode, count, focus, peerSlots, scroll, fillBleed, viewerMode, selfPip } = plan;
 
   return (
     <StageShell layoutMode={layoutMode}>
@@ -408,11 +481,12 @@ function SidebarStage({ plan }: { plan: SidebarStagePlan }) {
         }
       >
         <div
-          className="mm-stage__focus mm-stage__host-tile"
+          className="mm-stage__focus mm-stage__host-tile mm-stage__viewport"
           data-kind={focus.isScreenShare ? "screen" : "host"}
           data-stream-aspect={streamAspectAttr(focus)}
         >
           <Tile tile={focus} layoutMode={layoutMode} size="spotlight" />
+          {selfPip ? <SelfViewPip tile={selfPip} layoutMode={layoutMode} /> : null}
         </div>
         <div
           className="mm-stage__sidebar"
@@ -440,11 +514,14 @@ export function ConferenceVideoStage(props: CommonProps) {
     viewerMode: props.viewerMode,
     hostParticipantId: props.hostParticipantId,
     maxPerPage: props.maxPerPage,
+    localId: "local",
   });
 
   switch (plan.kind) {
     case "solo":
       return <SoloStage plan={plan} />;
+    case "pip":
+      return <PipStage plan={plan} />;
     case "smallGroup":
       return <SmallGroupStage plan={plan} />;
     case "gallery":

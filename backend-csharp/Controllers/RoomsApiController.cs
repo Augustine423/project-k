@@ -39,8 +39,16 @@ public sealed class RoomsApiController : ControllerBase
         _config = config;
     }
 
-    public sealed record CreateRoomBody(string DisplayName, int MaxUsers = 0, string? Pin = null);
-    public sealed record JoinRoomBody(string DisplayName, string? Pin = null);
+    public sealed record CreateRoomBody(
+        string DisplayName,
+        int MaxUsers = 0,
+        string? Pin = null,
+        DeviceBandwidthHintDto? DeviceHint = null);
+
+    public sealed record JoinRoomBody(
+        string DisplayName,
+        string? Pin = null,
+        DeviceBandwidthHintDto? DeviceHint = null);
     public sealed record LockBody(bool Locked);
     public sealed record SetModeBody(string Mode, bool Pin = true);
     public sealed record MediaPresenceBody(bool Publishing, bool Audio, bool Video);
@@ -52,7 +60,13 @@ public sealed class RoomsApiController : ControllerBase
             return BadRequest(new { error = "displayName is required" });
 
         var mediaHost = MediaHostHelper.FromRequest(Request, _config.TurnHost);
-        var ticket = await _rooms.CreateRoomAsync(body.DisplayName.Trim(), body.Pin ?? "", body.MaxUsers, mediaHost, ct);
+        var ticket = await _rooms.CreateRoomAsync(
+            body.DisplayName.Trim(),
+            body.Pin ?? "",
+            body.MaxUsers,
+            mediaHost,
+            body.DeviceHint,
+            ct);
         return StatusCode(StatusCodes.Status201Created, ticket);
     }
 
@@ -65,7 +79,13 @@ public sealed class RoomsApiController : ControllerBase
         try
         {
             var mediaHost = MediaHostHelper.FromRequest(Request, _config.TurnHost);
-            var (ticket, replacedIds) = await _rooms.JoinRoomAsync(roomId, body.DisplayName.Trim(), body.Pin ?? "", mediaHost, ct);
+            var (ticket, replacedIds) = await _rooms.JoinRoomAsync(
+                roomId,
+                body.DisplayName.Trim(),
+                body.Pin ?? "",
+                mediaHost,
+                body.DeviceHint,
+                ct);
             foreach (var oldId in replacedIds)
             {
                 _hub.Broadcast(roomId, new RoomEvent

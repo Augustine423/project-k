@@ -460,7 +460,7 @@ export function mosaicDataCount(tileCount: number, maxPerPage = GALLERY_PAGE_SIZ
 /* Stage plan: Gallery view | Host stage (index.html) | auto focus on share      */
 /* -------------------------------------------------------------------------- */
 
-export type StagePlanKind = "solo" | "smallGroup" | "gallery" | "focus" | "sidebar";
+export type StagePlanKind = "solo" | "smallGroup" | "gallery" | "focus" | "sidebar" | "pip";
 
 type StagePlanBase = {
   kind: StagePlanKind;
@@ -475,6 +475,51 @@ export type SoloStagePlan = StagePlanBase & {
   orientation: "portrait" | "landscape";
   tile: StageParticipantTile;
 };
+
+/**
+ * 1:1 Meet-style layout — remote fills the video viewport; local camera is a
+ * bottom-right PiP (16:9 or 9:16) anchored inside that viewport (not over chat).
+ */
+export type PipStagePlan = StagePlanBase & {
+  kind: "pip";
+  focus: StageParticipantTile;
+  self: StageParticipantTile;
+  fillBleed: boolean;
+};
+
+/** Local camera tile used for floating self-view (not screen share). */
+export function isLocalSelfTile(
+  tile: StageParticipantTile,
+  localId = "local",
+): boolean {
+  if (tile.isScreenShare) return false;
+  if (tile.id === localId || tile.id === "local") return true;
+  return Boolean(tile.mirror);
+}
+
+/** Aspect box for the self-view PiP chrome (portrait camera → 9:16). */
+export function selfPipAspect(tile: StageParticipantTile): "portrait" | "landscape" {
+  return isPortraitTile(tile) || tile.preferredAspect === "portrait"
+    ? "portrait"
+    : "landscape";
+}
+
+/**
+ * Pull local camera out of a peer list so it can float as PiP on the main pane.
+ * Returns null when local is the focus (no duplicate) or missing.
+ */
+export function extractSelfPip(
+  tiles: StageParticipantTile[],
+  focus: StageParticipantTile,
+  localId = "local",
+): { self: StageParticipantTile; peers: StageParticipantTile[] } | null {
+  const self = tiles.find((t) => isLocalSelfTile(t, localId));
+  if (!self || self.id === focus.id) return null;
+  return {
+    self,
+    peers: tiles.filter((t) => t.id !== focus.id && t.id !== self.id),
+  };
+}
 
 export type SmallGroupStagePlan = StagePlanBase & {
   kind: "smallGroup";
@@ -522,6 +567,8 @@ export type FocusStagePlan = StagePlanBase & {
   lockCols: number;
   viewportCap: number;
   fillBleed: boolean;
+  /** Local camera PiP over the focus pane when self is not the focus. */
+  selfPip?: StageParticipantTile;
 };
 
 /** @deprecated */
@@ -537,6 +584,8 @@ export type SidebarStagePlan = StagePlanBase & {
   peerSlots: LandscapePackSlot[];
   scroll: boolean;
   fillBleed: boolean;
+  /** Local camera PiP over the host pane when self is not the focus. */
+  selfPip?: StageParticipantTile;
 };
 
 export type StagePlan =
@@ -544,7 +593,8 @@ export type StagePlan =
   | SmallGroupStagePlan
   | TileStagePlan
   | FocusStagePlan
-  | SidebarStagePlan;
+  | SidebarStagePlan
+  | PipStagePlan;
 
 export type ResolveStagePlanInput = {
   tiles: StageParticipantTile[];
@@ -605,9 +655,11 @@ export function resolveStagePlan(input: ResolveStagePlanInput): StagePlan {
   }
 
   // 2) Host stage (project-k/index.html) — large host + right sidebar
+  //    Local camera floats as PiP on the host pane (not duplicated in the strip).
   if (preferred === "sidebar") {
     const focus = pickFocusTile(tiles, hostParticipantId);
-    const peers = tiles.filter((t) => t.id !== focus.id);
+    const split = extractSelfPip(tiles, focus, localId);
+    const peers = split?.peers ?? tiles.filter((t) => t.id !== focus.id);
     const peerSlots = packSlotsForViewer(peers, viewerMode);
     return {
       kind: "sidebar",
@@ -619,17 +671,38 @@ export function resolveStagePlan(input: ResolveStagePlanInput): StagePlan {
       peerSlots,
       scroll: peerSlots.length > 2,
       fillBleed,
+      selfPip: split?.self,
     };
   }
 
-  // 3) Gallery view — equal grid for everyone (screen share handled below).
-  // Small calls (≤4 landscape units) stay one Meet-style row; larger use balanced equal grid.
-  // (No separate smallGroup pyramid — one equal-grid path.)
+  // 3) Gallery 1:1 — remote fills viewport; local is aspect-aware bottom-right PiP
+  //    (self-view.png / index.html). Skip when either side is a screen share.
+  if (
+    preferred === "gallery" &&
+    tiles.length === 2 &&
+    !shouldUseFocusLayout(tiles)
+  ) {
+    const self = tiles.find((t) => isLocalSelfTile(t, localId));
+    const other = self ? tiles.find((t) => t.id !== self.id) : undefined;
+    if (self && other && !self.isScreenShare && !other.isScreenShare) {
+      return {
+        kind: "pip",
+        layoutMode: "gallery",
+        viewerMode,
+        count: 2,
+        tiles,
+        focus: other,
+        self,
+        fillBleed,
+      };
+    }
+  }
 
   // 4) Gallery view + screen share → Host-stage style (large share + right peer sidebar)
   if (shouldUseFocusLayout(tiles)) {
     const focus = pickFocusTile(tiles, hostParticipantId);
-    const peers = tiles.filter((t) => t.id !== focus.id);
+    const split = extractSelfPip(tiles, focus, localId);
+    const peers = split?.peers ?? tiles.filter((t) => t.id !== focus.id);
     const meet = resolveMeetFilmstrip(peers, {
       viewerMode,
       sizeLocked: shouldLockGridSize(count, viewerMode),
@@ -654,6 +727,7 @@ export function resolveStagePlan(input: ResolveStagePlanInput): StagePlan {
       lockCols,
       viewportCap,
       fillBleed,
+      selfPip: split?.self,
     };
   }
 

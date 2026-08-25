@@ -20,6 +20,10 @@ import {
   type GalleryVideoTier,
 } from "../media/galleryVideoPolicy";
 import { resolveCaptureDimensions } from "../media/deviceCapture";
+import {
+  createDeviceBandwidthHint,
+  selectAdaptiveCameraTarget,
+} from "../media/bandwidthHint";
 
 /** Cap publish / receive at 1080p 16:9 (1920×1080). Viewers adapt via simulcast. */
 export const LIVEKIT_MAX_VIDEO_BITRATE = VideoPresets.h1080.encoding.maxBitrate;
@@ -115,17 +119,19 @@ export function isPortraitCapturePreferred(): boolean {
 
 /**
  * Request camera capture before / during enable (host + guests).
- * Mobile upright → 720×1280; tablet/laptop → 1920×1080.
+ * Quality is picked from the device's current bandwidth hint.
  * Prefer full sensor frame (resizeMode none) — no hardware face/auto-crop.
  */
-export function cameraEnableCaptureOptions(): VideoCaptureOptions {
-  const { width, height, aspectRatio, portrait } = resolveCaptureDimensions();
+export function cameraEnableCaptureOptions(opts?: {
+  bandwidthHint?: ReturnType<typeof createDeviceBandwidthHint>;
+}): VideoCaptureOptions {
+  const target = selectAdaptiveCameraTarget(opts?.bandwidthHint);
   return {
     resolution: {
-      width,
-      height,
-      frameRate: LIVEKIT_MAX_FRAMERATE,
-      ...(portrait ? {} : { aspectRatio }),
+      width: target.width,
+      height: target.height,
+      frameRate: target.frameRate || LIVEKIT_MAX_FRAMERATE,
+      ...(target.portrait ? {} : { aspectRatio: target.width / Math.max(1, target.height) }),
     },
     facingMode: "user",
   };
@@ -150,15 +156,15 @@ export function screenShareCaptureOptions(): ScreenShareCaptureOptions {
  * - zoom locked to 1 when exposed
  */
 export function fullFrameCameraConstraints(): MediaTrackConstraints {
-  const { width, height, portrait } = resolveCaptureDimensions();
+  const target = selectAdaptiveCameraTarget();
   const base: MediaTrackConstraints = {
-    width: { ideal: width },
-    height: { ideal: height },
-    frameRate: { ideal: LIVEKIT_MAX_FRAMERATE, max: LIVEKIT_MAX_FRAMERATE },
+    width: { ideal: target.width },
+    height: { ideal: target.height },
+    frameRate: { ideal: target.frameRate || LIVEKIT_MAX_FRAMERATE, max: LIVEKIT_MAX_FRAMERATE },
     facingMode: { ideal: "user" },
   };
 
-  if (!portrait) {
+  if (!target.portrait) {
     base.aspectRatio = { ideal: 16 / 9 };
   }
 
@@ -217,6 +223,8 @@ export async function applyOrientationCaptureConstraints(
  * Optional enhanced DTLN is attached after publish when the user enables Noise On.
  */
 export function createLiveKitRoomOptions(): RoomOptions {
+  const bandwidthHint = createDeviceBandwidthHint();
+  const target = selectAdaptiveCameraTarget(bandwidthHint);
   return {
     adaptiveStream: {
       pixelDensity: "screen",
@@ -225,7 +233,7 @@ export function createLiveKitRoomOptions(): RoomOptions {
     stopLocalTrackOnUnpublish: false,
     // Baseline browser DSP; enhanced NC toggles constraints at mic-enable time.
     audioCaptureDefaults: microphoneEnableCaptureOptions({ enhancedNoiseCancel: false }),
-    videoCaptureDefaults: cameraEnableCaptureOptions(),
+    videoCaptureDefaults: cameraEnableCaptureOptions({ bandwidthHint }),
     publishDefaults: {
       simulcast: true,
       videoCodec: "vp9",
@@ -235,8 +243,22 @@ export function createLiveKitRoomOptions(): RoomOptions {
       dtx: true,
       red: true,
       forceStereo: false,
-      videoEncoding: VideoPresets.h1080.encoding,
-      videoSimulcastLayers: [VideoPresets.h180, VideoPresets.h360, VideoPresets.h720],
+      videoEncoding:
+        target.bitrateKbps >= 4000
+          ? VideoPresets.h1080.encoding
+          : target.bitrateKbps >= 2500
+            ? VideoPresets.h720.encoding
+            : target.bitrateKbps >= 1500
+              ? VideoPresets.h540.encoding
+              : target.bitrateKbps >= 900
+                ? VideoPresets.h360.encoding
+                : VideoPresets.h180.encoding,
+      videoSimulcastLayers:
+        target.bitrateKbps >= 2500
+          ? [VideoPresets.h180, VideoPresets.h360, VideoPresets.h720]
+          : target.bitrateKbps >= 900
+            ? [VideoPresets.h180, VideoPresets.h360]
+            : [VideoPresets.h180],
       screenShareEncoding: ScreenSharePresets.h1080fps30.encoding,
       // Let WebRTC trade resolution/framerate under congestion (best overall quality for bandwidth).
       degradationPreference: "balanced",

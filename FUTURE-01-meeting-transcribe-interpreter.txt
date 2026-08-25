@@ -207,3 +207,22 @@ END — FUTURE #2
 
 
 agent --resume=604afeff-7a2d-4a80-a129-047a514504e5
+codex resume 019ff704-e07b-78f0-8483-aa1373372d89
+
+
+  We’ll proceed in small checkpoints so a limit cutoff doesn’t waste the work. The current sequence is:
+
+  1. stateless room routing and join-ticket flow
+  2. device bandwidth detection and adaptive media profiles
+  3. publisher/subscriber policy selection
+  4. RTP/RTCP session handling
+  5. congestion control and bitrate adaptation
+  6. simulcast/SVC decision logic
+  7. node health checks and failover handling
+  8. room state reconciliation across nodes
+  9. TURN/STUN integration strategy
+  10. auth hardening
+  11. metrics, tracing, and capacity telemetry
+  12. load, recovery, and restart testing
+
+C:\Users\kyawz\.codex\skills\.system\openai-docs\SKILL.md

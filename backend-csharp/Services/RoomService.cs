@@ -41,6 +41,7 @@ public sealed class RoomService
         string pin,
         int maxUsers,
         string mediaHost,
+        DeviceBandwidthHintDto? deviceHint = null,
         CancellationToken ct = default)
     {
         var max = maxUsers <= 0 || maxUsers > _config.MaxRoomParticipants
@@ -74,7 +75,7 @@ public sealed class RoomService
             JoinedAt = DateTime.UtcNow,
         };
         await _store.AddParticipantAsync(host, ct);
-        return BuildTicket(room, host, mediaHost, activePublishers: 0);
+        return BuildTicket(room, host, mediaHost, activePublishers: 0, deviceHint);
     }
 
     public async Task<(JoinTicketDto Ticket, IReadOnlyList<string> ReplacedParticipantIds)> JoinRoomAsync(
@@ -82,6 +83,7 @@ public sealed class RoomService
         string displayName,
         string pin,
         string mediaHost,
+        DeviceBandwidthHintDto? deviceHint = null,
         CancellationToken ct = default)
     {
         var room = await _store.GetRoomAsync(roomId, ct)
@@ -115,7 +117,7 @@ public sealed class RoomService
             throw new RoomServiceException(RoomError.Full, "room is full");
 
         var stats = await _store.GetMediaStatsAsync(roomId, ct);
-        return (BuildTicket(room, participant, mediaHost, stats.Publishers), replaced);
+        return (BuildTicket(room, participant, mediaHost, stats.Publishers, deviceHint), replaced);
     }
 
     public Task<RoomRecord?> GetRoomAsync(string roomId, CancellationToken ct = default)
@@ -224,7 +226,8 @@ public sealed class RoomService
         RoomRecord room,
         ParticipantRecord participant,
         string mediaHost,
-        int activePublishers = 0)
+        int activePublishers = 0,
+        DeviceBandwidthHintDto? deviceHint = null)
     {
         var token = _jwt.Issue(room.Id, participant.Id, participant.Role);
         var turn = _turn.BuildTurnInfo(participant.Id, mediaHost)
@@ -243,7 +246,8 @@ public sealed class RoomService
             signalingUrl,
             caps.CanPublishAnything,
             true,
-            publishSources));
+            publishSources,
+            deviceHint));
 
         return new JoinTicketDto
         {
@@ -253,6 +257,7 @@ public sealed class RoomService
             LiveKitToken = grant.Token,
             MediaProvider = grant.Provider,
             ParticipantToken = token,
+            DeviceHint = deviceHint,
             Turn = new TurnInfoDto
             {
                 Urls = turn.Urls.Select(u => MediaHostHelper.RewriteUrlHost(u, mediaHost)).ToArray(),

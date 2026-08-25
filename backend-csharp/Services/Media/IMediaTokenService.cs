@@ -1,3 +1,5 @@
+using Kzys.Backend.Models;
+
 namespace Kzys.Backend.Services.Media;
 
 /// <summary>
@@ -17,7 +19,8 @@ public sealed record MediaJoinRequest(
     string SignalingUrl,
     bool CanPublish,
     bool CanSubscribe,
-    IReadOnlyList<string>? CanPublishSources = null);
+    IReadOnlyList<string>? CanPublishSources = null,
+    DeviceBandwidthHintDto? DeviceHint = null);
 
 public sealed record MediaJoinGrant(
     string Url,

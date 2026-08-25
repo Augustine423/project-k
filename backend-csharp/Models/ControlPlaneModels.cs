@@ -50,6 +50,15 @@ public sealed class TurnInfoDto
     public required string Credential { get; set; }
 }
 
+public sealed class DeviceBandwidthHintDto
+{
+    public uint UplinkKbps { get; set; }
+    public uint DownlinkKbps { get; set; }
+    public bool BatterySaver { get; set; }
+    public bool IsMobile { get; set; }
+    public bool IsPortrait { get; set; }
+}
+
 public sealed class JoinTicketDto
 {
     public required RoomRecord Room { get; set; }
@@ -60,6 +69,7 @@ public sealed class JoinTicketDto
     public string MediaProvider { get; set; } = MediaProviders.LiveKit;
     public required string ParticipantToken { get; set; }
     public required TurnInfoDto Turn { get; set; }
+    public DeviceBandwidthHintDto? DeviceHint { get; set; }
 }
 
 public sealed class ParticipantClaims

@@ -1,4 +1,5 @@
-import type { JoinTicket, Participant, Room, TurnInfo } from "./types";
+import type { DeviceBandwidthHint, JoinTicket, Participant, Room, TurnInfo } from "./types";
+import { createDeviceBandwidthHint } from "../media/bandwidthHint";
 
 /** Same-origin in dev (Vite proxy) so phones on the LAN hit the PC, not phone-localhost. */
 function apiBase(): string {
@@ -158,19 +159,29 @@ export interface CreateRoomInput {
   displayName: string;
   maxUsers?: number;
   pin?: string;
+  deviceHint?: DeviceBandwidthHint;
 }
 
 export function createRoom(input: CreateRoomInput): Promise<JoinTicket> {
-  return request("/api/rooms", { method: "POST", body: JSON.stringify(input) });
+  const deviceHint = input.deviceHint ?? createDeviceBandwidthHint();
+  return request("/api/rooms", {
+    method: "POST",
+    body: JSON.stringify({ ...input, deviceHint }),
+  });
 }
 
 export interface JoinRoomInput {
   displayName: string;
   pin?: string;
+  deviceHint?: DeviceBandwidthHint;
 }
 
 export function joinRoom(roomId: string, input: JoinRoomInput): Promise<JoinTicket> {
-  return request(`/api/rooms/${roomId}/join`, { method: "POST", body: JSON.stringify(input) });
+  const deviceHint = input.deviceHint ?? createDeviceBandwidthHint();
+  return request(`/api/rooms/${roomId}/join`, {
+    method: "POST",
+    body: JSON.stringify({ ...input, deviceHint }),
+  });
 }
 
 export function getRoom(roomId: string): Promise<Room> {
