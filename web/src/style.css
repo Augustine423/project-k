@@ -6171,8 +6171,8 @@ html:has(.auth-page) body {
   --sidebar-width: var(--meeting-sidebar-width, 352px);
   --stage-gap: 16px;
   --stage-pad-x: 16px;
-  --stage-pad-y: 16px;
-  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 16px);
+  --stage-pad-y: 8px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 6px);
   --stage-side-gutter: 0px;
   --tile-radius: 12px;
   display: grid;
@@ -6339,8 +6339,8 @@ html:has(.auth-page) body {
  */
 .mm-stage--pip {
   --stage-pad-x: 16px;
-  --stage-pad-y: 16px;
-  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 16px);
+  --stage-pad-y: 8px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 6px);
   --tile-radius: 12px;
   --pip-inset: 12px;
   display: flex;
@@ -6573,19 +6573,35 @@ html:has(.auth-page) body {
 .mm-stage--gallery.mm-stage--pretty[data-shape="solo"] .mm-gallery-flow {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  justify-items: center;
-  align-items: center;
+  justify-items: stretch;
+  align-items: stretch;
   width: var(--pack-w);
-  height: 86%;
-  max-height: 86%;
-  align-self: center;
+  height: 100%;
+  max-height: 100%;
+  align-self: stretch;
+  flex: 1 1 auto;
 }
 
 .mm-stage--gallery.mm-stage--pretty[data-shape="solo"] .mm-gallery-flow > .mm-slot {
-  width: 86%;
+  width: 100%;
   height: 100%;
-  justify-self: center;
-  align-self: center;
+  max-width: none;
+  max-height: none;
+  justify-self: stretch;
+  align-self: stretch;
+}
+
+/* Solo / 1:1 pip: pull the landscape box down toward the dock (less dead white space). */
+.mm-stage--gallery.mm-stage--pretty[data-shape="solo"],
+.mm-stage--pip {
+  --stage-pad-y: 8px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 6px);
+}
+
+.meeting-app.meeting-light .mm-stage--gallery.mm-stage--pretty[data-shape="solo"],
+.meeting-app.meeting-light .mm-stage--pip {
+  --stage-pad-y: 8px;
+  --stage-pad-bottom: calc(var(--dock-height) + env(safe-area-inset-bottom, 0px) + 6px);
 }
 
 /* Self-view: keep the box centered in the leftover stage (not left-pinned to chat). */
@@ -6757,7 +6773,7 @@ html:has(.auth-page) body {
 .meeting-app.meeting-light:has(.mm-stage--gallery.mm-stage--index1) .meeting-sidebar {
   top: var(--stage-pad-y, 16px);
   right: var(--stage-pad-x, 16px);
-  bottom: calc(var(--dock-height, 5.75rem) + env(safe-area-inset-bottom, 0px) + 16px);
+  bottom: calc(var(--dock-height, 5.75rem) + env(safe-area-inset-bottom, 0px) + 8px);
   width: var(--meeting-sidebar-width, 352px);
   max-width: min(var(--meeting-sidebar-width, 352px), calc(100% - 2.4rem));
 }

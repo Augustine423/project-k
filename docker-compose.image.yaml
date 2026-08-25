@@ -6,17 +6,23 @@ name: project-k
 #   docker compose -f docker-compose.yaml -f docker-compose.image.yaml pull
 #   docker compose -f docker-compose.yaml -f docker-compose.image.yaml up -d
 #
-# Requires images already pushed (e.g. kyawzayarsoe/project-k-web:latest).
+# Images (set in .env):
+#   WEB_IMAGE=kyawzayarsoe/project-k-web:latest
+#   SERVER_IMAGE=kyawzayarsoe/project-k-csharp:latest
 
 services:
   server:
     pull_policy: always
-    image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-csharp:${IMAGE_TAG:-latest}
+    image: ${SERVER_IMAGE:-kyawzayarsoe/project-k-csharp:latest}
+    build: !reset null
 
   web:
     pull_policy: always
-    image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-web:${IMAGE_TAG:-latest}
+    image: ${WEB_IMAGE:-kyawzayarsoe/project-k-web:latest}
+    build: !reset null
 
   web-dev:
+    profiles: ["dev"]
     pull_policy: always
-    image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-web:dev
+    image: ${WEB_DEV_IMAGE:-kyawzayarsoe/project-k-web:dev}
+    build: !reset null

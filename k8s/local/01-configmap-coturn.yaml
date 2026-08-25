@@ -8,7 +8,7 @@ metadata:
     app.kubernetes.io/env: kind-local
     app.kubernetes.io/component: coturn
 data:
-  TURN_HOST: "192.168.1.3"
+  TURN_HOST: "192.168.1.5"
   TURN_PORT: "3478"
   TURN_TLS_PORT: "5349"
   TURN_USE_TLS: "false"

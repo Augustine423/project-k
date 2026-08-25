@@ -5,9 +5,9 @@ bind_addresses:
   - ""
 rtc:
   tcp_port: 7881
-  # Avoid Windows Hyper-V excluded UDP ranges (50000–50xxx).
-  port_range_start: 52000
-  port_range_end: 52099
+  # Avoid Windows Hyper-V / svchost reserved UDP (50000–52xxx often occupied).
+  port_range_start: 53000
+  port_range_end: 53099
   use_external_ip: false
   # Advertised ICE IP comes from docker compose: livekit --node-ip ${LIVEKIT_NODE_IP}
   # (must match PUBLIC_HOST — your Wi‑Fi LAN IP).

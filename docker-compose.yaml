@@ -74,7 +74,7 @@ services:
     ports:
       - "${LIVEKIT_PORT:-7880}:7880"
       - "${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
-      - "52000-52099:52000-52099/udp"
+      - "53000-53099:53000-53099/udp"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:7880/ || exit 1"]
       interval: 10s
@@ -99,7 +99,7 @@ services:
       - "20000-20200:20000-20200/udp"
 
   server:
-    image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-csharp:${IMAGE_TAG:-latest}
+    image: ${SERVER_IMAGE:-kyawzayarsoe/project-k-csharp:latest}
     pull_policy: ${PULL_POLICY:-missing}
     build:
       context: .
@@ -130,7 +130,7 @@ services:
   # Open https://PUBLIC_HOST/ (or http://PUBLIC_HOST/ → redirects). Cam/mic need HTTPS.
   # Always started (no Compose profile) so GCP / plain `docker compose up` includes the web UI.
   web:
-    image: ${DOCKERHUB_USER:-kyawzayarsoe}/project-k-web:${IMAGE_TAG:-latest}
+    image: ${WEB_IMAGE:-kyawzayarsoe/project-k-web:latest}
     pull_policy: ${PULL_POLICY:-missing}
     build:
       context: ./web
