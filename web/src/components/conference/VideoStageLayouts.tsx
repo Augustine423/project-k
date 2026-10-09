@@ -159,7 +159,7 @@ function MmSlot({
   }
 
   if (slot.kind === "freeform") {
-    const aspect = slot.box === "portrait" ? "portrait" : "square";
+    const aspect = slot.box === "portrait" ? "portrait" : "landscape";
     return (
       <div
         className={`${className} mm-slot--freeform mm-slot--box-${slot.box} free-tile`}

@@ -737,7 +737,7 @@ export function resolveStagePlan(input: ResolveStagePlanInput): StagePlan {
     slots.map((s) =>
       s.kind === "freeform"
         ? { box: s.box }
-        : { box: "square" as GalleryBoxKind },
+        : { box: "landscape" as GalleryBoxKind },
     ),
   );
   const pack = resolveGalleryCountLayout(tiles.length, viewerMode);

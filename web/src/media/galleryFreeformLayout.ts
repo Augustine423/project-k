@@ -9,7 +9,7 @@
  * - Two portraits ≈ one square width
  */
 
-export type GalleryBoxKind = "square" | "portrait";
+export type GalleryBoxKind = "landscape" | "portrait";
 
 export type GalleryFreeformTile = {
   id: string;
@@ -19,7 +19,7 @@ export type GalleryFreeformTile = {
 };
 
 export const GALLERY_FREEFORM_COLS = 3;
-export const GALLERY_SQUARE_UNIT = 1;
+export const GALLERY_LANDSCAPE_UNIT = 1;
 export const GALLERY_PORTRAIT_UNIT = 0.5;
 
 /** @deprecated design px kept for callers that still read them */
@@ -30,16 +30,16 @@ export const FF_PT_H = 357;
 export const FF_GAP = 12;
 
 export function galleryBoxForTile(tile: GalleryFreeformTile): GalleryBoxKind {
-  if (tile.isScreenShare) return "square";
+  if (tile.isScreenShare) return "landscape";
   const isMobile =
     tile.sourceDevice === "mobile" ||
     (!tile.sourceDevice && tile.preferredAspect === "portrait");
   if (isMobile && tile.preferredAspect === "portrait") return "portrait";
-  return "square";
+  return "landscape";
 }
 
 export function galleryBoxUnit(box: GalleryBoxKind): number {
-  return box === "portrait" ? GALLERY_PORTRAIT_UNIT : GALLERY_SQUARE_UNIT;
+  return box === "portrait" ? GALLERY_PORTRAIT_UNIT : GALLERY_LANDSCAPE_UNIT;
 }
 
 export type GalleryFreeformSlot<T extends GalleryFreeformTile = GalleryFreeformTile> = {
@@ -130,7 +130,7 @@ export function layoutGalleryFreeformAbsolute<T extends GalleryFreeformTile>(
     Boolean(opts.mobileFit) &&
     slots.length > 0 &&
     stripUnits <= cols + 1e-6;
-  const uniform = slots.length > 0 && slots.every((s) => s.box === "square");
+  const uniform = slots.length > 0 && slots.every((s) => s.box === "landscape");
 
   return {
     placements: slots,

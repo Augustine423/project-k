@@ -6686,9 +6686,10 @@ html:has(.auth-page) body {
   flex: 1 0 auto;
 }
 
-/* Equal landscape cells — portrait streams cover-crop inside the same box */
-.mm-stage--gallery.mm-stage--pretty .mm-slot--box-square,
-.mm-stage--gallery.mm-stage--pretty .free-tile[data-box="square"],
+/* Landscape (16:9 — desktop / laptop) + Portrait (9:16 — mobile) boxes:
+   each tile keeps its native aspect ratio; video is never cropped. */
+.mm-stage--gallery.mm-stage--pretty .mm-slot--box-landscape,
+.mm-stage--gallery.mm-stage--pretty .free-tile[data-box="landscape"],
 .mm-stage--gallery.mm-stage--pretty .mm-slot--box-portrait,
 .mm-stage--gallery.mm-stage--pretty .free-tile[data-box="portrait"] {
   position: relative;
@@ -6698,15 +6699,24 @@ html:has(.auth-page) body {
   min-height: 0;
   max-width: none;
   max-height: none;
-  aspect-ratio: auto;
   box-sizing: border-box;
   margin: 0;
-  border-radius: var(--tile-radius, 14px);
+  border-radius: 0;
   overflow: hidden;
   background: #1f242d;
   border: none;
   box-shadow: none;
   outline: none;
+}
+
+.mm-stage--gallery.mm-stage--pretty .mm-slot--box-landscape,
+.mm-stage--gallery.mm-stage--pretty .free-tile[data-box="landscape"] {
+  aspect-ratio: 16 / 9;
+}
+
+.mm-stage--gallery.mm-stage--pretty .mm-slot--box-portrait,
+.mm-stage--gallery.mm-stage--pretty .free-tile[data-box="portrait"] {
+  aspect-ratio: 9 / 16;
 }
 
 .meeting-app.viewport-mobile-portrait .mm-stage--gallery.mm-stage--pretty,
@@ -6750,7 +6760,7 @@ html:has(.auth-page) body {
 .mm-stage--gallery.mm-stage--pretty .free-tile .video-tile {
   width: 100%;
   height: 100%;
-  border-radius: inherit;
+  border-radius: 0;
   border: none;
   box-shadow: none;
   outline: none;
@@ -6766,7 +6776,7 @@ html:has(.auth-page) body {
   .free-tile
   .video-tile
   video:not(.video-feed-blur) {
-  object-fit: cover;
+  object-fit: contain;
 }
 
 /* Gallery chat column alignment */

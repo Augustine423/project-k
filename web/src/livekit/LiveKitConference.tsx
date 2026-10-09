@@ -1185,7 +1185,7 @@ export function LiveKitConference({
         stream: null,
         hasVideo: false,
         roleBadge: spec.kind === "mobile" ? "Mobile" : "Web",
-        preferredAspect: spec.kind === "mobile" ? "portrait" : "square",
+        preferredAspect: spec.kind === "mobile" ? "portrait" : "landscape",
         sourceDevice: spec.kind === "mobile" ? "mobile" : "laptop",
       })),
     [simSpecs],

@@ -12,14 +12,13 @@ export const MM_VIDEO_ASPECT_ATTR = "mm.videoAspect";
 /**
  * Advertised video box aspect:
  * - mobile upright → portrait (9:16 gallery box)
- * - mobile sideways / tablet / laptop → square (1:1 gallery box)
+ * - mobile sideways / tablet / laptop → landscape (16:9 gallery box)
  */
-export type MmVideoAspectAttr = "portrait" | "landscape" | "square";
+export type MmVideoAspectAttr = "portrait" | "landscape";
 
 /**
  * Aspect to advertise to other participants.
- * Gallery: 9:16 only for mobile portrait; all other cases → 1:1 (`square`).
- * (Capture may still be 16:9 on mobile landscape; the tile box is 1:1 + cover.)
+ * Gallery: 9:16 only for mobile portrait; all other cases → 16:9 (`landscape`).
  */
 export function preferredAspectForCaptureDevice(
   device: CaptureDeviceClass = detectCaptureDeviceClass(),
@@ -27,7 +26,7 @@ export function preferredAspectForCaptureDevice(
   if (device === "mobile" && isDeviceOrientationPortrait()) {
     return "portrait";
   }
-  return "square";
+  return "landscape";
 }
 
 /** Attributes every MeetingMax client should publish on join / camera enable / rotate. */
@@ -53,11 +52,11 @@ export function readPreferredVideoAspect(
 ): StreamAspect | undefined {
   if (!attributes) return undefined;
   const raw = attributes[MM_VIDEO_ASPECT_ATTR];
-  if (raw === "portrait" || raw === "landscape" || raw === "square") return raw;
+  if (raw === "portrait" || raw === "landscape") return raw;
   const device = attributes[MM_DEVICE_ATTR];
   // Legacy: old clients only sent mm.device=mobile without aspect — assume upright portrait.
   if (device === "mobile") return "portrait";
-  if (device === "tablet" || device === "laptop") return "square";
+  if (device === "tablet" || device === "laptop") return "landscape";
   return undefined;
 }
 

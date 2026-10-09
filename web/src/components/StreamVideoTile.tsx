@@ -161,7 +161,7 @@ export function StreamVideoTile({
     );
     if (!(cell instanceof HTMLElement)) return;
     // Freeform gallery locks box via data-box — don't override portrait/square unit.
-    if (cell.dataset.box === "portrait" || cell.dataset.box === "square") return;
+    if (cell.dataset.box === "portrait" || cell.dataset.box === "landscape") return;
     if (aspect) cell.dataset.streamAspect = aspect;
     else delete cell.dataset.streamAspect;
   }, [streamAspect]);
