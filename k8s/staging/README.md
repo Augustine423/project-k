@@ -37,6 +37,14 @@ LiveKit ICE still advertises `LIVEKIT_MEDIA_IP` = media NLB IP. That is staging-
 
 Staging does **not** use cloud Redis. Keep `REDIS_URL=redis://redis:6379` and LiveKit `redis.address: redis:6379`. Size the single Redis pod if memory spikes. Swap to Memorystore/ElastiCache later by changing those two URLs only.
 
+Redis is a shared dependency for room state, cross-pod WebSocket event fanout, and LiveKit coordination. The single staging Redis pod is a single point of failure; increasing control-plane or LiveKit replicas does not make Redis highly available. Use a managed or explicitly HA Redis deployment, with persistence/failover appropriate to the service, before relying on production multi-pod availability.
+
+Each control-plane pod also keeps its own in-memory WebSocket connection map. This is expected: Redis Pub/Sub distributes events and each pod writes to its own connected sockets; the publishing pod suppresses its own Pub/Sub echo after local delivery. Disconnect grace timers are process-local, while presence is checked in Redis; a pod restart can cancel a timer, so reconnect, expiration, and stale participant cleanup still need operational validation.
+
+## Capacity configuration
+
+The staging ConfigMap intentionally limits rooms to 500 participants and interactive publishing to 50. Compose/local configuration defaults are higher (10,000 participant admission and 10,000 interactive publishers), but these are configured limits—not measured or guaranteed capacity. A large mostly-listening room has very different SFU, network, Redis, and browser costs from a room where many participants publish HD video. Do not infer capacity from the configured admission cap.
+
 ## Node autoscaling (cluster, not this folder)
 
 HPA only creates **pods**. If nodes are full, pods stay Pending until the **cluster autoscaler** adds VMs:

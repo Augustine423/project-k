@@ -159,21 +159,33 @@ return 1
         var entries = await _db.SortedSetRangeByRankWithScoresAsync(RaisedHandsKey(roomId));
         if (entries.Length == 0) return [];
 
+        var participantIds = entries.Select(entry => entry.Element).ToArray();
+        var participants = await _db.HashGetAsync(ParticipantsKey(roomId), participantIds);
         var result = new List<RaisedHandRecord>(entries.Length);
-        foreach (var entry in entries)
+        var staleIds = new List<RedisValue>();
+        for (var i = 0; i < entries.Length; i++)
         {
-            var participantId = (string)entry.Element!;
-            if (string.IsNullOrEmpty(participantId)) continue;
-            var participant = await GetParticipantAsync(roomId, participantId, ct);
+            ct.ThrowIfCancellationRequested();
+            var entry = entries[i];
+            var participantId = entry.Element;
+            if (participantId.IsNullOrEmpty) continue;
+
+            var value = participants[i];
+            var participant = value.IsNullOrEmpty
+                ? null
+                : JsonSerializer.Deserialize<ParticipantRecord>((string)value!);
             if (participant is null)
             {
-                await _db.SortedSetRemoveAsync(RaisedHandsKey(roomId), participantId);
+                staleIds.Add(participantId);
                 continue;
             }
 
             var raisedAt = DateTime.UnixEpoch.AddMilliseconds(entry.Score);
             result.Add(new RaisedHandRecord(participant.Id, participant.DisplayName, raisedAt));
         }
+
+        if (staleIds.Count > 0)
+            await _db.SortedSetRemoveAsync(RaisedHandsKey(roomId), staleIds.ToArray());
 
         return result;
     }
