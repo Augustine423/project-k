@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: project-k-test
+  labels:
+    app: project-k-test
+spec:
+  replicas: 1 # A single pod keeps this example small for basic testing.
+  selector:
+    matchLabels:
+      app: project-k-test
+  template:
+    metadata:
+      labels:
+        app: project-k-test
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine # A small, public image avoids requiring a project build.
+          ports:
+            - name: http
+              containerPort: 80 # Nginx listens on port 80 inside the container.
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: project-k-test
+spec:
+  type: ClusterIP # Keep the test service inside the cluster; use kubectl port-forward to reach it.
+  selector:
+    app: project-k-test # Route requests to pods created by the Deployment above.
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
