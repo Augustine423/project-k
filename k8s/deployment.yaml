@@ -1,35 +1,141 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: project-k-test
+  name: project-k-web
   labels:
-    app: project-k-test
+    app: project-k-web
 spec:
-  replicas: 1 # A single pod keeps this example small for basic testing.
+  replicas: 1
   selector:
     matchLabels:
-      app: project-k-test
+      app: project-k-web
   template:
     metadata:
       labels:
-        app: project-k-test
+        app: project-k-web
     spec:
       containers:
-        - name: nginx
-          image: nginx:1.27-alpine # A small, public image avoids requiring a project build.
+        - name: web
+          image: kyawzayarsoe/project-k-web:latest
+          imagePullPolicy: Always
           ports:
             - name: http
-              containerPort: 80 # Nginx listens on port 80 inside the container.
+              containerPort: 80
+            - name: https
+              containerPort: 443
+          readinessProbe:
+            httpGet:
+              path: /
+              port: https
+              scheme: HTTPS
+          livenessProbe:
+            httpGet:
+              path: /
+              port: https
+              scheme: HTTPS
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: project-k-test
+  name: project-k-web
 spec:
-  type: ClusterIP # Keep the test service inside the cluster; use kubectl port-forward to reach it.
+  type: ClusterIP
   selector:
-    app: project-k-test # Route requests to pods created by the Deployment above.
+    app: project-k-web
   ports:
     - name: http
       port: 80
       targetPort: http
+    - name: https
+      port: 443
+      targetPort: https
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server
+  labels:
+    app: server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: server
+  template:
+    metadata:
+      labels:
+        app: server
+    spec:
+      containers:
+        - name: server
+          image: kyawzayarsoe/project-k-csharp:latest
+          imagePullPolicy: Always
+          ports:
+            - name: http
+              containerPort: 4000
+          env:
+            - name: REDIS_URL
+              value: redis://redis:6379
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: server
+spec:
+  type: ClusterIP
+  selector:
+    app: server
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+        - name: redis
+          image: redis:7-alpine
+          ports:
+            - name: redis
+              containerPort: 6379
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
