@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
 import { useVideoStreamSize } from "../hooks/useVideoStreamAspect";
 import {
@@ -17,6 +17,8 @@ interface StreamVideoTileProps {
   muted?: boolean;
   mirror?: boolean;
   isSpeaking?: boolean;
+  micMuted?: boolean;
+  networkQuality?: "excellent" | "good" | "poor" | "lost" | "unknown";
   /** When false, tile shows avatar but audio may still play (off-page / audio-only). */
   hasVideo?: boolean;
   /** Show decoded WxH badge (dev/quality check). */
@@ -81,6 +83,8 @@ export function StreamVideoTile({
   muted = false,
   mirror = false,
   isSpeaking = false,
+  micMuted,
+  networkQuality = "unknown",
   hasVideo,
   showStats = import.meta.env.DEV,
   roleBadge,
@@ -95,6 +99,8 @@ export function StreamVideoTile({
   const blurRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const statsRef = useRef<HTMLSpanElement>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const videoTrack = stream?.getVideoTracks()[0] ?? null;
   const audioTrack = stream?.getAudioTracks()[0] ?? null;
@@ -210,6 +216,18 @@ export function StreamVideoTile({
   const tone = avatarTone(label);
   const initials = avatarInitials(label);
   const feedClass = ["video-feed", mirror ? "mirror" : ""].filter(Boolean).join(" ");
+  const audioIsMuted = micMuted ?? (!audioTrack || Boolean(audioTrack.muted));
+
+  async function copyParticipantName() {
+    try {
+      await navigator.clipboard.writeText(label);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1400);
+      setMenuOpen(false);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <div
@@ -227,6 +245,11 @@ export function StreamVideoTile({
       data-stream-aspect={streamAspect !== "unknown" ? streamAspect : undefined}
       data-ai-active={isSpeaking ? "true" : undefined}
     >
+      {useBlurFill && showVideo ? (
+        <div className="video-letterbox-backdrop" style={{ ["--tile-tone" as string]: tone }} aria-hidden="true">
+          <span>{initials}</span>
+        </div>
+      ) : null}
       {useBlurFill && showVideo ? (
         <video
           ref={blurRef}
@@ -255,10 +278,52 @@ export function StreamVideoTile({
           <span className="no-video-text">{label}</span>
         </div>
       )}
+      {!className.includes("mm-self-pip__tile") && !label.endsWith("(Screen)") && (
+        <div className="video-tile-indicators" aria-label="Participant status">
+          {audioIsMuted && (
+            <span className="video-tile-status" title="Microphone muted" aria-label="Microphone muted">
+              <svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" fill="none">
+                <path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 5.1 2.1M15 9V5a3 3 0 0 0-5.1-2.1M5 10v1a7 7 0 0 0 12 4.9M19 10v1a7 7 0 0 1-.4 2.3M12 18v4m-4 0h8M3 3l18 18" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </span>
+          )}
+          {isSpeaking && (
+            <span className="video-audio-wave" title="Speaking" aria-label="Speaking">
+              <i /><i /><i />
+            </span>
+          )}
+          <span
+            className={`video-network-quality quality-${networkQuality}`}
+            title={`Connection: ${networkQuality}`}
+            aria-label={`Connection quality: ${networkQuality}`}
+          >
+            <i /><i /><i />
+          </span>
+        </div>
+      )}
       {showStats && <span ref={statsRef} className="video-res-badge" aria-hidden />}
       <div className="video-chrome">
         {roleBadge && <span className="video-role">{roleBadge}</span>}
         <span className="video-label">{label}</span>
+      </div>
+      <div className="video-tile-menu">
+        <button
+          type="button"
+          className="video-tile-menu-button"
+          aria-label={`More options for ${label}`}
+          aria-expanded={menuOpen}
+          aria-haspopup="menu"
+          onClick={() => setMenuOpen((open) => !open)}
+        >
+          <span aria-hidden="true">•••</span>
+        </button>
+        {menuOpen && (
+          <div className="video-tile-menu-popover" role="menu">
+            <button type="button" role="menuitem" onClick={() => void copyParticipantName()}>
+              {copied ? "Copied" : "Copy name"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

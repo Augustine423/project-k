@@ -283,6 +283,8 @@ export type StageParticipantTile = {
   hasVideo?: boolean;
   roleBadge?: string;
   isSpeaking?: boolean;
+  micMuted?: boolean;
+  networkQuality?: "excellent" | "good" | "poor" | "lost" | "unknown";
   isScreenShare?: boolean;
   preferredAspect?: StreamAspect;
   /** Publisher device from mm.device — gallery 9:16 only when `mobile` + portrait. */

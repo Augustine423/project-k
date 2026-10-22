@@ -64,6 +64,8 @@ function Tile({
       hasVideo={tile.hasVideo}
       roleBadge={tile.roleBadge}
       isSpeaking={tile.isSpeaking}
+      micMuted={tile.micMuted}
+      networkQuality={tile.networkQuality}
       size={size}
       layoutMode={layoutMode}
       preferredAspect={tile.isScreenShare ? undefined : tile.preferredAspect}
