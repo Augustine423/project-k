@@ -7,7 +7,7 @@ public sealed class AppConfig
     public string JwtSigningSecret { get; init; } = "dev-jwt-signing-secret";
     public string CorsOrigin { get; init; } = "*";
     public int MaxRoomParticipants { get; init; } = 10000;
-    public int WebinarEnterListeners { get; init; } = 400;
+    public int WebinarEnterListeners { get; init; } = 10000;
     public double WebinarEnterRatio { get; init; } = 8.0;
     public int WebinarExitListeners { get; init; } = 50;
     public int InteractiveMaxPublishers { get; init; } = 10000;
@@ -17,7 +17,7 @@ public sealed class AppConfig
     /// <summary>Default page size for GET /participants.</summary>
     public int ParticipantsPageSizeDefault { get; init; } = 50;
     /// <summary>Max participants returned by search scan (large rooms).</summary>
-    public int ParticipantsSearchScanCap { get; init; } = 3000;
+    public int ParticipantsSearchScanCap { get; init; } = 10000;
     public string TurnSharedSecret { get; init; } = "dev-turn-shared-secret";
     public string TurnHost { get; init; } = "localhost";
     public int TurnPort { get; init; } = 3478;

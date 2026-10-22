@@ -11,6 +11,7 @@ public sealed class RoomEventHub : IHostedService
 {
     private const string BroadcastChannel = "kzys:room:events";
     private const int MaxMessageBytes = 65536;
+    private readonly string _instanceId = Guid.NewGuid().ToString("N");
 
     private static readonly JsonSerializerOptions EventJson = new()
     {
@@ -45,6 +46,10 @@ public sealed class RoomEventHub : IHostedService
             try
             {
                 using var doc = JsonDocument.Parse((string)message!);
+                if (doc.RootElement.TryGetProperty("origin", out var originEl)
+                    && originEl.GetString() == _instanceId)
+                    return;
+
                 var roomId = doc.RootElement.GetProperty("roomId").GetString();
                 if (string.IsNullOrEmpty(roomId)) return;
                 var payload = doc.RootElement.GetProperty("payload").GetRawText();
@@ -121,6 +126,7 @@ public sealed class RoomEventHub : IHostedService
 
         var envelope = JsonSerializer.Serialize(new
         {
+            origin = _instanceId,
             roomId,
             payload = evt,
             targetParticipantIds = (string[]?)null,
@@ -139,6 +145,7 @@ public sealed class RoomEventHub : IHostedService
 
         var envelope = JsonSerializer.Serialize(new
         {
+            origin = _instanceId,
             roomId,
             payload = evt,
             targetParticipantIds = targets,

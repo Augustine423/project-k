@@ -1,13 +1,6 @@
-# Interactive scale roadmap (vs Zoom / Google Meet)
+# Scalability notes
 
-Target tiers this codebase is moving toward:
-
-| Tier | Join cap | Interactive cam/mic | Our stack |
-|------|----------|----------------------|-----------|
-| Zoom Pro / Meet Starter | 100 | 100 | ✅ software ready |
-| Zoom Business / Meet Plus | 300 / 500 | 300 / 500 | ✅ config default 300 publishers, 1000 joins |
-| Zoom Large / Meet Enterprise | 1000 | 500–1000 (degraded) | ⚠️ needs 6+ SFU nodes + Postgres HA |
-| Webinar / live stream | 10k–100k view-only | N/A | 🔜 webinar mode + egress |
+Configuration limits and architecture notes are not capacity benchmarks. This repository does not establish that a room can sustain a particular number of participants, publishers, or end-to-end latency.
 
 ## Architecture (LiveKit SFU — same class as Zoom/Meet backend)
 
@@ -21,57 +14,26 @@ Redis ──► room roster, LiveKit node registry, scaling metrics
 
 **Reference tech:** [LiveKit distributed SFU](https://docs.livekit.io/transport/self-hosting/distributed/), simulcast + paginated gallery (`galleryVideoPolicy.ts`), TURN REST credentials, Redis-backed control plane.
 
-## Patched (interactive scale upgrade)
-
-| Area | Before | After |
-|------|--------|-------|
-| `INTERACTIVE_MAX_PUBLISHERS` | 50 | **300** (Zoom Business class) |
-| `MAX_ROOM_PARTICIPANTS` (k8s) | 500 | **1000** |
-| Webinar flip threshold | 45 listeners | **400** listeners / ratio **8.0** |
-| LiveKit replicas | 1 | **3** + HPA 1–6 |
-| LiveKit UDP ports | 101 | **1000** (50000–50999) |
-| Coturn relay ports | 101 | **1000** (20000–20999) |
-| LiveKit node selector | none | **sysload** (least-loaded node) |
-| SFU desired pods metric | active rooms only | **publisher-weighted** load |
-| Redis (k8s) | 512 Mi | **1 Gi** |
-| Gallery client tier | up to 200 | **up to 300** publishers |
-
-## CI verification
-
-- **Unit tests** (`backend-unit`): Redis-backed store tests
-- **Load test** (`load-test`): k6 join storm (400 VUs) — control plane only
-- **Gap:** add LiveKit publisher load test before claiming 300 interactive cameras in prod
-
-## Remaining to beat Zoom/Meet at 500+ interactive video
-
-1. **GKE media node pool** — 3–6× `c2-standard-8` (or GPU-less compute), label `project-k.io/media-node=true`
-2. **Postgres** — multi-replica control plane (SQLite breaks with scale-out)
-3. **Redis HA** — Sentinel or Memorystore for LiveKit coord + control plane
-4. **Per-node RTC** (staging NLB with 1 pod, or one SFU IP per node — see `k8s/staging` / `k8s/local`)
-5. **Coturn pool** — 2+ coturn pods on separate nodes
-6. **LiveKit Cloud fallback** — optional hybrid for rooms &gt; single-node SFU cap (~3000 per LiveKit docs self-hosted)
-7. **Geo DNS** — region-aware signaling (LiveKit `regionaware` node selector)
-8. **Observability** — Prometheus + Grafana for SFU CPU, packet loss, join latency
-
 ## Environment knobs
 
-| Variable | Default (new) | Purpose |
-|----------|---------------|---------|
-| `MAX_ROOM_PARTICIPANTS` | 1000 (k8s) / 10000 (code) | Hard join cap |
-| `INTERACTIVE_MAX_PUBLISHERS` | 300 | Max cam/mic publishers (interactive) |
-| `WEBINAR_ENTER_LISTENERS` | 400 | Delay auto-webinar switch |
-| `WEBINAR_ENTER_RATIO` | 8.0 | listeners:publisher ratio before webinar |
-| `LARGE_ROOM_EVENT_THRESHOLD` | 500 | WS count-only events |
-| `SFU_PUBLISHERS_PER_NODE` | 100 | HPA / metrics hint |
-| `KZYS_SFU_STANDBY_POOL` | 2 | Minimum warm SFU nodes |
+The values below describe configuration, not validated capacity. Defaults vary by deployment profile: local/Compose use a 10,000 participant admission cap and 10,000 interactive publisher cap; staging deliberately uses 500 participants and 50 interactive publishers.
 
-## Realistic capacity (current k8s manifests)
+| Variable | Code/Compose default | Staging | Purpose |
+|----------|---------------------|---------|---------|
+| `MAX_ROOM_PARTICIPANTS` | 10000 | 500 | Admission cap; not a tested room capacity |
+| `INTERACTIVE_MAX_PUBLISHERS` | 10000 | 50 | Interactive audio/video publishing permission cap |
+| `WEBINAR_MAX_PUBLISHERS` | 50 | 20 | Webinar publishing permission cap |
+| `WEBINAR_ENTER_LISTENERS` | 10000 | 400 | Automatic webinar-mode threshold |
+| `WEBINAR_ENTER_RATIO` | 8.0 | 8.0 | Listener-to-publisher ratio before webinar mode |
+| `LARGE_ROOM_EVENT_THRESHOLD` | 500 | 200 | Above this, use count-only presence events |
+| `PARTICIPANTS_PAGE_SIZE` | 50 | 50 | Default participant roster page size |
+| `SFU_PUBLISHERS_PER_NODE` | 100 | 50 | Scaling metric hint, not a guaranteed node capacity |
+| `KZYS_SFU_STANDBY_POOL` | 1 | 2 | Minimum warm SFU node target |
 
-| Test | Software cap | Needs (infra) |
-|------|--------------|---------------|
-| Join / chat / WS | 1000 | 1 control-plane + Redis |
-| Interactive video | 300 publishers | 3 SFU nodes × ~100 publishers |
-| One room max cameras | ~100–150 | Single SFU node CPU limit (LiveKit constraint) |
-| 300 in one room | 300 | **Not yet** — split across rooms or add SFU mesh (LiveKit Cloud) |
+The kind-local ConfigMap overrides `KZYS_SFU_STANDBY_POOL` to 0.
 
-**Bottom line:** Software limits now match **Zoom Business (300 interactive)**. Hardware must follow: **3+ media nodes** for lab proof, **6+** for sustained 300 cameras in one room (LiveKit keeps one room on one node).
+## Capacity expectations and limits
+
+A room with 10,000 mostly-listening attendees is a different workload from one where thousands publish HD video. Mic/camera-off defaults and selective subscriptions can reduce media traffic, but do not eliminate the per-attendee signaling, WebSocket, presence, Redis, and browser costs. Interactive publisher limits and admission limits must be chosen for the available SFU, TURN, network, Redis, and control-plane infrastructure.
+
+No 10,000-attendee or publisher capacity is established by these manifests or configuration values. The existing join-storm scenario exercises the control plane, not LiveKit media capacity. Avoid claiming a production capacity or end-to-end latency target until representative end-to-end measurements have been made in the intended infrastructure.

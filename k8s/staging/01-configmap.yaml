@@ -10,6 +10,7 @@ metadata:
 data:
   SERVICE_NAME: "kzys-control-plane"
   CORS_ORIGIN: "*"
+  # Staging admission caps are intentionally conservative; they are not capacity claims.
   MAX_ROOM_PARTICIPANTS: "500"
   LARGE_ROOM_EVENT_THRESHOLD: "200"
   PARTICIPANTS_PAGE_SIZE: "50"

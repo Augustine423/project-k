@@ -118,6 +118,8 @@ type RemoteFeed = {
   screenTrackSignature: string;
   hasVideo: boolean;
   hasScreenShare: boolean;
+  micMuted: boolean;
+  networkQuality: "excellent" | "good" | "poor" | "lost" | "unknown";
   preferredAspect?: StreamAspect;
   sourceDevice?: string;
 };
@@ -252,6 +254,8 @@ export function LiveKitConference({
       screenTrackSignature: screenTrack ? remoteTrackSignature([screenTrack]) : "",
       hasVideo: participantHasVideo(participant),
       hasScreenShare: Boolean(screenTrack),
+      micMuted: participant.getTrackPublication(Track.Source.Microphone)?.isMuted ?? true,
+      networkQuality: participant.connectionQuality.toLowerCase() as RemoteFeed["networkQuality"],
       preferredAspect: readPreferredVideoAspect(participant.attributes),
       sourceDevice: readSourceDevice(participant.attributes),
     };
@@ -524,9 +528,13 @@ export function LiveKitConference({
     };
 
     const onConnectionQualityChanged = (quality: ConnectionQuality, participant: Participant) => {
-      if (cancelled || !participant.isLocal) return;
-      setConnectionQuality(quality);
-      applyLocalUplinkVideoQuality(room, quality);
+      if (cancelled) return;
+      if (participant.isLocal) {
+        setConnectionQuality(quality);
+        applyLocalUplinkVideoQuality(room, quality);
+      } else {
+        upsertRemote(participant as RemoteParticipant);
+      }
     };
 
     const onParticipantAttributesChanged = (
@@ -1062,6 +1070,8 @@ export function LiveKitConference({
       preferredAspect: localPublishAspect,
       sourceDevice: localSourceDevice,
       isSpeaking: Boolean(localIdentity && speakingSet.has(localIdentity)),
+      micMuted: !audioEnabled,
+      networkQuality: connectionQuality.toLowerCase() as StageParticipantTile["networkQuality"],
       roleBadge: isHostRole ? (participantRole === "cohost" ? "Co-host" : "Host") : "You",
     }),
     [
@@ -1074,6 +1084,8 @@ export function LiveKitConference({
       participantRole,
       speakingSet,
       videoEnabled,
+      audioEnabled,
+      connectionQuality,
     ],
   );
 
@@ -1121,6 +1133,8 @@ export function LiveKitConference({
           isScreenShare: true,
           preferredAspect: undefined,
           isSpeaking: speakingSet.has(id),
+          micMuted: feed?.micMuted ?? true,
+          networkQuality: feed?.networkQuality ?? "unknown",
           roleBadge,
         });
       } else {
@@ -1134,6 +1148,8 @@ export function LiveKitConference({
           preferredAspect: feed?.preferredAspect,
           sourceDevice: feed?.sourceDevice,
           isSpeaking: speakingSet.has(id),
+          micMuted: feed?.micMuted ?? true,
+          networkQuality: feed?.networkQuality ?? "unknown",
           roleBadge,
         });
       }
