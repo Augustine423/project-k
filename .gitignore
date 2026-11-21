@@ -24,3 +24,7 @@ janus-gateway/
 
 # Session scratch
 session-token.txt
+
+# .NET build output
+bin/
+obj/

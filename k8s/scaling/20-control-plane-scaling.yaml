@@ -1,0 +1,53 @@
+# Control plane (C# API + WebSocket fan-out). Redis Pub/Sub relays events across pods.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: server
+spec:
+  scaleTargetRef: { apiVersion: apps/v1, kind: Deployment, name: server }
+  minReplicas: 3
+  maxReplicas: 40
+  metrics:
+    - type: Resource
+      resource: { name: cpu, target: { type: Utilization, averageUtilization: 60 } }
+    - type: Resource
+      resource: { name: memory, target: { type: Utilization, averageUtilization: 75 } }
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      policies:
+        - { type: Percent, value: 100, periodSeconds: 30 }
+    scaleDown:
+      stabilizationWindowSeconds: 600     # WebSockets are sticky; scale down slowly
+      policies:
+        - { type: Pods, value: 1, periodSeconds: 120 }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: server
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels: { app: server }
+---
+# Pods need requests for utilisation-based HPA; apply with: kubectl patch deployment server --patch-file ...
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: server-resources-patch
+data:
+  patch.yaml: |
+    spec:
+      template:
+        spec:
+          topologySpreadConstraints:
+            - maxSkew: 1
+              topologyKey: topology.kubernetes.io/zone
+              whenUnsatisfiable: ScheduleAnyway
+              labelSelector: { matchLabels: { app: server } }
+          containers:
+            - name: server
+              resources:
+                requests: { cpu: 500m, memory: 512Mi }
+                limits: { memory: 1Gi }

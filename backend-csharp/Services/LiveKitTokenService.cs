@@ -18,6 +18,27 @@ public sealed class LiveKitTokenService
         _ttl = ttl ?? TimeSpan.FromHours(6);
     }
 
+    /// <summary>Short-lived server token for the LiveKit RoomService API.</summary>
+    public string CreateAdminToken(string roomName)
+    {
+        var now = DateTimeOffset.UtcNow;
+        var payload = new JwtPayload(
+            issuer: _apiKey,
+            audience: null,
+            claims: null,
+            notBefore: now.UtcDateTime,
+            expires: now.AddMinutes(1).UtcDateTime,
+            issuedAt: now.UtcDateTime)
+        {
+            ["video"] = new Dictionary<string, object?> { ["roomAdmin"] = true, ["room"] = roomName },
+        };
+        var credentials = new SigningCredentials(
+            new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_apiSecret)),
+            SecurityAlgorithms.HmacSha256);
+        return new JwtSecurityTokenHandler().WriteToken(
+            new JwtSecurityToken(new JwtHeader(credentials) { ["typ"] = "JWT" }, payload));
+    }
+
     public string CreateJoinToken(
         string roomName,
         string identity,

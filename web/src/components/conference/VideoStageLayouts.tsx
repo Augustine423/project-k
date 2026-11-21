@@ -30,6 +30,7 @@ import {
 } from "../../media/galleryFreeformLayout";
 import type { ViewerViewportMode } from "../../hooks/useViewerViewport";
 import { useDraggableSelfPip } from "../../hooks/useDraggableSelfPip";
+import { useTilePack } from "../../hooks/useTilePack";
 import { useMemo, useRef } from "react";
 
 type CommonProps = {
@@ -69,7 +70,7 @@ function Tile({
       size={size}
       layoutMode={layoutMode}
       preferredAspect={tile.isScreenShare ? undefined : tile.preferredAspect}
-      fit={tile.isScreenShare ? "contain" : "cover"}
+      fit={tile.isScreenShare ? "contain" : undefined}
       className={className}
     />
   );
@@ -328,6 +329,9 @@ function TileStage({ plan }: { plan: TileStagePlan }) {
     [tiles, viewerMode, mobileFit],
   );
 
+  const flowRef = useRef<HTMLDivElement | null>(null);
+  const pack = useTilePack(flowRef, layout.placements.length, !scroll && !sizeLocked);
+
   const galleryStyle = {
     ["--lock-cols"]: String(lockCols),
     ["--lock-rows"]: String(sizeRows),
@@ -341,7 +345,7 @@ function TileStage({ plan }: { plan: TileStagePlan }) {
     ["--gallery-size-rows"]: String(sizeRows),
     ["--gallery-size-n"]: String(sizeN),
     ["--gallery-rows"]: String(rows),
-    ["--gallery-gap"]: count <= 2 ? "12px" : "10px",
+    ["--gallery-gap"]: "0px",
   } as CSSProperties;
 
   return (
@@ -368,8 +372,19 @@ function TileStage({ plan }: { plan: TileStagePlan }) {
         style={galleryStyle}
       >
         <div
+          ref={flowRef}
           className="mm-stage__gallery mm-gallery-flow"
           aria-label="Participants"
+          data-pack={pack ? "1" : undefined}
+          style={
+            pack
+              ? ({
+                  ["--pack-tile-w"]: `${pack.tileW}px`,
+                  ["--pack-tile-h"]: `${pack.tileH}px`,
+                  ["--pack-cols"]: String(pack.cols),
+                } as CSSProperties)
+              : undefined
+          }
           data-cols={String(cols)}
           data-shape={shape}
           data-scroll={scroll ? "1" : undefined}

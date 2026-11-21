@@ -14,7 +14,16 @@ function sizeFrom(w: number, h: number): StreamSize | null {
   return { aspect: classifyStreamAspect(w, h), width: w, height: h };
 }
 
-/** Observe decoded WxH on a bound <video> (track settings as fallback). */
+type FrameCallbackVideo = HTMLVideoElement & {
+  requestVideoFrameCallback?: (cb: () => void) => number;
+  cancelVideoFrameCallback?: (handle: number) => void;
+};
+
+/**
+ * Observe decoded WxH on a bound <video>. Event-driven: `resize` /
+ * `loadedmetadata`, plus requestVideoFrameCallback to catch the first frame and
+ * rotation changes — no polling timers.
+ */
 export function useVideoStreamSize(
   videoRef: RefObject<HTMLVideoElement | null>,
   stream: MediaStream | null | undefined,
@@ -38,33 +47,47 @@ export function useVideoStreamSize(
       );
     };
 
-    const readFromSettings = () => {
+    const settingsSize = () => {
       const settings = track.getSettings?.() ?? {};
       return sizeFrom(Number(settings.width) || 0, Number(settings.height) || 0);
     };
 
+    const video = videoRef.current as FrameCallbackVideo | null;
     const update = () => {
-      const video = videoRef.current;
       if (video && video.videoWidth > 0 && video.videoHeight > 0) {
         apply(sizeFrom(video.videoWidth, video.videoHeight));
         return;
       }
-      apply(readFromSettings());
+      apply(settingsSize());
     };
 
-    apply(readFromSettings());
-    const video = videoRef.current;
+    let frameHandle: number | null = null;
+    let cancelled = false;
+    const watchFrames = () => {
+      if (!video?.requestVideoFrameCallback) return;
+      frameHandle = video.requestVideoFrameCallback(() => {
+        if (cancelled) return;
+        update();
+        // Only needed until real dimensions are known; resize events cover the rest.
+        if (!(video.videoWidth > 0 && video.videoHeight > 0)) watchFrames();
+      });
+    };
+
+    apply(settingsSize());
     video?.addEventListener("loadedmetadata", update);
     video?.addEventListener("resize", update);
-    const timer = window.setInterval(update, 800);
+    track.addEventListener("unmute", update);
     update();
+    watchFrames();
 
     const onEnded = () => setSize(EMPTY);
     track.addEventListener("ended", onEnded);
 
     return () => {
-      window.clearInterval(timer);
+      cancelled = true;
+      if (frameHandle !== null) video?.cancelVideoFrameCallback?.(frameHandle);
       track.removeEventListener("ended", onEnded);
+      track.removeEventListener("unmute", update);
       video?.removeEventListener("loadedmetadata", update);
       video?.removeEventListener("resize", update);
     };

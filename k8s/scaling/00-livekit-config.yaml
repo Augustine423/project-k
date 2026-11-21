@@ -1,0 +1,42 @@
+# LiveKit SFU config tuned for low latency and large audiences.
+# Secrets (keys, redis password) must come from a Secret, not this ConfigMap, in production.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: livekit-config
+data:
+  livekit.yaml: |
+    port: 7880
+    rtc:
+      tcp_port: 7881
+      udp_port: 7882          # single muxed UDP port: simple LB/firewall rules
+      use_external_ip: true
+      congestion_control:
+        enabled: true
+        allow_pause: true     # pause lowest layers under congestion instead of freezing
+      # Lower latency: skip long jitter buffering on the server side.
+      packet_buffer_size: 500
+    redis:
+      # Sentinel from k8s/redis-ha.yaml. For managed Redis use `address:` instead.
+      sentinel_master_name: mymaster
+      sentinel_addresses:
+        - redis-ha-0.redis-ha:26379
+        - redis-ha-1.redis-ha:26379
+        - redis-ha-2.redis-ha:26379
+    room:
+      empty_timeout: 300
+      departure_timeout: 20
+      max_participants: 10000
+      enable_remote_unmute: false
+    audio:
+      active_level: 35
+      min_percentile: 40
+      update_interval: 400    # ms; active-speaker detection cadence
+      smooth_intervals: 2
+    node_selector:
+      kind: sysload
+      sysload_limit: 0.70     # stop placing new rooms on nodes above 70% load
+    prometheus:
+      port: 6789          # top-level `prometheus_port` is deprecated since v1.13
+    logging:
+      level: info

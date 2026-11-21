@@ -1,0 +1,38 @@
+# Large audiences (> ~500 viewers): composite the room once and fan out via HLS/CDN instead of WebRTC.
+# Viewer latency becomes ~2-6 s (LL-HLS), so use it only for view-only attendees beyond the interactive cap.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit-egress
+spec:
+  replicas: 2
+  selector: { matchLabels: { app: livekit-egress } }
+  template:
+    metadata:
+      labels: { app: livekit-egress }
+    spec:
+      terminationGracePeriodSeconds: 3600
+      containers:
+        - name: egress
+          image: livekit/egress:v1.15.0
+          env:
+            - name: EGRESS_CONFIG_BODY
+              valueFrom: { secretKeyRef: { name: livekit-egress, key: config } }
+          resources:
+            requests: { cpu: "4", memory: 4Gi }     # one composite (web) egress needs ~4 CPU
+            limits: { memory: 6Gi }
+          securityContext:
+            capabilities: { add: ["SYS_ADMIN"] }    # Chrome sandbox for RoomComposite
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: livekit-egress
+spec:
+  scaleTargetRef: { name: livekit-egress }
+  minReplicaCount: 2
+  maxReplicaCount: 20
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata: { value: "50" }

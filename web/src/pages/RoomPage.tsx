@@ -4,7 +4,9 @@ import {
   endRoom,
   getParticipantCount,
   kickParticipant,
+  setParticipantPublishAccess,
   leaveRoom as leaveRoomApi,
+  refreshMediaToken,
   listParticipantsPage,
   MAX_CHAT_MESSAGES,
   setRoomLocked,
@@ -18,6 +20,7 @@ import { MeetingHeader } from "../components/MeetingChrome";
 import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { MediaConference } from "../media/MediaConference";
+import { HlsViewer } from "../components/HlsViewer";
 import { forceDisconnectLiveKitRoom } from "../livekit/livekitRoomSession";
 import { mediaUnavailableReason } from "../media/secureContext";
 import { useViewerViewport } from "../hooks/useViewerViewport";
@@ -85,6 +88,8 @@ export function RoomPage() {
     ticket && raisedHands.some((h) => h.participantId === ticket.participant.id),
   );
   const isWebinar = ticket?.room.mode === "webinar";
+  const handsEnabled = isWebinar || Boolean(ticket?.room.viewOnlyDefault);
+  const [promotedIds, setPromotedIds] = useState<ReadonlySet<string>>(new Set());
   const dmPeerRef = useRef(dmPeer);
   dmPeerRef.current = dmPeer;
   const sideTabRef = useRef(sideTab);
@@ -330,6 +335,20 @@ export function RoomPage() {
         return;
       }
 
+      if (evt.type === "participant.promoted") {
+        const data = evt.data as { participantId?: string; canPublish?: boolean };
+        const id = data.participantId;
+        if (id) {
+          setPromotedIds((prev) => {
+            const next = new Set(prev);
+            if (data.canPublish) next.add(id);
+            else next.delete(id);
+            return next;
+          });
+        }
+        return;
+      }
+
       if (evt.type === "hand.updated") {
         const data = evt.data as {
           raised?: { participantId?: string; displayName?: string; at?: string }[];
@@ -473,7 +492,7 @@ export function RoomPage() {
   }
 
   function toggleRaiseHand() {
-    if (!ticket || !isWebinar) return;
+    if (!ticket || !handsEnabled) return;
     try {
       if (selfHandRaised) lowerHand(roomId, ticket.participantToken);
       else raiseHand(roomId, ticket.participantToken);
@@ -530,6 +549,18 @@ export function RoomPage() {
     }
   }
 
+  async function setPublishAccess(participantId: string, promote: boolean) {
+    if (!ticket) return;
+    setHostBusy(true);
+    try {
+      await setParticipantPublishAccess(roomId, ticket.participantToken, participantId, promote);
+    } catch (err) {
+      setStatusMessage(err instanceof Error ? err.message : "Could not change speaking access");
+    } finally {
+      setHostBusy(false);
+    }
+  }
+
   async function kick(participantId: string) {
     if (!ticket) return;
     setHostBusy(true);
@@ -552,6 +583,16 @@ export function RoomPage() {
       ticket?.turn?.urls.join("|"),
     ],
   );
+
+  const fetchFreshToken = useCallback(
+    () => refreshMediaToken(roomId, token).then((r) => r.liveKitToken || null),
+    [roomId, token],
+  );
+
+  const isHlsDelivery = ticket?.delivery === "hls" && !!ticket.hlsUrl;
+  useEffect(() => {
+    if (isHlsDelivery) setStatus("connected");
+  }, [isHlsDelivery]);
 
   const handleConnected = useCallback(() => {
     setStatus("connected");
@@ -653,7 +694,14 @@ export function RoomPage() {
           />
         )}
         <main className="meeting-stage">
-          {status !== "ended" && (
+          {status !== "ended" && ticket.delivery === "hls" && ticket.hlsUrl && (
+            <HlsViewer
+              url={ticket.hlsUrl}
+              onStatus={setStatusMessage}
+              onLeave={leaveRoom}
+            />
+          )}
+          {status !== "ended" && !(ticket.delivery === "hls" && ticket.hlsUrl) && (
             <MediaConference
               roomId={roomId}
               participantToken={token}
@@ -673,10 +721,12 @@ export function RoomPage() {
               onFocusInvite={shareInvite}
               activePanel={shareOpen ? "invite" : sidePanelOpen ? sideTab : null}
               roomMode={ticket.room.mode}
+              viewOnlyDefault={ticket.room.viewOnlyDefault}
+              fetchFreshToken={fetchFreshToken}
               participantRole={ticket.participant.role}
               hostParticipantId={ticket.room.hostParticipantId}
               peopleBadgeCount={guestParticipantCount}
-              showRaiseHand={isWebinar}
+              showRaiseHand={handsEnabled}
               handRaised={selfHandRaised}
               onToggleRaiseHand={toggleRaiseHand}
             />
@@ -708,12 +758,14 @@ export function RoomPage() {
               onSetMeetingMode={setMeetingMode}
               onToggleLock={toggleLock}
               onKick={kick}
+              onSetPublishAccess={ticket.room.viewOnlyDefault ? setPublishAccess : undefined}
+              promotedIds={promotedIds}
               hostBusy={hostBusy}
               activeTab={sideTab}
               onTabChange={focusSidePanel}
               onClose={closeSidePanel}
               raisedHands={raisedHands}
-              showRaisedHands={isWebinar}
+              showRaisedHands={handsEnabled}
               dmPeer={dmPeer}
               onDmPeerChange={changeDmPeer}
               dmThreads={dmThreads}

@@ -8,6 +8,10 @@ export interface Room {
   mode: RoomMode;
   maxParticipants: number;
   maxPublishers: number;
+  /** Large rooms only: ceiling of attendees that can hold publish-capable seats. */
+  maxInteractive?: number;
+  /** Attendees join subscribe-only until a host promotes them. */
+  viewOnlyDefault?: boolean;
   locked: boolean;
   modePinned?: boolean;
   createdAt: string;
@@ -50,6 +54,9 @@ export interface JoinTicket {
   deviceHint?: DeviceBandwidthHint;
   participantToken: string;
   turn: TurnInfo;
+  /** "hls" when the WebRTC audience cap is reached and an HLS playback URL is provided. */
+  delivery?: "webrtc" | "hls";
+  hlsUrl?: string | null;
 }
 
 export interface ApiError {

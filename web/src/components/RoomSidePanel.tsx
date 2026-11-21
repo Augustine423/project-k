@@ -48,6 +48,9 @@ interface RoomSidePanelProps {
   onSetMeetingMode?: (mode: "interactive" | "webinar") => void;
   onToggleLock?: () => void;
   onKick?: (participantId: string) => void;
+  /** View-only rooms: host grants/revokes publish permission. */
+  onSetPublishAccess?: (participantId: string, promote: boolean) => void;
+  promotedIds?: ReadonlySet<string>;
   hostBusy?: boolean;
   activeTab: SidePanelTab;
   onTabChange?: (tab: SidePanelTab) => void;
@@ -96,6 +99,8 @@ export function RoomSidePanel({
   onSetMeetingMode,
   onToggleLock,
   onKick,
+  onSetPublishAccess,
+  promotedIds,
   hostBusy,
   activeTab,
   onTabChange,
@@ -668,6 +673,16 @@ export function RoomSidePanel({
                       <RaiseHandIcon className="rsp-status-icon is-hand" size={14} />
                     ) : (
                       <MicMutedSmall className="rsp-status-icon" />
+                    )}
+                    {isHost && p.role === "participant" && onSetPublishAccess && (
+                      <button
+                        type="button"
+                        className="rsp-text-btn"
+                        onClick={() => onSetPublishAccess(p.id, !promotedIds?.has(p.id))}
+                        disabled={hostBusy}
+                      >
+                        {promotedIds?.has(p.id) ? "Mute & revoke" : "Allow to speak"}
+                      </button>
                     )}
                     {isHost && p.role !== "host" && onKick && (
                       <button

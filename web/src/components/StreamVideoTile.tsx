@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { avatarInitials, avatarTone } from "./chatTypes";
 import { useVideoStreamSize } from "../hooks/useVideoStreamAspect";
+import { forgetAudioElement, playAudioElement } from "../media/audioPlayback";
 import {
   classifyStreamAspect,
   resolveTileFit,
@@ -75,6 +76,27 @@ export function resolveDisplayAspect(opts: {
   return opts.measured;
 }
 
+/**
+ * Observe the tile's rendered w/h ratio. Quantised so layout transitions (which fire
+ * many resize callbacks) only re-render when the ratio meaningfully changes.
+ */
+function useTileBoxRatio(ref: React.RefObject<HTMLElement | null>): number | undefined {
+  const [ratio, setRatio] = useState<number | undefined>();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver((entries) => {
+      const rect = entries[0]?.contentRect;
+      if (!rect || rect.width <= 0 || rect.height <= 0) return;
+      const next = Math.round((rect.width / rect.height) * 50) / 50;
+      setRatio((prev) => (prev === next ? prev : next));
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref]);
+  return ratio;
+}
+
 /** One video element per tile — contain (+ optional blur fill) so content is never cropped. */
 export function StreamVideoTile({
   stream,
@@ -100,6 +122,26 @@ export function StreamVideoTile({
   const audioRef = useRef<HTMLAudioElement>(null);
   const statsRef = useRef<HTMLSpanElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const sync = () => setIsFullscreen(document.fullscreenElement === tileRef.current);
+    document.addEventListener("fullscreenchange", sync);
+    return () => document.removeEventListener("fullscreenchange", sync);
+  }, []);
+
+  const toggleFullscreen = () => {
+    const el = tileRef.current;
+    if (!el) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else if (el.requestFullscreen) {
+      void el.requestFullscreen().catch(() => undefined);
+    } else {
+      // iOS Safari only supports fullscreen on the video element itself.
+      (videoRef.current as (HTMLVideoElement & { webkitEnterFullscreen?: () => void }) | null)?.webkitEnterFullscreen?.();
+    }
+  };
   const [copied, setCopied] = useState(false);
 
   const videoTrack = stream?.getVideoTracks()[0] ?? null;
@@ -114,12 +156,17 @@ export function StreamVideoTile({
     measured: measuredAspect,
     preferred: preferredAspect,
   });
+  const boxRatio = useTileBoxRatio(tileRef);
+  const streamRatio =
+    liveSize.width > 0 && liveSize.height > 0 ? liveSize.width / liveSize.height : undefined;
   const fit =
     fitOverride ??
     resolveTileFit({
       streamAspect,
       layout: layoutMode,
       size,
+      boxRatio,
+      streamRatio,
     });
   const useBlurFill = fit === "contain-blur";
 
@@ -128,31 +175,32 @@ export function StreamVideoTile({
       ? hasVideo && Boolean(stream?.getVideoTracks().length)
       : Boolean(stream?.getVideoTracks().length);
 
-  // Video bind — sharp + blur share the same track.
+  // Bind only when the underlying track changes — layout/fit/UI state changes must
+  // never re-attach the stream (that is what causes a visible flicker).
   useEffect(() => {
     const videoEl = videoRef.current;
-    const blurEl = blurRef.current;
     if (!videoEl) return;
 
-    const videoStream = videoTrack ? new MediaStream([videoTrack]) : null;
-    attachMediaStream(videoEl, videoStream);
-    if (videoStream) void videoEl.play().catch(() => undefined);
-    if (blurEl) {
-      attachMediaStream(blurEl, videoStream);
-      if (videoStream) void blurEl.play().catch(() => undefined);
-    }
+    attachMediaStream(videoEl, videoTrack ? new MediaStream([videoTrack]) : null);
+    if (videoTrack) void videoEl.play().catch(() => undefined);
 
-    const onEnded = () => {
-      attachMediaStream(videoEl, null);
-      if (blurEl) attachMediaStream(blurEl, null);
-    };
+    const onEnded = () => attachMediaStream(videoEl, null);
     videoTrack?.addEventListener("ended", onEnded);
     return () => {
       videoTrack?.removeEventListener("ended", onEnded);
       attachMediaStream(videoEl, null);
-      if (blurEl) attachMediaStream(blurEl, null);
     };
-  }, [videoTrack, videoTrackId, trackSignature, useBlurFill, showVideo]);
+  }, [videoTrack]);
+
+  // The blur backdrop mounts/unmounts with the fit mode; it binds independently.
+  const blurActive = useBlurFill && showVideo;
+  useEffect(() => {
+    const blurEl = blurRef.current;
+    if (!blurEl || !blurActive || !videoTrack) return;
+    attachMediaStream(blurEl, new MediaStream([videoTrack]));
+    void blurEl.play().catch(() => undefined);
+    return () => attachMediaStream(blurEl, null);
+  }, [blurActive, videoTrack]);
 
   // Push live aspect onto parent cell so CSS can size 1:1 / 9:16 / 16:9 boxes.
   useEffect(() => {
@@ -170,6 +218,11 @@ export function StreamVideoTile({
     if (cell.dataset.box === "portrait" || cell.dataset.box === "landscape") return;
     if (aspect) cell.dataset.streamAspect = aspect;
     else delete cell.dataset.streamAspect;
+
+    // Reused cells must not keep this participant's aspect after unmount/change.
+    return () => {
+      if (cell.isConnected && cell.dataset.box === undefined) delete cell.dataset.streamAspect;
+    };
   }, [streamAspect]);
 
   // Audio bind — local tile is muted so mic never plays into speakers (echo).
@@ -179,12 +232,13 @@ export function StreamVideoTile({
 
     const audioStream = audioTrack && !muted ? new MediaStream([audioTrack]) : null;
     attachMediaStream(audioEl, audioStream);
-    if (audioStream) void audioEl.play().catch(() => undefined);
+    if (audioStream) playAudioElement(audioEl);
 
     const onEnded = () => attachMediaStream(audioEl, null);
     audioTrack?.addEventListener("ended", onEnded);
     return () => {
       audioTrack?.removeEventListener("ended", onEnded);
+      forgetAudioElement(audioEl);
       attachMediaStream(audioEl, null);
     };
   }, [audioTrack, audioTrackId, muted]);
@@ -203,13 +257,11 @@ export function StreamVideoTile({
 
     videoEl.addEventListener("loadedmetadata", update);
     videoEl.addEventListener("resize", update);
-    const timer = window.setInterval(update, 1000);
     update();
 
     return () => {
       videoEl.removeEventListener("loadedmetadata", update);
       videoEl.removeEventListener("resize", update);
-      window.clearInterval(timer);
     };
   }, [videoTrackId, showStats]);
 
@@ -245,12 +297,12 @@ export function StreamVideoTile({
       data-stream-aspect={streamAspect !== "unknown" ? streamAspect : undefined}
       data-ai-active={isSpeaking ? "true" : undefined}
     >
-      {useBlurFill && showVideo ? (
+      {blurActive ? (
         <div className="video-letterbox-backdrop" style={{ ["--tile-tone" as string]: tone }} aria-hidden="true">
           <span>{initials}</span>
         </div>
       ) : null}
-      {useBlurFill && showVideo ? (
+      {blurActive ? (
         <video
           ref={blurRef}
           autoPlay
@@ -306,6 +358,22 @@ export function StreamVideoTile({
         {roleBadge && <span className="video-role">{roleBadge}</span>}
         <span className="video-label">{label}</span>
       </div>
+      {showVideo && (
+        <button
+          type="button"
+          className="video-tile-fullscreen"
+          aria-label={isFullscreen ? "Exit full screen" : `Full screen ${label}`}
+          title={isFullscreen ? "Exit full screen" : "Full screen"}
+          onClick={toggleFullscreen}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" aria-hidden="true">
+            <path
+              d={isFullscreen ? "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" : "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"}
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      )}
       <div className="video-tile-menu">
         <button
           type="button"

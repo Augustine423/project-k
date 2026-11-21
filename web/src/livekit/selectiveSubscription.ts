@@ -11,6 +11,8 @@ export const MAX_AUDIO_SUBSCRIPTIONS = 64;
 export interface SubscriptionTargets {
   video: Set<string>;
   audio: Set<string>;
+  /** Screen-share video: visible page + host (so the host's share works from any page). */
+  screen: Set<string>;
 }
 
 /**
@@ -25,6 +27,8 @@ export function buildSubscriptionTargets(opts: {
   maxAudio?: number;
 }): SubscriptionTargets {
   const video = new Set(opts.visibleIds);
+  const screen = new Set(opts.visibleIds);
+  if (opts.hostParticipantId) screen.add(opts.hostParticipantId);
   const audio = new Set<string>(opts.visibleIds);
 
   if (opts.hostParticipantId) audio.add(opts.hostParticipantId);
@@ -52,10 +56,10 @@ export function buildSubscriptionTargets(opts: {
         n += 1;
       }
     }
-    return { video, audio: capped };
+    return { video, audio: capped, screen };
   }
 
-  return { video, audio };
+  return { video, audio, screen };
 }
 
 function setPublicationSubscribed(pub: RemoteTrackPublication, subscribed: boolean): void {
@@ -70,20 +74,34 @@ export function applySelectiveSubscriptions(room: Room, targets: SubscriptionTar
     const wantVideo = targets.video.has(id);
     const wantAudio = targets.audio.has(id);
 
-    applyParticipantSubscriptions(participant, wantVideo, wantAudio);
+    applyParticipantSubscriptions(participant, wantVideo, wantAudio, targets.screen.has(id));
   }
+}
+
+export function applyTargetsToParticipant(
+  participant: RemoteParticipant,
+  targets: SubscriptionTargets,
+): void {
+  const id = participant.identity;
+  applyParticipantSubscriptions(
+    participant,
+    targets.video.has(id),
+    targets.audio.has(id),
+    targets.screen.has(id),
+  );
 }
 
 export function applyParticipantSubscriptions(
   participant: RemoteParticipant,
   wantVideo: boolean,
   wantAudio: boolean,
+  wantScreen: boolean = wantVideo,
 ): void {
   for (const pub of participant.trackPublications.values()) {
     const remote = pub as RemoteTrackPublication;
     if (pub.kind === Track.Kind.Video) {
       if (pub.source === Track.Source.ScreenShare) {
-        setPublicationSubscribed(remote, wantVideo || wantAudio);
+        setPublicationSubscribed(remote, wantScreen);
       } else {
         setPublicationSubscribed(remote, wantVideo);
       }

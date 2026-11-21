@@ -243,6 +243,26 @@ export function setRoomMode(
   });
 }
 
+export function setParticipantPublishAccess(
+  roomId: string,
+  token: string,
+  participantId: string,
+  promote: boolean,
+): Promise<{ participantId: string; canPublish: boolean }> {
+  return request(
+    `/api/rooms/${roomId}/participants/${participantId}/${promote ? "promote" : "demote"}`,
+    { method: "POST", headers: authHeader(token) },
+  );
+}
+
+/** Fresh LiveKit token for this seat; reflects promote/demote done since the original join. */
+export function refreshMediaToken(
+  roomId: string,
+  token: string,
+): Promise<{ liveKitUrl: string; liveKitToken: string }> {
+  return request(`/api/rooms/${roomId}/media-token`, { method: "POST", headers: authHeader(token) });
+}
+
 export function kickParticipant(roomId: string, token: string, participantId: string): Promise<void> {
   return request(`/api/rooms/${roomId}/participants/${participantId}/kick`, {
     method: "POST",

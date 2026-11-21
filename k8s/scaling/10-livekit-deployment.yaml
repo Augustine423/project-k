@@ -1,0 +1,82 @@
+# LiveKit SFU pods: one per dedicated node, hostNetwork so UDP media bypasses kube-proxy/NAT.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: livekit
+  labels: { app: livekit }
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
+  selector:
+    matchLabels: { app: livekit }
+  template:
+    metadata:
+      labels: { app: livekit }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "6789"
+    spec:
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      terminationGracePeriodSeconds: 3600   # drain: let live meetings finish before the pod is killed
+      nodeSelector:
+        workload: livekit
+      tolerations:
+        - { key: workload, operator: Equal, value: livekit, effect: NoSchedule }
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels: { app: livekit }
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: livekit
+          image: livekit/livekit-server:v1.13.11
+          args: ["--config", "/etc/livekit/livekit.yaml"]
+          env:
+            - name: LIVEKIT_KEYS
+              valueFrom: { secretKeyRef: { name: livekit-keys, key: keys } }   # "apikey: secret"
+          ports:
+            - { name: http, containerPort: 7880 }
+            - { name: tcp, containerPort: 7881 }
+            - { name: udp, containerPort: 7882, protocol: UDP }
+            - { name: metrics, containerPort: 6789 }
+          resources:
+            requests: { cpu: "6", memory: 8Gi }     # sized for an 8 vCPU / 16 GiB node, 10 Gbps NIC
+            limits: { memory: 12Gi }                # no CPU limit: avoids CFS throttling (latency spikes)
+          readinessProbe:
+            httpGet: { path: /, port: 7880 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /, port: 7880 }
+            periodSeconds: 10
+            failureThreshold: 6
+          lifecycle:
+            preStop:
+              exec: { command: ["sh", "-c", "sleep 15"] }
+          volumeMounts:
+            - { name: config, mountPath: /etc/livekit }
+      volumes:
+        - name: config
+          configMap: { name: livekit-config }
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: livekit
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels: { app: livekit }
+---
+# Signalling/WebSocket entry point. Media (UDP 7882/TCP 7881) goes direct to node IPs.
+apiVersion: v1
+kind: Service
+metadata:
+  name: livekit
+spec:
+  selector: { app: livekit }
+  ports:
+    - { name: http, port: 7880, targetPort: http }

@@ -1,0 +1,29 @@
+# Run before each release: kubectl apply -f 60-loadtest-job.yaml && kubectl logs -f job/lk-load-test
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: lk-load-test
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: lk
+          image: livekit/livekit-cli:v2.20.1
+          command: ["lk", "load-test"]
+          args:
+            - --url=wss://livekit.example.com
+            - --api-key=$(LK_API_KEY)
+            - --api-secret=$(LK_API_SECRET)
+            - --room=load-test-interactive
+            - --video-publishers=50
+            - --audio-publishers=100
+            - --subscribers=450
+            - --duration=10m
+            - --num-per-second=5
+          env:
+            - { name: LK_API_KEY, valueFrom: { secretKeyRef: { name: livekit-loadtest, key: key } } }
+            - { name: LK_API_SECRET, valueFrom: { secretKeyRef: { name: livekit-loadtest, key: secret } } }
+          resources: { requests: { cpu: "4", memory: 4Gi } }
