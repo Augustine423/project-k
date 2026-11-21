@@ -37,19 +37,26 @@ public sealed class JwtTokenService
 
     public ParticipantClaims Verify(string token)
     {
-        var handler = new JwtSecurityTokenHandler();
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
         var principal = handler.ValidateToken(token, new TokenValidationParameters
         {
             ValidateIssuer = false,
             ValidateAudience = false,
             ValidateIssuerSigningKey = true,
+            ValidateLifetime = true,
+            RequireExpirationTime = true,
+            ValidAlgorithms = [SecurityAlgorithms.HmacSha256],
             IssuerSigningKey = new SymmetricSecurityKey(_secret),
             ClockSkew = TimeSpan.FromMinutes(1),
         }, out _);
 
         var roomId = principal.FindFirst("roomId")?.Value;
         var participantId = principal.FindFirst("participantId")?.Value;
-        var role = principal.FindFirst("role")?.Value ?? ParticipantRoles.Participant;
+        // Only exact, known role values are honoured; anything else is a plain participant.
+        var claimedRole = principal.FindFirst("role")?.Value;
+        var role = claimedRole is ParticipantRoles.Host or ParticipantRoles.CoHost
+            ? claimedRole
+            : ParticipantRoles.Participant;
         if (string.IsNullOrEmpty(roomId) || string.IsNullOrEmpty(participantId))
             throw new SecurityTokenException("invalid token claims");
 

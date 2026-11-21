@@ -1,0 +1,10 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - 00-livekit-config.yaml
+  - 10-livekit-deployment.yaml
+  - 20-control-plane-scaling.yaml
+  - 30-keda-livekit.yaml
+  - 40-node-autoscaling.yaml
+  - 50-egress-broadcast.yaml
+# 60-loadtest-job.yaml is applied manually.

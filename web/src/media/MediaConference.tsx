@@ -25,6 +25,9 @@ export interface MediaConferenceProps {
   onFocusInvite?: () => void;
   activePanel?: MeetingPanel | null;
   roomMode?: string;
+  viewOnlyDefault?: boolean;
+  /** Returns a current LiveKit token for (re)connects so promoted presenters keep publish rights. */
+  fetchFreshToken?: () => Promise<string | null>;
   participantRole?: string;
   hostParticipantId?: string;
   showRaiseHand?: boolean;

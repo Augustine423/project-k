@@ -4,6 +4,9 @@ using Kzys.Backend.Data;
 using Kzys.Backend.Models;
 using Kzys.Backend.Services;
 using Kzys.Backend.Realtime;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 using StackExchange.Redis;
 
@@ -78,7 +81,22 @@ builder.Services.AddCors(options =>
     });
 });
 
+if (config.TrustForwardedHeaders)
+{
+    builder.Services.Configure<ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+        o.KnownNetworks.Clear();
+        o.KnownProxies.Clear();
+    });
+}
+
+builder.Services.AddSingleton<Kzys.Backend.RateLimiting.RedisRateLimiter>();
+
 var app = builder.Build();
+
+if (config.TrustForwardedHeaders)
+    app.UseForwardedHeaders();
 
 await DatabaseSeeder.InitializeAsync(app.Services);
 

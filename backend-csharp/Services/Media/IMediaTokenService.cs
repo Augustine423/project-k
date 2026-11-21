@@ -10,6 +10,9 @@ public interface IMediaTokenService
     string ProviderName { get; }
 
     MediaJoinGrant CreateJoinGrant(MediaJoinRequest request);
+
+    /// <summary>Changes a connected participant's publish permission without forcing a reconnect.</summary>
+    Task SetPublishPermissionAsync(string roomName, string identity, bool canPublish, CancellationToken ct = default);
 }
 
 public sealed record MediaJoinRequest(

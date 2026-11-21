@@ -48,6 +48,7 @@ public sealed class RoomService
             ? _config.MaxRoomParticipants
             : maxUsers;
 
+        var tier = RoomPlanManager.GetTierLimits(max);
         var roomId = RandomId("room");
         var hostId = RandomId("p");
         var room = new RoomRecord
@@ -57,7 +58,9 @@ public sealed class RoomService
             Secret = "",
             Pin = pin ?? "",
             MaxParticipants = max,
-            MaxPublishers = max,
+            MaxPublishers = tier.MaxPublishers,
+            MaxInteractive = tier.MaxInteractive,
+            ViewOnlyDefault = max > _config.ViewOnlyDefaultThreshold,
             CreatedAt = DateTime.UtcNow,
             HostParticipantId = hostId,
         };
@@ -112,12 +115,69 @@ public sealed class RoomService
             Approved = true,
             JoinedAt = DateTime.UtcNow,
         };
+        // Admission: the SFU hosts a room on one node, so cap WebRTC audience and divert the rest to HLS.
+        var seated = await _store.GetParticipantCountAsync(roomId, ct);
+        var overWebRtcCap = seated >= _config.MaxWebRtcParticipants;
+        if (overWebRtcCap && string.IsNullOrWhiteSpace(_config.HlsBaseUrl))
+            throw new RoomServiceException(RoomError.Full, "live capacity reached, please try again shortly");
+
         var (added, _) = await _store.TryAddParticipantAsync(participant, room.MaxParticipants, ct);
         if (!added)
             throw new RoomServiceException(RoomError.Full, "room is full");
 
         var stats = await _store.GetMediaStatsAsync(roomId, ct);
-        return (BuildTicket(room, participant, mediaHost, stats.Publishers, deviceHint), replaced);
+        var ticket = BuildTicket(room, participant, mediaHost, stats.Publishers, deviceHint);
+        if (overWebRtcCap)
+        {
+            ticket.Delivery = "hls";
+            ticket.HlsUrl = $"{_config.HlsBaseUrl.TrimEnd('/')}/{Uri.EscapeDataString(room.Id)}/index.m3u8";
+            ticket.LiveKitToken = "";
+        }
+        return (ticket, replaced);
+    }
+
+    /// <summary>Host/co-host grants publish permission to a view-only attendee (bounded by presenter cap).</summary>
+    public async Task PromoteParticipantAsync(string roomId, string participantId, CancellationToken ct = default)
+    {
+        var room = await MustRoomAsync(roomId, ct);
+        var participant = await _store.GetParticipantAsync(roomId, participantId, ct)
+            ?? throw new RoomServiceException(RoomError.NotFound, "participant not found");
+        if (participant.Role is ParticipantRoles.Host or ParticipantRoles.CoHost) return;
+
+        var limit = Math.Min(room.MaxPublishers, room.MaxInteractive > 0 ? room.MaxInteractive : room.MaxPublishers);
+        if (!await _store.TryPromoteAsync(roomId, participantId, limit, ct))
+            throw new RoomServiceException(RoomError.PublisherLimit, "presenter limit reached");
+
+        try
+        {
+            await _media.SetPublishPermissionAsync(roomId, participantId, true, ct);
+        }
+        catch
+        {
+            await _store.DemoteAsync(roomId, participantId, ct);
+            throw;
+        }
+
+        await _store.LowerHandAsync(roomId, participantId, ct);
+        _hub.Broadcast(roomId, new RoomEvent
+        {
+            Type = "participant.promoted",
+            Data = new { participantId, canPublish = true },
+        });
+        await RoomWebSocketHandler.BroadcastRaisedHandsAsync(_hub, _store, roomId, ct);
+    }
+
+    public async Task DemoteParticipantAsync(string roomId, string participantId, CancellationToken ct = default)
+    {
+        await MustRoomAsync(roomId, ct);
+        await _store.DemoteAsync(roomId, participantId, ct);
+        await _store.RemoveMediaPresenceAsync(roomId, participantId, ct);
+        await _media.SetPublishPermissionAsync(roomId, participantId, false, ct);
+        _hub.Broadcast(roomId, new RoomEvent
+        {
+            Type = "participant.promoted",
+            Data = new { participantId, canPublish = false },
+        });
     }
 
     public Task<RoomRecord?> GetRoomAsync(string roomId, CancellationToken ct = default)
@@ -222,18 +282,37 @@ public sealed class RoomService
         await _store.DeleteRoomAsync(roomId, ct);
     }
 
+    /// <summary>
+    /// Fresh LiveKit grant for an existing seat. Re-reads promoted state so a reconnecting
+    /// or refreshed presenter does not fall back to the view-only grant in the original ticket.
+    /// </summary>
+    public async Task<JoinTicketDto> ReissueTicketAsync(
+        string roomId,
+        string participantId,
+        string role,
+        string mediaHost,
+        CancellationToken ct = default)
+    {
+        var participant = await EnsureParticipantSeatAsync(roomId, participantId, role, null, ct);
+        var room = await MustRoomAsync(roomId, ct);
+        var promoted = await _store.IsPromotedAsync(roomId, participantId, ct);
+        var stats = await _store.GetMediaStatsAsync(roomId, ct);
+        return BuildTicket(room, participant, mediaHost, stats.Publishers, null, promoted);
+    }
+
     private JoinTicketDto BuildTicket(
         RoomRecord room,
         ParticipantRecord participant,
         string mediaHost,
         int activePublishers = 0,
-        DeviceBandwidthHintDto? deviceHint = null)
+        DeviceBandwidthHintDto? deviceHint = null,
+        bool promoted = false)
     {
         var token = _jwt.Issue(room.Id, participant.Id, participant.Role);
         var turn = _turn.BuildTurnInfo(participant.Id, mediaHost)
             ?? new TurnInfoDto { Urls = [], Username = "", Credential = "" };
 
-        var caps = _modes.GetPublishCapabilities(room, participant, activePublishers, isCurrentlyPublishing: false);
+        var caps = _modes.GetPublishCapabilities(room, participant, activePublishers, isCurrentlyPublishing: false, promoted);
         IReadOnlyList<string>? publishSources = null;
         if (caps.CanPublishAudio && !caps.CanPublishVideo)
             publishSources = ["microphone"];
@@ -288,6 +367,8 @@ public enum RoomError
     BadPin,
     Full,
     InvalidMode,
+    PublisherLimit,
+    MediaUnavailable,
 }
 
 public sealed class RoomServiceException : Exception

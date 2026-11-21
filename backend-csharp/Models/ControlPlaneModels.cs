@@ -22,6 +22,10 @@ public sealed class RoomRecord
     public string Mode { get; set; } = RoomModes.Interactive;
     public int MaxParticipants { get; set; }
     public int MaxPublishers { get; set; }
+    /// <summary>Upper bound of participants that may be promoted to interactive (publish-capable) seats.</summary>
+    public int MaxInteractive { get; set; }
+    /// <summary>Attendees join subscribe-only until a host promotes them.</summary>
+    public bool ViewOnlyDefault { get; set; }
     public int ActivePublishers { get; set; }
     public int ActiveListeners { get; set; }
     public bool Locked { get; set; }
@@ -70,6 +74,9 @@ public sealed class JoinTicketDto
     public required string ParticipantToken { get; set; }
     public required TurnInfoDto Turn { get; set; }
     public DeviceBandwidthHintDto? DeviceHint { get; set; }
+    /// <summary>"webrtc" (default) or "hls" when the WebRTC audience cap is reached.</summary>
+    public string Delivery { get; set; } = "webrtc";
+    public string? HlsUrl { get; set; }
 }
 
 public sealed class ParticipantClaims

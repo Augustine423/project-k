@@ -1,0 +1,152 @@
+# Redis HA: 3 pods, each running redis + sentinel (quorum 2). Replaces the former single-pod Redis.
+# Clients (control plane, LiveKit) must connect through Sentinel, never to a fixed pod:
+#   control plane: REDIS_URL=redis-ha-0.redis-ha:26379,redis-ha-1.redis-ha:26379,redis-ha-2.redis-ha:26379,serviceName=mymaster
+#   LiveKit:       redis.sentinel_master_name + redis.sentinel_addresses (see k8s/scaling/00-livekit-config.yaml)
+# For production prefer a managed Redis with automatic failover (ElastiCache / Memorystore) and set REDIS_URL to it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-ha-scripts
+data:
+  start-redis.sh: |
+    #!/bin/sh
+    set -e
+    HOST="$(hostname)"
+    MASTER=""
+    for i in 0 1 2; do
+      m="$(redis-cli -h redis-ha-$i.redis-ha -p 26379 --raw sentinel get-master-addr-by-name mymaster 2>/dev/null | head -1 || true)"
+      if [ -n "$m" ]; then MASTER="$m"; break; fi
+    done
+    [ -z "$MASTER" ] && MASTER="redis-ha-0.redis-ha"
+    ARGS="--appendonly yes --dir /data --replica-announce-ip $HOST.redis-ha --maxmemory-policy noeviction"
+    if [ "$MASTER" = "$HOST.redis-ha" ]; then
+      exec redis-server $ARGS
+    fi
+    exec redis-server $ARGS --replicaof "$MASTER" 6379
+  start-sentinel.sh: |
+    #!/bin/sh
+    set -e
+    HOST="$(hostname)"
+    MASTER=""
+    for i in 0 1 2; do
+      m="$(redis-cli -h redis-ha-$i.redis-ha -p 26379 --raw sentinel get-master-addr-by-name mymaster 2>/dev/null | head -1 || true)"
+      if [ -n "$m" ]; then MASTER="$m"; break; fi
+    done
+    [ -z "$MASTER" ] && MASTER="redis-ha-0.redis-ha"
+    cat > /data/sentinel.conf <<CONF
+    port 26379
+    dir /data
+    sentinel resolve-hostnames yes
+    sentinel announce-hostnames yes
+    sentinel announce-ip $HOST.redis-ha
+    sentinel monitor mymaster $MASTER 6379 2
+    sentinel down-after-milliseconds mymaster 5000
+    sentinel failover-timeout mymaster 15000
+    sentinel parallel-syncs mymaster 1
+    CONF
+    exec redis-sentinel /data/sentinel.conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-ha
+  labels:
+    app: redis-ha
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: redis-ha
+  ports:
+    - name: redis
+      port: 6379
+    - name: sentinel
+      port: 26379
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis-ha
+spec:
+  serviceName: redis-ha
+  replicas: 3
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: redis-ha
+  template:
+    metadata:
+      labels:
+        app: redis-ha
+    spec:
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: redis-ha
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          command: ["sh", "/scripts/start-redis.sh"]
+          ports:
+            - name: redis
+              containerPort: 6379
+          resources:
+            requests: { cpu: 250m, memory: 1Gi }
+            limits: { memory: 2Gi }
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["redis-cli", "ping"]
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: scripts, mountPath: /scripts }
+        - name: sentinel
+          image: redis:7.2-alpine
+          command: ["sh", "/scripts/start-sentinel.sh"]
+          ports:
+            - name: sentinel
+              containerPort: 26379
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { memory: 128Mi }
+          readinessProbe:
+            exec:
+              command: ["redis-cli", "-p", "26379", "ping"]
+            periodSeconds: 5
+          volumeMounts:
+            - { name: sentinel-data, mountPath: /data }
+            - { name: scripts, mountPath: /scripts }
+      volumes:
+        - name: scripts
+          configMap:
+            name: redis-ha-scripts
+        - name: sentinel-data
+          emptyDir: {}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 5Gi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: redis-ha
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: redis-ha

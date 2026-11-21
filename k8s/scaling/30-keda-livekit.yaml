@@ -1,0 +1,44 @@
+# Requires KEDA (https://keda.sh) and Prometheus scraping LiveKit's :6789.
+# Scales SFU pods on the real cost drivers: published tracks (ingress), subscribed tracks (egress), CPU.
+# Metric names verified against livekit-server v1.13.11 (pkg/telemetry/prometheus/rooms.go): namespace `livekit`,
+# gauges livekit_track_published_total{kind}, livekit_track_subscribed_total{kind}; `kind` values are UPPERCASE (VIDEO/AUDIO), confirmed on a live /metrics scrape. Requires `prometheus.port` in the
+# server config (set in 00-livekit-config.yaml) and a Prometheus scrape job named `livekit`. Re-check after upgrades.
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: livekit
+spec:
+  scaleTargetRef: { name: livekit }
+  minReplicaCount: 2
+  maxReplicaCount: 60
+  cooldownPeriod: 900
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleUp:
+          stabilizationWindowSeconds: 0
+          policies: [{ type: Pods, value: 4, periodSeconds: 60 }]
+        scaleDown:
+          stabilizationWindowSeconds: 900
+          policies: [{ type: Pods, value: 1, periodSeconds: 300 }]
+  triggers:
+    - type: cpu
+      metricType: Utilization
+      metadata: { value: "60" }
+    # Camera + mic publishers per pod (~400 video / ~800 audio publishers per 8 vCPU node).
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        query: sum(livekit_track_published_total{kind="VIDEO"}) / count(up{job="livekit"})
+        threshold: "400"
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        query: sum(livekit_track_published_total{kind="AUDIO"}) / count(up{job="livekit"})
+        threshold: "800"
+    # Subscriber fan-out drives egress CPU/bandwidth.
+    - type: prometheus
+      metadata:
+        serverAddress: http://prometheus.monitoring.svc:9090
+        query: sum(livekit_track_subscribed_total) / count(up{job="livekit"})
+        threshold: "6000"

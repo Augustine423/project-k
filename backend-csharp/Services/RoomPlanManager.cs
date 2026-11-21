@@ -24,6 +24,25 @@ public sealed class RoomPlanManager
     public const int DefaultRoomDurationHours = 24;
     public const int SubscriptionRoomsPerMonthEquivalent = 4;
 
+    /// <summary>Interactive (WebRTC publish-capable) ceiling per room; the rest are view-only.</summary>
+    public const int MaxInteractiveParticipants = 500;
+
+    /// <summary>
+    /// Publisher / interactive caps per capacity tier. One room lives on one SFU node, so
+    /// large tiers keep presenters small and everyone else subscribe-only.
+    /// </summary>
+    public static (int MaxPublishers, int MaxInteractive) GetTierLimits(int maxParticipants)
+    {
+        var interactive = Math.Min(Math.Max(1, maxParticipants), MaxInteractiveParticipants);
+        var publishers = maxParticipants switch
+        {
+            <= 100 => Math.Max(1, maxParticipants),
+            <= 500 => 100,
+            _ => 50,
+        };
+        return (publishers, interactive);
+    }
+
     private readonly object _sync = new();
     private ImmutableDictionary<string, RoomPlan> _plansById =
         ImmutableDictionary<string, RoomPlan>.Empty;

@@ -3,6 +3,7 @@ using Kzys.Backend.Models;
 using Kzys.Backend.Realtime;
 using Kzys.Backend.Services;
 using Microsoft.AspNetCore.Mvc;
+using Kzys.Backend.RateLimiting;
 
 namespace Kzys.Backend.Controllers;
 
@@ -54,6 +55,7 @@ public sealed class RoomsApiController : ControllerBase
     public sealed record MediaPresenceBody(bool Publishing, bool Audio, bool Video);
 
     [HttpPost]
+    [RedisRateLimit("create")]
     public async Task<ActionResult<JoinTicketDto>> Create([FromBody] CreateRoomBody body, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(body.DisplayName))
@@ -71,6 +73,7 @@ public sealed class RoomsApiController : ControllerBase
     }
 
     [HttpPost("{roomId}/join")]
+    [RedisRateLimit("join")]
     public async Task<ActionResult<JoinTicketDto>> Join(string roomId, [FromBody] JoinRoomBody body, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(body.DisplayName))
@@ -159,6 +162,7 @@ public sealed class RoomsApiController : ControllerBase
     }
 
     [HttpPost("{roomId}/media")]
+    [RedisRateLimit("media")]
     public async Task<IActionResult> ReportMedia(string roomId, [FromBody] MediaPresenceBody body, CancellationToken ct)
     {
         var claims = RequireParticipant(roomId);
@@ -183,7 +187,8 @@ public sealed class RoomsApiController : ControllerBase
                 body.Video,
                 ct);
 
-            var caps = _modes.GetPublishCapabilities(room, participant, room.ActivePublishers, body.Publishing);
+            var promoted = await _store.IsPromotedAsync(roomId, claims.ParticipantId, ct);
+            var caps = _modes.GetPublishCapabilities(room, participant, room.ActivePublishers, body.Publishing, promoted);
 
             return Ok(new
             {
@@ -196,6 +201,24 @@ public sealed class RoomsApiController : ControllerBase
                 // Backward-compatible alias: true only when neither audio nor video may publish.
                 listenerOnly = !caps.CanPublishAnything,
             });
+        }
+        catch (RoomServiceException ex) when (ex.Error == RoomError.NotFound)
+        {
+            return NotFound(new { error = "room not found" });
+        }
+    }
+
+    [HttpPost("{roomId}/media-token")]
+    [RedisRateLimit("media")]
+    public async Task<IActionResult> ReissueMediaToken(string roomId, CancellationToken ct)
+    {
+        var claims = RequireParticipant(roomId);
+        if (claims is null) return Unauthorized(new { error = "invalid token" });
+        try
+        {
+            var mediaHost = MediaHostHelper.FromRequest(Request, _config.TurnHost);
+            var ticket = await _rooms.ReissueTicketAsync(roomId, claims.ParticipantId, claims.Role, mediaHost, ct);
+            return Ok(new { liveKitUrl = ticket.LiveKitUrl, liveKitToken = ticket.LiveKitToken });
         }
         catch (RoomServiceException ex) when (ex.Error == RoomError.NotFound)
         {
@@ -286,6 +309,41 @@ public sealed class RoomsApiController : ControllerBase
         await _presenceBroadcast.BroadcastLeftAsync(roomId, participantId, ct);
         _hub.Broadcast(roomId, new RoomEvent { Type = "participant.kicked", Data = new { participantId } });
         return Ok(new { ok = true });
+    }
+
+    [HttpPost("{roomId}/participants/{participantId}/promote")]
+    [RedisRateLimit("promote")]
+    public Task<IActionResult> Promote(string roomId, string participantId, CancellationToken ct)
+        => ChangePublishAccessAsync(roomId, participantId, promote: true, ct);
+
+    [HttpPost("{roomId}/participants/{participantId}/demote")]
+    [RedisRateLimit("promote")]
+    public Task<IActionResult> Demote(string roomId, string participantId, CancellationToken ct)
+        => ChangePublishAccessAsync(roomId, participantId, promote: false, ct);
+
+    private async Task<IActionResult> ChangePublishAccessAsync(
+        string roomId, string participantId, bool promote, CancellationToken ct)
+    {
+        if (RequireHost(roomId) is null)
+            return StatusCode(StatusCodes.Status403Forbidden, new { error = "host only" });
+        try
+        {
+            if (promote) await _rooms.PromoteParticipantAsync(roomId, participantId, ct);
+            else await _rooms.DemoteParticipantAsync(roomId, participantId, ct);
+            return Ok(new { participantId, canPublish = promote });
+        }
+        catch (RoomServiceException ex) when (ex.Error == RoomError.NotFound)
+        {
+            return NotFound(new { error = ex.Message });
+        }
+        catch (RoomServiceException ex) when (ex.Error == RoomError.PublisherLimit)
+        {
+            return Conflict(new { error = ex.Message });
+        }
+        catch (RoomServiceException ex) when (ex.Error == RoomError.MediaUnavailable)
+        {
+            return StatusCode(StatusCodes.Status502BadGateway, new { error = ex.Message });
+        }
     }
 
     private ParticipantClaims? RequireParticipant(string roomId)

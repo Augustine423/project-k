@@ -17,12 +17,15 @@ import { ControlBar } from "../components/ControlBar";
 import { GalleryPagination } from "../components/GalleryPagination";
 import { ConferenceVideoStage } from "../components/conference/VideoStageLayouts";
 import { GallerySimBar } from "../components/conference/GallerySimBar";
-import { StreamVideoTile } from "../components/StreamVideoTile";
+import { AudioEnablePill } from "../components/AudioEnablePill";
+import { RemoteAudio } from "../components/RemoteAudio";
+import { setRoomAudioBlocked } from "../media/audioPlayback";
 import { useViewerViewport } from "../hooks/useViewerViewport";
 import {
   layoutPageSize,
   layoutRemotesPerPage,
   persistLayoutMode,
+  hasStoredLayoutMode,
   readStoredLayoutMode,
   type ConferenceLayoutMode,
   type StageParticipantTile,
@@ -38,8 +41,8 @@ import {
   sliceGalleryPage,
 } from "../media/galleryVideoPolicy";
 import {
-  applyParticipantSubscriptions,
   applySelectiveSubscriptions,
+  applyTargetsToParticipant,
   buildSubscriptionTargets,
   shouldTrackRemoteParticipant,
   type SubscriptionTargets,
@@ -97,6 +100,9 @@ interface LiveKitConferenceProps {
   onFocusInvite?: () => void;
   activePanel?: "chat" | "participants" | "invite" | null;
   roomMode?: string;
+  /** Large room: non-host attendees are subscribe-only until promoted by a host. */
+  viewOnlyDefault?: boolean;
+  fetchFreshToken?: () => Promise<string | null>;
   /** host | cohost | participant — drives webinar camera rights while media API syncs. */
   participantRole?: string;
   /** Control-plane host identity — used for attendee spotlight layout. */
@@ -146,6 +152,8 @@ export function LiveKitConference({
   onFocusInvite,
   activePanel = null,
   roomMode,
+  viewOnlyDefault = false,
+  fetchFreshToken,
   participantRole = "participant",
   hostParticipantId,
   showRaiseHand = false,
@@ -180,15 +188,22 @@ export function LiveKitConference({
   );
   const [activeSpeakerIds, setActiveSpeakerIds] = useState<string[]>([]);
   const [localScreenShare, setLocalScreenShare] = useState(false);
-  const [layoutMode, setLayoutMode] = useState<ConferenceLayoutMode>(() => readStoredLayoutMode());
+  const isHostRoleInit = participantRole === "host" || participantRole === "cohost";
+  // View-only attendees in large rooms default to speaker-focused rendering (host/speaker large,
+  // few peers) instead of a 50-tile gallery; an explicit saved choice still wins.
+  const [layoutMode, setLayoutMode] = useState<ConferenceLayoutMode>(() =>
+    viewOnlyDefault && !isHostRoleInit && !hasStoredLayoutMode() ? "sidebar" : readStoredLayoutMode(),
+  );
   /** Local gallery box: mobile upright → portrait 9:16; else → square 1:1 (updates on rotate). */
   const [localPublishAspect, setLocalPublishAspect] = useState(() => preferredAspectForCaptureDevice());
   const [localSourceDevice, setLocalSourceDevice] = useState(() => detectCaptureDeviceClass());
   const [localIdentity, setLocalIdentity] = useState("");
   const isHostRole = participantRole === "host" || participantRole === "cohost";
   const isWebinar = roomMode === "webinar";
-  const [canPublishAudio, setCanPublishAudio] = useState(true);
-  const [canPublishVideo, setCanPublishVideo] = useState(() => isHostRole || roomMode !== "webinar");
+  const [canPublishAudio, setCanPublishAudio] = useState(() => isHostRole || !viewOnlyDefault);
+  const [canPublishVideo, setCanPublishVideo] = useState(
+    () => isHostRole || (roomMode !== "webinar" && !viewOnlyDefault),
+  );
   const [silenceNotice, setSilenceNotice] = useState<string | null>(null);
   const mediaAvailable = canAccessMediaDevices();
   const viewport = useViewerViewport();
@@ -206,6 +221,12 @@ export function LiveKitConference({
   onStatusRef.current = onStatus;
   liveKitUrlRef.current = liveKitUrl;
   liveKitTokenRef.current = liveKitToken;
+  const fetchFreshTokenRef = useRef(fetchFreshToken);
+  fetchFreshTokenRef.current = fetchFreshToken;
+  const currentLiveKitToken = useCallback(async () => {
+    const fresh = await fetchFreshTokenRef.current?.().catch(() => null);
+    return fresh || liveKitTokenRef.current;
+  }, []);
   turnRef.current = turn;
 
   const isMassRoom = participantCount > MASS_ROOM_THRESHOLD;
@@ -216,6 +237,7 @@ export function LiveKitConference({
   const subscriptionTargetsRef = useRef<SubscriptionTargets>({
     video: new Set<string>(),
     audio: new Set<string>(),
+    screen: new Set<string>(),
   });
 
   const shouldTrackRemote = useCallback((participant: RemoteParticipant): boolean => {
@@ -279,7 +301,7 @@ export function LiveKitConference({
       // Host/co-host always keep media controls (server may briefly return None
       // if the seat was raced during refresh).
       const audio = isHostRole ? true : caps.canPublishAudio;
-      const video = isHostRole ? true : isWebinar ? false : caps.canPublishVideo;
+      const video = isHostRole ? true : caps.canPublishVideo;
       setCanPublishAudio(audio);
       setCanPublishVideo(video);
       const lp = room.localParticipant;
@@ -293,7 +315,7 @@ export function LiveKitConference({
       // UI only — do not re-report media presence (avoids sync loops).
       refreshLocalUi(room);
     },
-    [isHostRole, isWebinar, refreshLocalUi],
+    [isHostRole, refreshLocalUi],
   );
 
   const syncMediaPresence = useCallback(
@@ -312,12 +334,12 @@ export function LiveKitConference({
         .catch(() => {
           // Network blip after refresh — keep role-based defaults, don't hide controls.
           void applyPublishCaps(room, {
-            canPublishAudio: true,
-            canPublishVideo: isHostRole || !isWebinar,
+            canPublishAudio: isHostRole || !viewOnlyDefault,
+            canPublishVideo: isHostRole || (!isWebinar && !viewOnlyDefault),
           });
         });
     },
-    [applyPublishCaps, isHostRole, isWebinar, roomId, participantToken],
+    [applyPublishCaps, isHostRole, isWebinar, roomId, participantToken, viewOnlyDefault],
   );
 
   const syncMediaPresenceRef = useRef(syncMediaPresence);
@@ -333,17 +355,6 @@ export function LiveKitConference({
 
   const applyLocalStateRef = useRef(applyLocalState);
   applyLocalStateRef.current = applyLocalState;
-
-  const applyVideoRestricted = useCallback(
-    async (room: Room) => {
-      const lp = room.localParticipant;
-      if (lp.isCameraEnabled) await lp.setCameraEnabled(false);
-      if (lp.isScreenShareEnabled) await lp.setScreenShareEnabled(false);
-      refreshLocalUi(room);
-      syncMediaPresenceRef.current(room);
-    },
-    [refreshLocalUi],
-  );
 
   const upsertRemote = useCallback(
     (participant: RemoteParticipant) => {
@@ -402,11 +413,7 @@ export function LiveKitConference({
       if (isMassRoomRef.current) {
         const targets = subscriptionTargetsRef.current;
         for (const p of room.remoteParticipants.values()) {
-          applyParticipantSubscriptions(
-            p,
-            targets.video.has(p.identity),
-            targets.audio.has(p.identity),
-          );
+          applyTargetsToParticipant(p, targets);
           if (shouldTrackRemoteParticipant(p, targets)) upsertRemote(p);
         }
         return;
@@ -452,11 +459,13 @@ export function LiveKitConference({
               credential: t.credential,
             }))
           : [{ urls: "stun:stun.l.google.com:19302" }];
-        void room
-          .connect(liveKitUrlRef.current, liveKitTokenRef.current, {
-            rtcConfig: { iceServers },
-            autoSubscribe: !isMassRoomRef.current,
-          })
+        void currentLiveKitToken()
+          .then((lkToken) =>
+            room.connect(liveKitUrlRef.current, lkToken, {
+              rtcConfig: { iceServers },
+              autoSubscribe: !isMassRoomRef.current,
+            }),
+          )
           .then(() => {
             if (!cancelled) finishConnected();
           })
@@ -484,11 +493,7 @@ export function LiveKitConference({
       if (cancelled) return;
       if (isMassRoomRef.current) {
         const targets = subscriptionTargetsRef.current;
-        applyParticipantSubscriptions(
-          p,
-          targets.video.has(p.identity),
-          targets.audio.has(p.identity),
-        );
+        applyTargetsToParticipant(p, targets);
         if (shouldTrackRemoteParticipant(p, targets)) upsertRemote(p);
         return;
       }
@@ -556,6 +561,7 @@ export function LiveKitConference({
     const finishConnected = () => {
       if (cancelled) return;
       setConnected(true);
+      setRoomAudioBlocked(!room.canPlaybackAudio);
       publishLocalDeviceAttrs();
       applyLocalStateRef.current(room);
       refreshRemotes(room);
@@ -565,6 +571,16 @@ export function LiveKitConference({
       onConnectedRef.current();
     };
 
+    const onAudioPlaybackChanged = () => {
+      const blocked = !room.canPlaybackAudio;
+      setRoomAudioBlocked(blocked);
+      if (blocked) void room.startAudio().catch(() => undefined);
+    };
+
+    room.on(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackChanged);
+    // Host promote/demote arrives as a permission change; re-read caps from the control plane.
+    const onPermissionsChanged = () => syncMediaPresenceRef.current(room);
+    room.on(RoomEvent.ParticipantPermissionsChanged, onPermissionsChanged);
     room.on(RoomEvent.Connected, finishConnected);
     room.on(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
     room.on(RoomEvent.LocalTrackUnpublished, onLocalMediaChange);
@@ -602,7 +618,7 @@ export function LiveKitConference({
               }))
             : [{ urls: "stun:stun.l.google.com:19302" }];
 
-          await room.connect(liveKitUrlRef.current, liveKitTokenRef.current, {
+          await room.connect(liveKitUrlRef.current, await currentLiveKitToken(), {
             rtcConfig: { iceServers },
             autoSubscribe: !isMassRoomRef.current,
           });
@@ -617,6 +633,9 @@ export function LiveKitConference({
 
     return () => {
       cancelled = true;
+      room.off(RoomEvent.AudioPlaybackStatusChanged, onAudioPlaybackChanged);
+      room.off(RoomEvent.ParticipantPermissionsChanged, onPermissionsChanged);
+      setRoomAudioBlocked(false);
       room.off(RoomEvent.Connected, finishConnected);
       room.off(RoomEvent.LocalTrackPublished, onLocalTrackPublished);
       room.off(RoomEvent.LocalTrackUnpublished, onLocalMediaChange);
@@ -656,14 +675,9 @@ export function LiveKitConference({
   useEffect(() => {
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
     if (!room || room.state !== ConnectionState.Connected) return;
-    if (isWebinar && !isHostRole) {
-      setCanPublishVideo(false);
-      setCanPublishAudio(true);
-      void applyVideoRestricted(room);
-    } else {
-      syncMediaPresenceRef.current(room);
-    }
-  }, [applyVideoRestricted, isHostRole, isWebinar, sessionKey]);
+    // Server caps decide (a promoted attendee keeps publish rights across mode changes).
+    syncMediaPresenceRef.current(room);
+  }, [isWebinar, sessionKey]);
 
   // Accidental unmute: auto-mute local mic after sustained silence in webinar.
   useEffect(() => {
@@ -877,6 +891,11 @@ export function LiveKitConference({
       setMediaBusy(false);
     }
   }, [applyLocalState, canPublishVideo, onError, sessionKey]);
+
+  const startRoomAudio = useCallback(async () => {
+    const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+    if (room) await room.startAudio();
+  }, [sessionKey]);
 
   const handleLeave = useCallback(() => {
     forceDisconnectLiveKitRoom(sessionKey);
@@ -1274,7 +1293,12 @@ export function LiveKitConference({
       {!connected && (
         <div className="join-banner info">Connecting to media server…</div>
       )}
-      {isWebinar && !isHostRole && connected && (
+      {viewOnlyDefault && !isHostRole && connected && !canPublishAudio && (
+        <div className="join-banner info">
+          View-only — raise your hand and the host can invite you to speak.
+        </div>
+      )}
+      {isWebinar && !isHostRole && connected && !(viewOnlyDefault && !canPublishAudio) && (
         <div className="join-banner info">Webinar — raise hand to get the host’s attention.</div>
       )}
       <GallerySimBar
@@ -1320,19 +1344,10 @@ export function LiveKitConference({
           .map((id) => {
             const feed = remoteFeeds.get(id);
             if (!feed?.stream.getAudioTracks().length) return null;
-            return (
-              <StreamVideoTile
-                key={`audio-${id}`}
-                stream={feed.stream}
-                trackSignature={feed.trackSignature}
-                label={feed.displayName}
-                hasVideo={false}
-                showStats={false}
-                layoutMode={layoutMode}
-              />
-            );
+            return <RemoteAudio key={`audio-${id}`} stream={feed.stream} />;
           })}
       </div>
+      <AudioEnablePill startAudio={startRoomAudio} />
       <ControlBar
         audioEnabled={audioEnabled}
         videoEnabled={videoEnabled}

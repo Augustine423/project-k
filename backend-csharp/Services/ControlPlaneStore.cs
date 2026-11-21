@@ -26,6 +26,7 @@ public sealed class ControlPlaneStore
     private static string ParticipantIndexKey(string id) => "room:" + id + ":participant_index";
     private static string MediaKey(string id) => "room:" + id + ":media";
     private static string RaisedHandsKey(string id) => "room:" + id + ":raised_hands";
+    private static string PromotedKey(string id) => "room:" + id + ":promoted";
     private static string RoomSecretKey(string id) => "room:" + id + ":secret";
     private static string RoomPinKey(string id) => "room:" + id + ":pin";
     private static string ActiveRoomsKey => "kzys:active_rooms";
@@ -64,7 +65,7 @@ public sealed class ControlPlaneStore
     {
         await _db.KeyDeleteAsync([
             RoomKey(roomId), ParticipantsKey(roomId), ParticipantIndexKey(roomId), MediaKey(roomId),
-            RaisedHandsKey(roomId), RoomSecretKey(roomId), RoomPinKey(roomId),
+            RaisedHandsKey(roomId), RoomSecretKey(roomId), RoomPinKey(roomId), PromotedKey(roomId),
         ]);
         await _db.SetRemoveAsync(ActiveRoomsKey, roomId);
         await RefreshScalingMetricsAsync(ct);
@@ -137,7 +138,32 @@ return 1
         await _db.HashDeleteAsync(ParticipantsKey(roomId), participantId);
         await _db.SortedSetRemoveAsync(ParticipantIndexKey(roomId), participantId);
         await _db.SortedSetRemoveAsync(RaisedHandsKey(roomId), participantId);
+        await _db.SetRemoveAsync(PromotedKey(roomId), participantId);
     }
+
+    public Task<bool> IsPromotedAsync(string roomId, string participantId, CancellationToken ct = default)
+        => _db.SetContainsAsync(PromotedKey(roomId), participantId);
+
+    public async Task<long> GetPromotedCountAsync(string roomId, CancellationToken ct = default)
+        => await _db.SetLengthAsync(PromotedKey(roomId));
+
+    /// <summary>Atomically adds to the promoted set unless it already holds <paramref name="max"/> entries.</summary>
+    public async Task<bool> TryPromoteAsync(string roomId, string participantId, int max, CancellationToken ct = default)
+    {
+        const string script = """
+if redis.call('SISMEMBER', KEYS[1], ARGV[1]) == 1 then return 1 end
+if redis.call('SCARD', KEYS[1]) >= tonumber(ARGV[2]) then return 0 end
+redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('EXPIRE', KEYS[1], tonumber(ARGV[3]))
+return 1
+""";
+        var result = (int)await _db.ScriptEvaluateAsync(
+            script, [PromotedKey(roomId)], [participantId, max.ToString(), ((int)RoomTtl.TotalSeconds).ToString()]);
+        return result == 1;
+    }
+
+    public Task DemoteAsync(string roomId, string participantId, CancellationToken ct = default)
+        => _db.SetRemoveAsync(PromotedKey(roomId), participantId);
 
     public async Task RaiseHandAsync(string roomId, string participantId, CancellationToken ct = default)
     {

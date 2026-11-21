@@ -28,6 +28,22 @@ public sealed class AppConfig
     public string LiveKitApiSecret { get; init; } = "dev-livekit-local-secret-32chars-min";
     // Browser-facing LiveKit WS URL (rewritten per client host at join time).
     public string LiveKitPublicUrl { get; init; } = "ws://localhost:7880";
+    /// <summary>Server-to-server LiveKit API base (permission updates). Defaults to the public URL with http(s).</summary>
+    public string LiveKitApiUrl { get; init; } = "";
+    /// <summary>Rooms larger than this start view-only: attendees need a host promotion to publish.</summary>
+    public int ViewOnlyDefaultThreshold { get; init; } = 100;
+    /// <summary>Joins beyond this count are refused (or sent to HLS) to protect the single-node SFU.</summary>
+    public int MaxWebRtcParticipants { get; init; } = 1500;
+    /// <summary>When set, attendees past MaxWebRtcParticipants get an HLS playback URL under this base.</summary>
+    public string HlsBaseUrl { get; init; } = "";
+    public int CreateRateLimitPerMinute { get; init; } = 10;
+    public int JoinRateLimitPerMinute { get; init; } = 600;
+    public int JoinRoomRateLimitPerMinute { get; init; } = 3000;
+    public int PromoteRoomRateLimitPerMinute { get; init; } = 300;
+    public int PromoteRateLimitPerMinute { get; init; } = 60;
+    public int MediaRateLimitPerMinute { get; init; } = 120;
+    /// <summary>Honour X-Forwarded-For (only enable behind a trusted ingress).</summary>
+    public bool TrustForwardedHeaders { get; init; }
 
     public static AppConfig Load()
     {
@@ -55,8 +71,22 @@ public sealed class AppConfig
             LiveKitApiKey = Env("LIVEKIT_API_KEY", "devkey"),
             LiveKitApiSecret = Env("LIVEKIT_API_SECRET", "dev-livekit-local-secret-32chars-min"),
             LiveKitPublicUrl = Env("LIVEKIT_PUBLIC_URL", "ws://localhost:7880"),
+            LiveKitApiUrl = Env("LIVEKIT_API_URL", ""),
+            ViewOnlyDefaultThreshold = IntEnv("VIEW_ONLY_DEFAULT_THRESHOLD", 100),
+            MaxWebRtcParticipants = IntEnv("MAX_WEBRTC_PARTICIPANTS", 1500),
+            HlsBaseUrl = Env("HLS_BASE_URL", ""),
+            CreateRateLimitPerMinute = IntEnv("RATE_LIMIT_CREATE_PER_MIN", 10),
+            JoinRateLimitPerMinute = IntEnv("RATE_LIMIT_JOIN_PER_MIN", 600),
+            JoinRoomRateLimitPerMinute = IntEnv("RATE_LIMIT_JOIN_ROOM_PER_MIN", 3000),
+            PromoteRoomRateLimitPerMinute = IntEnv("RATE_LIMIT_PROMOTE_ROOM_PER_MIN", 300),
+            PromoteRateLimitPerMinute = IntEnv("RATE_LIMIT_PROMOTE_PER_MIN", 60),
+            MediaRateLimitPerMinute = IntEnv("RATE_LIMIT_MEDIA_PER_MIN", 120),
+            TrustForwardedHeaders = bool.TryParse(Env("TRUST_FORWARDED_HEADERS", "false"), out var tfh) && tfh,
         };
     }
+
+    private static int IntEnv(string key, int fallback)
+        => int.TryParse(Env(key, fallback.ToString()), out var v) && v > 0 ? v : fallback;
 
     private static string Env(string key, string fallback)
     {

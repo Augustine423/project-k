@@ -457,10 +457,10 @@ public static class RoomWebSocketHandler
         var room = await store.GetRoomAsync(roomId);
         if (room is null) return;
 
-        // Raise/lower only apply in webinar; sync still returns current (possibly empty) list.
+        // Raise/lower apply in webinar and view-only large rooms; sync still returns the current list.
         if (type is "hand.raise" or "hand.lower")
         {
-            if (!string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal))
+            if (!string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal) && !room.ViewOnlyDefault)
                 return;
 
             var participant = await store.GetParticipantAsync(roomId, participantId);

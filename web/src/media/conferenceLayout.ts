@@ -135,6 +135,15 @@ export function readStoredLayoutMode(): ConferenceLayoutMode {
   return DEFAULT_LAYOUT_MODE;
 }
 
+export function hasStoredLayoutMode(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return Boolean(window.localStorage.getItem(LAYOUT_STORAGE_KEY));
+  } catch {
+    return false;
+  }
+}
+
 export function persistLayoutMode(mode: ConferenceLayoutMode): void {
   if (typeof window === "undefined") return;
   try {
@@ -262,16 +271,29 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
   return "square";
 }
 
-/** Tile + focus use cover; screen share overrides to contain in UI. */
+/** Box vs. video ratio difference (log-scale) below which bars are imperceptible. */
+export const FIT_MATCH_TOLERANCE = 0.02;
+
+/**
+ * Camera video is never cropped: `contain` when the box already matches the
+ * stream, otherwise `contain-blur` (blurred copy fills the letterbox, Meet-style).
+ * `cover` is not used for camera tiles.
+ */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
   layout: ConferenceLayoutMode | string;
   size: "grid" | "spotlight" | "strip";
+  /** Rendered tile width / height. */
+  boxRatio?: number;
+  /** Decoded video width / height. */
+  streamRatio?: number;
 }): TileFitMode {
-  void opts.streamAspect;
-  void opts.layout;
-  void opts.size;
-  return "cover";
+  const { boxRatio, streamRatio } = opts;
+  if (boxRatio && streamRatio && boxRatio > 0 && streamRatio > 0) {
+    const drift = Math.abs(Math.log(boxRatio / streamRatio));
+    return drift <= FIT_MATCH_TOLERANCE ? "contain" : "contain-blur";
+  }
+  return "contain-blur";
 }
 
 export type StageParticipantTile = {

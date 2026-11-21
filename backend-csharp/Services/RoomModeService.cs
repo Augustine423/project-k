@@ -64,7 +64,7 @@ public sealed class RoomModeService
             room.Mode = nextMode;
             room.MaxPublishers = nextMode == RoomModes.Webinar
                 ? _config.WebinarMaxPublishers
-                : Math.Min(room.MaxParticipants, _config.InteractiveMaxPublishers);
+                : InteractivePublisherCap(room);
 
             _log.LogInformation(
                 "room {RoomId} mode {OldMode} → {NewMode} (pub={Pub} listen={Listen})",
@@ -120,7 +120,7 @@ public sealed class RoomModeService
         room.Mode = nextMode;
         room.MaxPublishers = nextMode == RoomModes.Webinar
             ? _config.WebinarMaxPublishers
-            : Math.Min(room.MaxParticipants, _config.InteractiveMaxPublishers);
+            : InteractivePublisherCap(room);
 
         await _store.SaveRoomAsync(room, ct);
         await _store.EnqueueModeApplyAsync(roomId, ct);
@@ -143,6 +143,9 @@ public sealed class RoomModeService
             Data = new { mode = room.Mode, maxPublishers = room.MaxPublishers, modePinned = room.ModePinned },
         });
     }
+
+    private int InteractivePublisherCap(RoomRecord room)
+        => Math.Min(RoomPlanManager.GetTierLimits(room.MaxParticipants).MaxPublishers, _config.InteractiveMaxPublishers);
 
     public string EvaluateMode(
         string currentMode,
@@ -192,7 +195,7 @@ public sealed class RoomModeService
         room.ModePinned = pin;
         room.MaxPublishers = mode == RoomModes.Webinar
             ? _config.WebinarMaxPublishers
-            : Math.Min(room.MaxParticipants, _config.InteractiveMaxPublishers);
+            : InteractivePublisherCap(room);
 
         var stats = await _store.GetMediaStatsAsync(roomId, ct);
         room.ActivePublishers = stats.Publishers;
@@ -230,10 +233,18 @@ public sealed class RoomModeService
         RoomRecord room,
         ParticipantRecord participant,
         int activePublishers,
-        bool isCurrentlyPublishing = false)
+        bool isCurrentlyPublishing = false,
+        bool promoted = false)
     {
         if (participant.Role is ParticipantRoles.Host or ParticipantRoles.CoHost)
             return PublishCapabilities.Full;
+
+        if (promoted)
+            return PublishCapabilities.Full;
+
+        // Large rooms: attendees stay subscribe-only until a host promotes them.
+        if (room.ViewOnlyDefault)
+            return PublishCapabilities.None;
 
         if (string.Equals(room.Mode, RoomModes.Webinar, StringComparison.Ordinal))
             return PublishCapabilities.AudioOnly;
@@ -249,9 +260,10 @@ public sealed class RoomModeService
         RoomRecord room,
         ParticipantRecord participant,
         int activePublishers,
-        bool isCurrentlyPublishing = false)
+        bool isCurrentlyPublishing = false,
+        bool promoted = false)
     {
-        var caps = GetPublishCapabilities(room, participant, activePublishers, isCurrentlyPublishing);
+        var caps = GetPublishCapabilities(room, participant, activePublishers, isCurrentlyPublishing, promoted);
         return !caps.CanPublishAudio && !caps.CanPublishVideo;
     }
 
