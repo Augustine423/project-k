@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   copyInviteLink,
   inviteLinkForRoom,
@@ -12,12 +12,7 @@ interface ShareInvitePopoverProps {
   onClose: () => void;
 }
 
-/**
- * Compact share card: plain join URL (no query params) + optional local meeting title.
- */
 export function ShareInvitePopover({ roomId, open, onClose }: ShareInvitePopoverProps) {
-  const titleId = useId();
-  const nameRef = useRef<HTMLInputElement>(null);
   const [meetingName, setMeetingName] = useState(() => readStoredMeetingName(roomId));
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState("");
@@ -29,28 +24,7 @@ export function ShareInvitePopover({ roomId, open, onClose }: ShareInvitePopover
     setMeetingName(readStoredMeetingName(roomId));
     setCopied(false);
     setError("");
-    const t = window.setTimeout(() => nameRef.current?.focus(), 40);
-    return () => window.clearTimeout(t);
   }, [open, roomId]);
-
-  useEffect(() => {
-    if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    function onPointer(e: MouseEvent) {
-      const target = e.target as HTMLElement | null;
-      if (!target) return;
-      if (target.closest(".mm-share-pop") || target.closest(".mm-share-backdrop") || target.closest("[data-share-toggle]")) return;
-      onClose();
-    }
-    window.addEventListener("keydown", onKey);
-    window.addEventListener("mousedown", onPointer);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("mousedown", onPointer);
-    };
-  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -62,6 +36,7 @@ export function ShareInvitePopover({ roomId, open, onClose }: ShareInvitePopover
     saveMeetingName();
     const ok = await copyInviteLink(roomId);
     if (ok) {
+      setError("");
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
     } else {
@@ -70,65 +45,34 @@ export function ShareInvitePopover({ roomId, open, onClose }: ShareInvitePopover
   }
 
   return (
-    <>
-      <button
-        type="button"
-        className="mm-share-backdrop"
-        aria-label="Close share dialog"
-        onClick={onClose}
-      />
-      <div
-        className="mm-share-pop"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-      >
-      <div className="mm-share-pop-head">
-        <h2 id={titleId} className="mm-share-pop-title">
-          Share meeting
-        </h2>
-        <button type="button" className="mm-share-pop-close" onClick={onClose} aria-label="Close">
-          ×
-        </button>
-      </div>
-
-      <div className="mm-share-pop-result">
-        <label className="mm-share-pop-label" htmlFor="mm-share-link">
-          Invite link
-        </label>
-        <div className="mm-share-pop-row">
-          <input
-            id="mm-share-link"
-            className="mm-share-pop-input mm-share-pop-link"
-            type="text"
-            readOnly
-            value={shareLink}
-            onFocus={(e) => e.target.select()}
-          />
-          <button type="button" className="mm-share-pop-copy" onClick={() => void copyShare()}>
-            {copied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      </div>
-
-      <label className="mm-share-pop-label" htmlFor="mm-share-meeting-name">
-        Meeting name <span className="muted">(optional, shown on join page)</span>
-      </label>
+    <section id="meeting-invite" className="meeting-invite" aria-label="Meeting invitation">
+      <label className="meeting-invite-label" htmlFor="mm-share-link">Invite link</label>
       <input
-        ref={nameRef}
+        id="mm-share-link"
+        className="meeting-invite-link"
+        type="text"
+        readOnly
+        value={shareLink}
+        onFocus={(e) => e.target.select()}
+      />
+      <button type="button" className="meeting-invite-copy" onClick={() => void copyShare()}>
+        {copied ? "Copied" : "Copy"}
+      </button>
+      <label className="sr-only" htmlFor="mm-share-meeting-name">Meeting name (optional)</label>
+      <input
         id="mm-share-meeting-name"
-        className="mm-share-pop-input"
+        className="meeting-invite-name"
         type="text"
         value={meetingName}
         onChange={(e) => setMeetingName(e.target.value)}
         onBlur={saveMeetingName}
-        placeholder="e.g. Team standup"
+        placeholder="Meeting name (optional)"
         maxLength={80}
         autoComplete="off"
       />
 
-      {error && <p className="mm-share-pop-error">{error}</p>}
-      </div>
-    </>
+      <button type="button" className="meeting-invite-close" onClick={onClose} aria-label="Hide invite link">×</button>
+      {error && <span className="meeting-invite-error" role="status">{error}</span>}
+    </section>
   );
 }

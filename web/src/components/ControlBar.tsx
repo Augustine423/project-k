@@ -40,6 +40,7 @@ interface ControlBarProps {
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
   onFocusInvite?: () => void;
+  inviteOpen?: boolean;
   activePanel?: MeetingPanel | null;
   layoutMode?: ConferenceLayoutMode;
   onLayoutChange?: (mode: ConferenceLayoutMode) => void;
@@ -91,6 +92,7 @@ export function ControlBar({
   onFocusChat,
   onFocusParticipants,
   onFocusInvite,
+  inviteOpen = false,
   activePanel = null,
   layoutMode,
   onLayoutChange,
@@ -228,10 +230,10 @@ export function ControlBar({
             <button
               type="button"
               data-panel-toggle="invite"
-              className={`meeting-v2-ctrl-btn ${activePanel === "invite" ? "is-active" : ""}`}
+              className={`meeting-v2-ctrl-btn ${inviteOpen ? "is-active" : ""}`}
               onClick={onFocusInvite}
-              aria-pressed={activePanel === "invite"}
-              aria-label={activePanel === "invite" ? "Hide share" : "Share meeting link"}
+              aria-pressed={inviteOpen}
+              aria-label={inviteOpen ? "Hide share" : "Share meeting link"}
               data-share-toggle
             >
               <InviteIcon size={22} />

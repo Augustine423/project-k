@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { BrandLogo } from "./BrandLogo";
-import { ShareInvitePopover } from "./ShareInvitePopover";
 import { getInitials } from "../hooks/useAuth";
 
 interface MeetingHeaderProps {
@@ -13,10 +12,11 @@ interface MeetingHeaderProps {
   roomId?: string;
   shareOpen?: boolean;
   onShare?: () => void;
-  onCloseShare?: () => void;
   searchValue?: string;
   onSearchChange?: (query: string) => void;
   onSearchFocus?: () => void;
+  isFullscreen?: boolean;
+  onToggleFullscreen?: () => void;
 }
 
 function useClock() {
@@ -30,6 +30,34 @@ function useClock() {
     return () => window.clearInterval(id);
   }, []);
   return time;
+}
+
+function useElapsed() {
+  const [start] = useState(() => Date.now());
+  const [now, setNow] = useState(start);
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const total = Math.floor((now - start) / 1000);
+  const h = Math.floor(total / 3600);
+  const m = String(Math.floor((total % 3600) / 60)).padStart(h ? 2 : 1, "0");
+  const sec = String(total % 60).padStart(2, "0");
+  return h ? `${h}:${m}:${sec}` : `${m}:${sec}`;
+}
+
+function FullscreenIcon({ exit, size = 16 }: { exit: boolean; size?: number }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true" fill="none">
+      <path
+        d={exit ? "M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" : "M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
 }
 
 function ShareIcon({ size = 16 }: { size?: number }) {
@@ -52,12 +80,14 @@ export function MeetingHeader({
   roomId = "",
   shareOpen = false,
   onShare,
-  onCloseShare,
   searchValue = "",
   onSearchChange,
   onSearchFocus,
+  isFullscreen = false,
+  onToggleFullscreen,
 }: MeetingHeaderProps) {
   const clock = useClock();
+  const elapsed = useElapsed();
 
   return (
     <header className="meeting-v2-header">
@@ -66,7 +96,8 @@ export function MeetingHeader({
           <BrandLogo size={28} />
         </Link>
         <div className="meeting-v2-meta">
-          <span className="meeting-v2-clock">{clock}</span>
+          <span className="meeting-v2-title">Meeting{roomId ? ` · ${roomId.slice(0, 8)}` : ""}</span>
+          <span className="meeting-v2-clock" title={`Local time ${clock}`}>{elapsed}</span>
           <span
             className={`meeting-v2-status-dot ${connected ? "online" : "offline"}`}
             title={statusMessage}
@@ -112,15 +143,24 @@ export function MeetingHeader({
               data-share-toggle
               onClick={onShare}
               aria-expanded={shareOpen}
-              aria-haspopup="dialog"
+              aria-controls="meeting-invite"
             >
               <ShareIcon />
               <span className="meeting-v2-share-label">Share</span>
             </button>
-            {roomId && (
-              <ShareInvitePopover roomId={roomId} open={shareOpen} onClose={() => onCloseShare?.()} />
-            )}
           </div>
+        )}
+        {onToggleFullscreen && (
+          <button
+            type="button"
+            className="meeting-v2-fullscreen"
+            onClick={onToggleFullscreen}
+            aria-pressed={isFullscreen}
+            aria-label={isFullscreen ? "Exit full screen" : "Enter full screen"}
+            title={isFullscreen ? "Exit full screen" : "Full screen"}
+          >
+            <FullscreenIcon exit={isFullscreen} />
+          </button>
         )}
         <span className="meeting-v2-user-name">{displayName}</span>
         <div className="meeting-v2-avatar" aria-hidden="true">

@@ -23,6 +23,7 @@ export interface MediaConferenceProps {
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
   onFocusInvite?: () => void;
+  inviteOpen?: boolean;
   activePanel?: MeetingPanel | null;
   roomMode?: string;
   viewOnlyDefault?: boolean;

@@ -325,22 +325,24 @@ export function RoomSidePanel({
     <section className={`rsp rsp-solo rsp-${activeTab}`}>
       <header className="rsp-head rsp-solo-head">
         <div className="rsp-solo-title">
-          <TitleIcon size={18} />
+          {activeTab !== "chat" && <TitleIcon size={18} />}
           <h2>{panelTitle(activeTab)}</h2>
-          <span className="rsp-live-badge" title="People in the room">
-            {participantCount}
-          </span>
+          {activeTab !== "chat" && (
+            <span className="rsp-live-badge" title="People in the room">
+              {participantCount}
+            </span>
+          )}
           {onClose && (
             <button type="button" className="rsp-close" onClick={onClose} aria-label="Close panel">
               ×
             </button>
           )}
         </div>
-        {onTabChange && (
+        {onTabChange && activeTab !== "chat" && (
           <nav className="rsp-tabs" aria-label="Room panel">
             <button
               type="button"
-              className={`rsp-tab${activeTab === "chat" ? " is-active" : ""}`}
+              className="rsp-tab"
               onClick={() => onTabChange("chat")}
             >
               Chat
@@ -359,7 +361,7 @@ export function RoomSidePanel({
 
       {activeTab === "chat" && (
         <div className="rsp-body rsp-chat" role="region" aria-label="Chat">
-          <nav className="rsp-lanes" aria-label="Chat destination">
+          {openDmPeers.length > 0 && <nav className="rsp-lanes" aria-label="Chat destination">
             <button
               type="button"
               className={`rsp-lane ${dmPeer == null ? "is-active" : ""}`}
@@ -391,7 +393,7 @@ export function RoomSidePanel({
                 </button>
               );
             })}
-          </nav>
+          </nav>}
 
           {dmPeer && (
             <div className="rsp-dm-bar">
@@ -435,17 +437,6 @@ export function RoomSidePanel({
                   key={msg.id}
                   className={`rsp-msg ${self ? "is-self" : "is-other"}`}
                 >
-                  <button
-                    type="button"
-                    className={`rsp-face${self ? " rsp-face-self" : ""}`}
-                    style={{ background: avatarTone(msg.participantId || msg.displayName) }}
-                    aria-label={self ? "You" : `Message ${msg.displayName}`}
-                    title={self ? "You" : `Message ${msg.displayName}`}
-                    onClick={() => openDmFromChat(msg)}
-                    disabled={self || !msg.participantId}
-                  >
-                    {avatarInitials(msg.displayName)}
-                  </button>
                   <div className="rsp-msg-main">
                     <div className="rsp-msg-meta">
                       <button
@@ -455,17 +446,14 @@ export function RoomSidePanel({
                         disabled={self || !msg.participantId}
                         title={
                           self
-                            ? undefined
+                            ? formatChatTime(msg.at)
                             : msg.participantId
-                              ? `Message ${msg.displayName}`
-                              : undefined
+                              ? `Message ${msg.displayName} · ${formatChatTime(msg.at)}`
+                              : formatChatTime(msg.at)
                         }
                       >
                         {self ? "You" : msg.displayName}
                       </button>
-                      <time className="rsp-msg-time" dateTime={msg.at}>
-                        {formatChatTime(msg.at)}
-                      </time>
                     </div>
                     <div className="rsp-bubble">
                       <p className="rsp-msg-body">{msg.message}</p>
@@ -486,7 +474,9 @@ export function RoomSidePanel({
               aria-label={dmPeer ? "Direct message" : "Room chat message"}
             />
             <button type="submit" disabled={chatDisabled || !draft.trim()} aria-label="Send message">
-              Send
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 12l16-8-6 16-3-7z" />
+              </svg>
             </button>
           </form>
         </div>

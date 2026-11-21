@@ -274,10 +274,12 @@ export function classifyStreamAspect(width: number, height: number): StreamAspec
 /** Box vs. video ratio difference (log-scale) below which bars are imperceptible. */
 export const FIT_MATCH_TOLERANCE = 0.02;
 
+/** |ln(sourceRatio / tileRatio)| below this fills the tile (`cover`); above it the frame is letterboxed. */
+export const FIT_THRESHOLD = 0.15;
+
 /**
- * Camera video is never cropped: `contain` when the box already matches the
- * stream, otherwise `contain-blur` (blurred copy fills the letterbox, Meet-style).
- * `cover` is not used for camera tiles.
+ * Smart fit: near-matching boxes fill (`cover`, crop under ~15%), anything further apart
+ * uses `contain-blur` so a portrait feed is never stretched or face-cropped in a wide tile.
  */
 export function resolveTileFit(opts: {
   streamAspect: StreamAspect;
@@ -291,7 +293,8 @@ export function resolveTileFit(opts: {
   const { boxRatio, streamRatio } = opts;
   if (boxRatio && streamRatio && boxRatio > 0 && streamRatio > 0) {
     const drift = Math.abs(Math.log(boxRatio / streamRatio));
-    return drift <= FIT_MATCH_TOLERANCE ? "contain" : "contain-blur";
+    if (drift <= FIT_MATCH_TOLERANCE) return "contain";
+    return drift < FIT_THRESHOLD ? "cover" : "contain-blur";
   }
   return "contain-blur";
 }

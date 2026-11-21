@@ -16,7 +16,10 @@ import { sendRoomChat, sendDirectChat, raiseHand, lowerHand, syncRaisedHands, us
 import { clearTicket, getCachedRoster, getTicket, saveCachedRoster, saveTicket } from "../api/ticketStore";
 import type { JoinTicket, Participant, Room } from "../api/types";
 import type { ChatMessage } from "../components/chatTypes";
+import { useMeetingFullscreen } from "../hooks/useMeetingFullscreen";
+import { useIdleWhen } from "../hooks/useIdleWhen";
 import { MeetingHeader } from "../components/MeetingChrome";
+import { ShareInvitePopover } from "../components/ShareInvitePopover";
 import { RoomSidePanel, type DmPeer, type SidePanelTab } from "../components/RoomSidePanel";
 import { resolveJoinTicketMedia } from "../api/resolveUrls";
 import { MediaConference } from "../media/MediaConference";
@@ -78,6 +81,9 @@ export function RoomPage() {
   const selfId = ticket?.participant.id ?? "";
   const isHost = ticket ? isHostRole(ticket.participant.role) : false;
   const viewport = useViewerViewport();
+  const appRef = useRef<HTMLDivElement>(null);
+  const fullscreen = useMeetingFullscreen(appRef);
+  const chromeIdle = useIdleWhen(fullscreen.isFullscreen, 3000);
   /** Auto-hide chrome only on mobile viewports — host web + client web stay visible. */
   const autoHideChrome =
     viewport.mode === "mobile-portrait" || viewport.mode === "mobile-landscape";
@@ -205,15 +211,11 @@ export function RoomPage() {
     if (sidePanelOpen) setChromeVisible(true);
   }, [sidePanelOpen]);
 
-  const [shareOpen, setShareOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(true);
 
   const shareInvite = useCallback(() => {
     setShareOpen((open) => !open);
     setChromeVisible(true);
-    // Share uses a compact popover — close the side panel if it was on invite.
-    if (sideTabRef.current === "invite") {
-      setSidePanelOpen(false);
-    }
   }, []);
 
   const closeShare = useCallback(() => setShareOpen(false), []);
@@ -647,11 +649,14 @@ export function RoomPage() {
 
   return (
     <div
+      ref={appRef}
       className={[
         "meeting-app meeting-v2 meeting-light",
+        fullscreen.isFullscreen ? "is-fullscreen" : "",
+        fullscreen.isPseudo ? "is-pseudo-fullscreen" : "",
+        chromeIdle ? "chrome-idle" : "",
         autoHideChrome && !chromeVisible ? "chrome-hidden" : "",
         sidePanelOpen ? "sidebar-open" : "",
-        shareOpen ? "share-open" : "",
         isHost ? "is-host-view" : "is-client-view",
         `viewport-${viewport.mode}`,
         "layout-gallery",
@@ -669,12 +674,17 @@ export function RoomPage() {
         roomMode={ticket.room.mode}
         roomId={roomId}
         shareOpen={shareOpen}
-        onShare={shareInvite}
-        onCloseShare={closeShare}
+        onShare={ticket.participant.role === "host" ? shareInvite : undefined}
         searchValue={peopleSearch}
         onSearchChange={handlePeopleSearchChange}
         onSearchFocus={handlePeopleSearchFocus}
+        isFullscreen={fullscreen.isFullscreen}
+        onToggleFullscreen={fullscreen.toggle}
       />
+
+      {ticket.participant.role === "host" && (
+        <ShareInvitePopover roomId={roomId} open={shareOpen} onClose={closeShare} />
+      )}
 
       {status === "error" && <div className="banner error">{statusMessage}</div>}
       {mediaWarning && <div className="banner warn">{mediaWarning}</div>}
@@ -718,8 +728,9 @@ export function RoomPage() {
               chatBadge={unreadChat > 0 ? (unreadChat === 1 ? "new" : unreadChat) : undefined}
               onFocusChat={() => toggleSidePanel("chat")}
               onFocusParticipants={() => toggleSidePanel("participants")}
-              onFocusInvite={shareInvite}
-              activePanel={shareOpen ? "invite" : sidePanelOpen ? sideTab : null}
+              onFocusInvite={ticket.participant.role === "host" ? shareInvite : undefined}
+              inviteOpen={ticket.participant.role === "host" && shareOpen}
+              activePanel={sidePanelOpen ? sideTab : null}
               roomMode={ticket.room.mode}
               viewOnlyDefault={ticket.room.viewOnlyDefault}
               fetchFreshToken={fetchFreshToken}
@@ -776,7 +787,7 @@ export function RoomPage() {
               onSearchQueryChange={setPeopleSearch}
             />
           </div>
-          {isHost && (
+          {isHost && sideTab === "participants" && (
             <div className="host-end-row">
               <button type="button" className="btn btn-danger btn-sm" onClick={() => void endMeeting()} disabled={hostBusy}>
                 End meeting for all

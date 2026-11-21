@@ -42,9 +42,11 @@ import {
 } from "../media/galleryVideoPolicy";
 import {
   applySelectiveSubscriptions,
+  applyStageHiddenVideo,
   applyTargetsToParticipant,
   buildSubscriptionTargets,
   shouldTrackRemoteParticipant,
+  withoutHiddenVideo,
   type SubscriptionTargets,
 } from "./selectiveSubscription";
 import {
@@ -98,6 +100,7 @@ interface LiveKitConferenceProps {
   onFocusChat?: () => void;
   onFocusParticipants?: () => void;
   onFocusInvite?: () => void;
+  inviteOpen?: boolean;
   activePanel?: "chat" | "participants" | "invite" | null;
   roomMode?: string;
   /** Large room: non-host attendees are subscribe-only until promoted by a host. */
@@ -150,6 +153,7 @@ export function LiveKitConference({
   onFocusChat,
   onFocusParticipants,
   onFocusInvite,
+  inviteOpen,
   activePanel = null,
   roomMode,
   viewOnlyDefault = false,
@@ -180,6 +184,8 @@ export function LiveKitConference({
   const [connected, setConnected] = useState(false);
   const [mediaBusy, setMediaBusy] = useState(false);
   const [galleryPage, setGalleryPage] = useState(1);
+  const [stageHiddenIds, setStageHiddenIds] = useState<string[]>([]);
+  const stageHiddenRef = useRef<Set<string>>(new Set());
   const [simAddCount, setSimAddCount] = useState(4);
   const [simSpecs, setSimSpecs] = useState<Array<{ id: string; kind: "web" | "mobile" }>>([]);
   const simSeqRef = useRef(1);
@@ -1018,11 +1024,14 @@ export function LiveKitConference({
     const room = roomRef.current ?? getLiveKitRoom(sessionKey);
     if (!room) return;
 
-    const targets = buildSubscriptionTargets({
-      visibleIds: visibleRemoteOrder,
-      activeSpeakerIds,
-      hostParticipantId,
-    });
+    const targets = withoutHiddenVideo(
+      buildSubscriptionTargets({
+        visibleIds: visibleRemoteOrder,
+        activeSpeakerIds,
+        hostParticipantId,
+      }),
+      stageHiddenIds,
+    );
     subscriptionTargetsRef.current = targets;
     applySelectiveSubscriptions(room, targets);
     applyRemoteSimulcastPreferences(room, visibleRemoteOrder, galleryTier, connectionQuality, {
@@ -1055,9 +1064,19 @@ export function LiveKitConference({
     hostParticipantId,
     isMassRoom,
     sessionKey,
+    stageHiddenIds,
     upsertRemote,
     visibleRemoteOrder,
   ]);
+
+  // Camera video for participants collapsed into the stage's "+N" tile is paused; audio stays.
+  useEffect(() => {
+    if (!connected) return;
+    const room = roomRef.current ?? getLiveKitRoom(sessionKey);
+    if (!room) return;
+    applyStageHiddenVideo(room, stageHiddenIds, stageHiddenRef.current);
+    stageHiddenRef.current = new Set(stageHiddenIds);
+  }, [connected, sessionKey, stageHiddenIds]);
 
   // Small/medium rooms: simulcast layer prefs only (autoSubscribe stays on).
   useEffect(() => {
@@ -1328,6 +1347,7 @@ export function LiveKitConference({
         viewerMode={viewport.mode}
         activeSpeakerIds={activeSpeakerIds}
         localIdentity={localIdentity || undefined}
+        onHiddenChange={setStageHiddenIds}
       />
       <GalleryPagination
         page={galleryPage}
@@ -1371,6 +1391,7 @@ export function LiveKitConference({
         onFocusChat={onFocusChat}
         onFocusParticipants={isHostRole ? onFocusParticipants : undefined}
         onFocusInvite={isHostRole ? onFocusInvite : undefined}
+        inviteOpen={inviteOpen}
         activePanel={activePanel}
         layoutMode={layoutMode}
         onLayoutChange={handleLayoutChange}

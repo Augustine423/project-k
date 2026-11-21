@@ -118,3 +118,35 @@ export function shouldTrackRemoteParticipant(
   const id = participant.identity;
   return targets.video.has(id) || targets.audio.has(id);
 }
+
+/** Drop camera video for tiles the stage collapsed into "+N" (audio is kept). */
+export function withoutHiddenVideo(
+  targets: SubscriptionTargets,
+  hiddenIds: readonly string[],
+): SubscriptionTargets {
+  if (hiddenIds.length === 0) return targets;
+  const hidden = new Set(hiddenIds);
+  return { ...targets, video: new Set([...targets.video].filter((id) => !hidden.has(id))) };
+}
+
+/** Pause camera video of "+N" participants and restore it when they return to the stage. */
+export function applyStageHiddenVideo(
+  room: Room,
+  hiddenIds: readonly string[],
+  previouslyHidden: ReadonlySet<string>,
+): void {
+  const hidden = new Set(hiddenIds);
+  const touch = (id: string, subscribed: boolean) => {
+    const participant = room.remoteParticipants.get(id);
+    if (!participant) return;
+    for (const pub of participant.trackPublications.values()) {
+      if (pub.kind === Track.Kind.Video && pub.source !== Track.Source.ScreenShare) {
+        setPublicationSubscribed(pub as RemoteTrackPublication, subscribed);
+      }
+    }
+  };
+  hidden.forEach((id) => touch(id, false));
+  previouslyHidden.forEach((id) => {
+    if (!hidden.has(id)) touch(id, true);
+  });
+}

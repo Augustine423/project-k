@@ -6996,14 +6996,6 @@ html:has(.meeting-app) body {
   overscroll-behavior: none;
 }
 
-html:has(.meeting-app.sidebar-open),
-html:has(.meeting-app.sidebar-open) body,
-html:has(.meeting-app.share-open),
-html:has(.meeting-app.share-open) body {
-  overflow: hidden;
-  touch-action: none;
-}
-
 .meeting-app.meeting-v2 {
   min-height: 100dvh;
   min-height: 100svh;
@@ -7474,4 +7466,693 @@ html:has(.meeting-app.share-open) body {
   object-fit: contain !important;
   width: 100% !important;
   height: 100% !important;
+}
+
+/* Meet-style separation: 4px visible gap (2px inset per tile) with softly rounded tiles. */
+.mm-stage--gallery .mm-slot,
+.mm-stage--gallery .mm-pair__cell {
+  --tile-inset: 2px;
+  --tile-radius: 10px;
+  box-sizing: border-box;
+  padding: var(--tile-inset);
+}
+
+.mm-stage--gallery .mm-slot > .video-tile,
+.mm-stage--gallery .mm-pair__cell > .video-tile {
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+}
+
+.mm-stage--gallery .mm-slot::after,
+.mm-stage--gallery .mm-pair__cell::after {
+  inset: var(--tile-inset);
+  border: 0;
+  border-radius: var(--tile-radius);
+  box-shadow: none;
+}
+
+.mm-stage--gallery .mm-slot:has(.video-tile.is-speaking)::after,
+.mm-stage--gallery .mm-slot:has(.video-tile.speaking)::after {
+  border: 3px solid var(--tile-speak, #1a73e8);
+  box-shadow: 0 0 0 1px rgba(26, 115, 232, 0.35);
+}
+
+/* ---- Layout-engine stage: tiles are absolutely positioned by tileLayout.ts ---- */
+.te-shell {
+  --tile-radius: 16px;
+  --meet-ink: #171a26;
+  --meet-tile: #232738;
+  --meet-speaker: #8b9bff;
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  background: var(--meet-ink);
+}
+.te-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.te-slot {
+  position: absolute;
+  left: 0;
+  top: 0;
+  box-sizing: border-box;
+  border-radius: var(--tile-radius);
+  overflow: hidden;
+  background: var(--meet-tile);
+  outline: none;
+  cursor: pointer;
+  transition:
+    transform 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    width 350ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    height 350ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform, width, height;
+}
+.te-slot.is-pip {
+  z-index: 5;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.te-slot:focus-visible {
+  box-shadow: 0 0 0 3px var(--meet-speaker);
+}
+.te-slot > .video-tile {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  height: 100% !important;
+  aspect-ratio: auto !important;
+  border-radius: 0;
+}
+.te-slot:has(.video-tile.is-speaking)::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  border: 3px solid var(--meet-speaker);
+  pointer-events: none;
+  z-index: 6;
+}
+.te-more {
+  display: grid;
+  place-items: center;
+  cursor: default;
+  color: #fff;
+  font-size: clamp(16px, 3vw, 28px);
+  font-weight: 700;
+}
+@media (prefers-reduced-motion: reduce) {
+  .te-slot {
+    transition: none;
+  }
+}
+
+.te-stage {
+  inset: 8px;
+}
+@media (max-width: 519px) {
+  .te-stage {
+    inset: 6px;
+  }
+}
+.te-stage .video-chrome {
+  position: absolute;
+  left: 10px;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(15, 18, 30, 0.62);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  pointer-events: none;
+  z-index: 3;
+}
+.te-stage .video-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.te-stage .video-role {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: #8b9bff;
+  color: #171a26;
+}
+.te-slot.is-pip .video-chrome {
+  left: 6px;
+  bottom: 6px;
+  padding: 2px 7px;
+  font-size: 11px;
+}
+
+/* ---- Tile layers: blurred backdrop, frame, avatar (layout-engine stage) ---- */
+.te-slot {
+  container-type: size;
+}
+.te-stage .video-tile {
+  background: var(--meet-tile);
+  overflow: hidden;
+}
+.te-stage .video-tile video:not(.video-feed-blur) {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 2;
+  background: transparent;
+  object-position: center;
+}
+.te-stage .video-tile[data-fit="cover"] video:not(.video-feed-blur) {
+  object-fit: cover;
+}
+.te-stage .video-tile[data-fit="contain"] video:not(.video-feed-blur),
+.te-stage .video-tile[data-fit="contain-blur"] video:not(.video-feed-blur) {
+  object-fit: contain;
+}
+.te-stage .video-tile .video-feed-blur {
+  filter: blur(28px) brightness(0.55) saturate(1.15);
+}
+.te-stage .no-video-container {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  gap: 0;
+  background: linear-gradient(160deg, #2b3050, var(--meet-tile));
+}
+.te-stage .no-video-text {
+  display: none;
+}
+/* Avatar scales with the tile: 28px minimum, 72px maximum. */
+.te-stage .video-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 700;
+  line-height: 1;
+  width: clamp(28px, 26cqmin, 72px);
+  height: clamp(28px, 26cqmin, 72px);
+  font-size: clamp(11px, 10cqmin, 28px);
+  border: 0;
+  color: #fff;
+  background: linear-gradient(145deg, #5b6cff, #8b9bff);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+/* ---- Meeting shell: dark surface, glass control pill, fullscreen, phone-landscape rail ---- */
+.meeting-app.meeting-v2.meeting-light {
+  --meet-ink: #171a26;
+  --meet-glass: rgba(44, 50, 74, 0.88);
+  --meet-danger: #f0525e;
+  --meet-speaker: #8b9bff;
+  --ctrl-size: 48px;
+  background: var(--meet-ink);
+  color: #fff;
+  font-family: "Figtree", "Outfit", system-ui, sans-serif;
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-body,
+.meeting-app.meeting-v2.meeting-light .meeting-stage {
+  background: var(--meet-ink);
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-header {
+  background: rgba(23, 26, 38, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  color: #fff;
+  backdrop-filter: blur(14px);
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-header * {
+  color: inherit;
+}
+.meeting-v2-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+.meeting-v2-clock {
+  font-variant-numeric: tabular-nums;
+}
+.meeting-v2-fullscreen {
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  cursor: pointer;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+.meeting-v2-fullscreen:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.meeting-v2-fullscreen:focus-visible {
+  outline: 3px solid var(--meet-speaker);
+  outline-offset: 2px;
+}
+
+.meeting-app.meeting-v2.meeting-light .meeting-v2-control-bar-wrap {
+  transition: opacity 0.35s ease;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-control-bar {
+  background: var(--meet-glass);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-btn {
+  width: var(--ctrl-size);
+  height: var(--ctrl-size);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+  border-color: transparent;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-btn.is-off {
+  background: var(--meet-danger);
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-btn:focus-visible {
+  outline: 3px solid var(--meet-speaker);
+}
+
+@media (max-width: 519px) {
+  .meeting-app.meeting-v2.meeting-light {
+    --ctrl-size: 42px;
+  }
+}
+
+/* Fullscreen: hide the chrome after 3s idle; any input restores it. */
+.meeting-app.chrome-idle .meeting-v2-header,
+.meeting-app.chrome-idle .meeting-v2-control-bar-wrap {
+  opacity: 0;
+  pointer-events: none;
+}
+.meeting-app.is-pseudo-fullscreen {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  width: 100vw;
+  height: 100dvh;
+  max-height: 100dvh;
+}
+
+/* Phone landscape: controls become a right-hand rail, compact top bar. */
+@media (max-height: 419px) and (orientation: landscape) {
+  .meeting-app.meeting-v2.meeting-light {
+    --ctrl-size: 40px;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-header {
+    min-height: 0;
+    height: 34px;
+    padding-top: env(safe-area-inset-top, 0);
+    padding-bottom: 0;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-search,
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-user-name,
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-avatar,
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-share-label {
+    display: none;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-body {
+    padding-right: calc(var(--ctrl-size) + 20px + env(safe-area-inset-right, 0px));
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-control-bar-wrap {
+    left: auto;
+    right: 0;
+    top: 34px;
+    bottom: 0;
+    width: auto;
+    align-items: center;
+    padding: 4px max(6px, env(safe-area-inset-right, 0px)) 4px 4px;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-control-bar {
+    flex-direction: column;
+    max-height: 100%;
+    overflow-y: auto;
+    border-radius: 24px;
+    padding: 6px;
+    gap: 6px;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-main,
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-end-row {
+    display: contents;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-label {
+    display: none;
+  }
+}
+
+/* The invitation occupies its own row rather than overlaying the stage or panel. */
+.meeting-app .meeting-invite {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  color: #eef0f8;
+  background: #24293e;
+}
+.meeting-invite-label {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.meeting-invite-link,
+.meeting-invite-name {
+  min-width: 0;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid #3d4466;
+  border-radius: 8px;
+  background: #1b1e2c;
+  color: #eef0f8;
+  font: inherit;
+  font-size: 13px;
+}
+.meeting-invite-link { flex: 1 1 120px; }
+.meeting-invite-name { flex: 0 1 190px; width: 140px; }
+.meeting-invite-copy,
+.meeting-invite-close {
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+}
+.meeting-invite-copy { padding: 0 12px; background: #8b9bff; color: #171a26; }
+.meeting-invite-close { width: 32px; background: transparent; color: #eef0f8; font-size: 22px; }
+.meeting-invite-error { flex-basis: 100%; color: #ffc0c5; font-size: 12px; }
+
+/* Chat follows the supplied meeting reference while retaining direct messaging. */
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar .rsp-chat,
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar .rsp.rsp-chat {
+  background: rgba(36, 41, 62, .96);
+  color: #eef0f8;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar .rsp.rsp-chat {
+  border: 0;
+  border-radius: 16px;
+  box-shadow: none;
+  backdrop-filter: blur(14px);
+}
+.rsp-chat .rsp-head {
+  padding: 6px 6px 6px 14px;
+  background: transparent;
+}
+.rsp-chat .rsp-solo-title { min-height: 36px; gap: 0; }
+.rsp-chat .rsp-solo-title h2 {
+  color: #eef0f8;
+  font: 600 14px "Figtree", system-ui, sans-serif;
+  letter-spacing: normal;
+}
+.rsp-chat .rsp-close {
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  color: #eef0f8;
+}
+.rsp-chat .rsp-close:hover { background: rgba(255,255,255,.1); color: #fff; }
+.rsp-chat .rsp-feed {
+  gap: 10px;
+  padding: 4px 14px;
+  background: transparent;
+}
+.rsp-chat .rsp-empty { padding: 8px; }
+.rsp-chat .rsp-empty-icon { display: none; }
+.rsp-chat .rsp-empty p, .rsp-chat .rsp-empty-hint { color: #c9cde0; font-size: 13px; }
+.rsp-chat .rsp-msg, .rsp-chat .rsp-msg.is-self {
+  display: block;
+  max-width: 100%;
+  align-self: flex-start;
+}
+.rsp-chat .rsp-msg.is-self { align-self: flex-end; text-align: right; }
+.rsp-chat .rsp-msg-main, .rsp-chat .rsp-msg.is-self .rsp-msg-main { display: block; }
+.rsp-chat .rsp-msg-meta { display: block; padding: 0; }
+.rsp-chat .rsp-msg-name, .rsp-chat .rsp-msg-name:disabled {
+  max-width: 100%;
+  color: #8b9bff;
+  font: 600 12px "Figtree", system-ui, sans-serif;
+}
+.rsp-chat .rsp-msg.is-self .rsp-msg-name { color: #c9d0ff; }
+.rsp-chat .rsp-bubble, .rsp-chat .rsp-msg.is-other .rsp-bubble, .rsp-chat .rsp-msg.is-self .rsp-bubble {
+  width: auto;
+  padding: 0;
+  margin-top: 2px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+}
+.rsp-chat .rsp-msg-body, .rsp-chat .rsp-msg.is-self .rsp-msg-body {
+  color: #eef0f8;
+  font: 400 13px/1.4 "Figtree", system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+.rsp-chat .rsp-composer {
+  display: flex;
+  gap: 8px;
+  padding: 10px;
+  border: 0;
+  background: transparent;
+}
+.rsp-chat .rsp-composer input {
+  flex: 1;
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid #3d4466;
+  border-radius: 18px;
+  background: #1b1e2c;
+  color: #eef0f8;
+  font: 400 16px "Figtree", system-ui, sans-serif;
+}
+.rsp-chat .rsp-composer input::placeholder { color: #a7aec8; }
+.rsp-chat .rsp-composer input:focus-visible { outline: 3px solid #8b9bff; outline-offset: 2px; }
+.rsp-chat .rsp-composer button {
+  flex: 0 0 36px;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  background: #8b9bff;
+  color: #171a26;
+  box-shadow: none;
+}
+.rsp-chat .rsp-composer button:hover:not(:disabled) { background: #b0bcff; box-shadow: none; }
+.rsp-chat .rsp-composer button svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.rsp-chat .rsp-lanes, .rsp-chat .rsp-dm-bar { background: #24293e; border-color: #3d4466; }
+.rsp-chat .rsp-lane, .rsp-chat .rsp-dm-copy, .rsp-chat .rsp-text-btn { color: #eef0f8; }
+.rsp-chat .rsp-lane.is-active { background: #3d4466; color: #eef0f8; }
+
+@media (prefers-reduced-motion: reduce) {
+  .meeting-app .meeting-v2-header,
+  .meeting-app .meeting-v2-control-bar-wrap {
+    transition: none;
+  }
+}
+
+/* Round icon buttons (labels stay available via aria-label), red End Call. */
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-btn {
+  min-width: var(--ctrl-size);
+  padding: 0;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  flex-direction: row;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-label {
+  display: none;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-btn.hand-raised,
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-btn.is-active {
+  background: var(--meet-speaker);
+  color: #171a26;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-end {
+  width: calc(var(--ctrl-size) * 1.5);
+  min-width: calc(var(--ctrl-size) * 1.5);
+  height: var(--ctrl-size);
+  border-radius: 999px;
+  background: var(--meet-danger);
+  color: #fff;
+  margin-left: 0.25rem;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-end .meeting-v2-ctrl-label,
+.meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-end .meeting-v2-end-label {
+  display: none;
+}
+@media (max-height: 419px) and (orientation: landscape) {
+  .meeting-app.meeting-v2.meeting-light .meeting-v2-ctrl-end {
+    width: var(--ctrl-size);
+    min-width: var(--ctrl-size);
+    margin-left: 0;
+  }
+}
+
+/* App themes for the surrounding pages (lobby, auth, dashboards). The meeting surface stays dark via --meet-* tokens. */
+:root { color-scheme: dark; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #eceef5;
+    --bg-elevated: #ffffff;
+    --surface: rgba(255, 255, 255, 0.86);
+    --surface-solid: #ffffff;
+    --surface-2: #f1f3fa;
+    --border: rgba(23, 26, 38, 0.12);
+    --text: #3b4260;
+    --text-dim: #586080;
+    --heading: #171a26;
+    --glass: rgba(255, 255, 255, 0.9);
+    --glass-border: rgba(23, 26, 38, 0.1);
+    --shadow: 0 16px 48px rgba(23, 26, 38, 0.14);
+  }
+}
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #eceef5;
+  --bg-elevated: #ffffff;
+  --surface: rgba(255, 255, 255, 0.86);
+  --surface-solid: #ffffff;
+  --surface-2: #f1f3fa;
+  --border: rgba(23, 26, 38, 0.12);
+  --text: #3b4260;
+  --text-dim: #586080;
+  --heading: #171a26;
+  --glass: rgba(255, 255, 255, 0.9);
+  --glass-border: rgba(23, 26, 38, 0.1);
+  --shadow: 0 16px 48px rgba(23, 26, 38, 0.14);
+}
+.meeting-app { color-scheme: dark; }
+.meeting-app.meeting-v2.meeting-light .meeting-v2-header .mm-share-pop *:not(button) {
+  color: var(--mm-ink);
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-header .mm-share-pop .mm-share-pop-label {
+  color: var(--mm-ink-dim);
+}
+.meeting-app.meeting-v2.meeting-light .meeting-v2-header .mm-share-pop .mm-share-pop-close {
+  color: var(--mm-ink);
+}
+
+/* Keep meeting panels in the layout flow so chat never obscures participant video. */
+.meeting-app.meeting-v2.meeting-light .meeting-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  min-height: 0;
+  padding: 0 12px calc(var(--dock-height, 6.5rem) + env(safe-area-inset-bottom, 0px) + 12px);
+  overflow: hidden;
+  transition: grid-template-columns 0.3s ease, grid-template-rows 0.3s ease;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-stage {
+  grid-column: 1;
+  grid-row: 1;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar {
+  position: relative;
+  inset: auto;
+  grid-column: 2;
+  grid-row: 1;
+  display: none;
+  width: auto;
+  max-width: none;
+  height: auto;
+  max-height: none;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar.open {
+  display: flex;
+}
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar .room-side-panel-wrap,
+.meeting-app.meeting-v2.meeting-light .meeting-sidebar .rsp {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 0;
+}
+.meeting-app.meeting-v2.meeting-light.sidebar-open
+  .meeting-body {
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 12px;
+}
+.meeting-app.meeting-v2.meeting-light.sidebar-open .meeting-body .meeting-sidebar.open {
+  inset: auto;
+}
+
+@media (min-width: 769px) and (max-width: 960px) {
+  .meeting-app.meeting-v2.meeting-light.sidebar-open
+    .meeting-body {
+    grid-template-columns: minmax(0, 1fr) minmax(280px, min(38vw, 340px));
+    gap: 10px;
+  }
+}
+
+@media (max-width: 768px) {
+  .meeting-app.meeting-v2.meeting-light .meeting-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    gap: 8px;
+    padding: 8px 8px calc(var(--dock-height, 5.5rem) + env(safe-area-inset-bottom, 0px) + 8px);
+  }
+  .meeting-app.meeting-v2.meeting-light.sidebar-open .meeting-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 46%);
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-sidebar,
+  .meeting-app.meeting-v2.meeting-light .meeting-sidebar.open {
+    position: relative;
+    inset: auto;
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    max-width: none;
+    height: auto;
+    max-height: none;
+    z-index: 3;
+    border-radius: 18px;
+    animation: none;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-sidebar-backdrop {
+    display: none;
+  }
+}
+
+@media (max-height: 419px) and (orientation: landscape) {
+  .meeting-app.meeting-v2.meeting-light .meeting-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+    padding: 4px max(6px, calc(var(--ctrl-size) + 20px + env(safe-area-inset-right, 0px))) 4px 4px;
+  }
+  .meeting-app.meeting-v2.meeting-light.sidebar-open .meeting-body {
+    grid-template-columns: minmax(0, 1fr) minmax(220px, min(34vw, 300px));
+    grid-template-rows: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .meeting-app.meeting-v2.meeting-light .meeting-sidebar,
+  .meeting-app.meeting-v2.meeting-light .meeting-sidebar.open {
+    grid-column: 2;
+    grid-row: 1;
+    width: auto;
+    height: 100%;
+  }
 }

@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import { Track } from "livekit-client";
-import { applyParticipantSubscriptions, buildSubscriptionTargets } from "./selectiveSubscription";
+import {
+  applyParticipantSubscriptions,
+  applyStageHiddenVideo,
+  buildSubscriptionTargets,
+  withoutHiddenVideo,
+} from "./selectiveSubscription";
 
 function pub(kind: Track.Kind, source: Track.Source) {
   return { kind, source, isSubscribed: false, setSubscribed: vi.fn() };
@@ -30,5 +35,31 @@ describe("screen-share subscription rule", () => {
     const p = { trackPublications: new Map([["s", screen]]) } as never;
     applyParticipantSubscriptions(p, true, false);
     expect(screen.setSubscribed).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("stage hidden (+N) video", () => {
+  it("drops hidden ids from video but keeps audio", () => {
+    const t = withoutHiddenVideo(
+      buildSubscriptionTargets({ visibleIds: ["a", "b"], activeSpeakerIds: [] }),
+      ["b"],
+    );
+    expect([...t.video]).toEqual(["a"]);
+    expect(t.audio.has("b")).toBe(true);
+  });
+
+  it("unsubscribes hidden camera, keeps audio and restores returning ids", () => {
+    const cam = pub(Track.Kind.Video, Track.Source.Camera);
+    const mic = pub(Track.Kind.Audio, Track.Source.Microphone);
+    cam.isSubscribed = true;
+    const room = {
+      remoteParticipants: new Map([["x", { trackPublications: new Map([["c", cam], ["m", mic]]) }]]),
+    } as never;
+    applyStageHiddenVideo(room, ["x"], new Set());
+    expect(cam.setSubscribed).toHaveBeenCalledWith(false);
+    expect(mic.setSubscribed).not.toHaveBeenCalled();
+    cam.isSubscribed = false;
+    applyStageHiddenVideo(room, [], new Set(["x"]));
+    expect(cam.setSubscribed).toHaveBeenLastCalledWith(true);
   });
 });

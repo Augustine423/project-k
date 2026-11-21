@@ -30,6 +30,7 @@ import {
 } from "../../media/galleryFreeformLayout";
 import type { ViewerViewportMode } from "../../hooks/useViewerViewport";
 import { useDraggableSelfPip } from "../../hooks/useDraggableSelfPip";
+import { EngineStage, ENGINE_MAX_TILES } from "./EngineStage";
 import { useTilePack } from "../../hooks/useTilePack";
 import { useMemo, useRef } from "react";
 
@@ -42,6 +43,8 @@ type CommonProps = {
   localIdentity?: string;
   layoutMode: ConferenceLayoutMode;
   primaryId?: string;
+  /** Ids collapsed into the "+N" tile (video can be unsubscribed). */
+  onHiddenChange?: (ids: string[]) => void;
 };
 
 function Tile({
@@ -525,6 +528,20 @@ function SidebarStage({ plan }: { plan: SidebarStagePlan }) {
 }
 
 export function ConferenceVideoStage(props: CommonProps) {
+  if (props.tiles.length > 0 && props.tiles.length <= ENGINE_MAX_TILES) {
+    return (
+      <EngineStage
+        tiles={props.tiles}
+        layoutMode={props.layoutMode}
+        hostParticipantId={props.hostParticipantId}
+        onHiddenChange={props.onHiddenChange}
+      />
+    );
+  }
+  return <LegacyConferenceVideoStage {...props} />;
+}
+
+function LegacyConferenceVideoStage(props: CommonProps) {
   const plan = resolveStagePlan({
     tiles: props.tiles,
     layoutMode: props.layoutMode,

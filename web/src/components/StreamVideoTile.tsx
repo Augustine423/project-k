@@ -22,6 +22,8 @@ interface StreamVideoTileProps {
   networkQuality?: "excellent" | "good" | "poor" | "lost" | "unknown";
   /** When false, tile shows avatar but audio may still play (off-page / audio-only). */
   hasVideo?: boolean;
+  /** Reports the decoded source ratio (width / height) whenever it changes. */
+  onSourceRatio?: (ratio: number) => void;
   /** Show decoded WxH badge (dev/quality check). */
   showStats?: boolean;
   roleBadge?: string;
@@ -109,6 +111,7 @@ export function StreamVideoTile({
   networkQuality = "unknown",
   hasVideo,
   showStats = import.meta.env.DEV,
+  onSourceRatio,
   roleBadge,
   size = "grid",
   layoutMode = "gallery",
@@ -169,6 +172,10 @@ export function StreamVideoTile({
       streamRatio,
     });
   const useBlurFill = fit === "contain-blur";
+
+  useEffect(() => {
+    if (streamRatio) onSourceRatio?.(streamRatio);
+  }, [streamRatio, onSourceRatio]);
 
   const showVideo =
     hasVideo !== undefined
